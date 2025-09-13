@@ -1,0 +1,61 @@
+{
+	"name": "React + Bun + Convex Development",
+	"image": "mcr.microsoft.com/devcontainers/javascript-node:24",
+	"features": {
+		"ghcr.io/devcontainers/features/git:1": {},
+		"ghcr.io/devcontainers/features/github-cli:1": {},
+		"ghcr.io/devcontainers/features/docker-in-docker:2": {
+			"moby": false
+		}
+	},
+	"postCreateCommand": "curl -fsSL https://bun.sh/install | bash && source ~/.bashrc && bun install",
+	"customizations": {
+		"vscode": {
+			"extensions": [
+				"biomejs.biome",
+				"bradlc.vscode-tailwindcss",
+				"ms-vscode.vscode-typescript-next",
+				"esbenp.prettier-vscode",
+				"ms-vscode.vscode-json",
+				"formulahendry.auto-rename-tag",
+				"christian-kohler.path-intellisense",
+				"ms-vscode.vscode-eslint",
+				"convex.convex-vscode"
+			],
+			"settings": {
+				"editor.defaultFormatter": "biomejs.biome",
+				"editor.formatOnSave": true,
+				"editor.codeActionsOnSave": {
+					"source.organizeImports": "explicit",
+					"source.fixAll": "explicit"
+				},
+				"typescript.preferences.importModuleSpecifier": "relative",
+				"typescript.suggest.autoImports": true,
+				"emmet.includeLanguages": {
+					"typescript": "html",
+					"typescriptreact": "html"
+				},
+				"tailwindCSS.experimental.classRegex": [
+					["cva\\(([^)]*)\\)", "[\"'`]([^\"'`]*).*?[\"'`]"],
+					["cx\\(([^)]*)\\)", "(?:'|\"|`)([^']*)(?:'|\"|`)"]
+				]
+			}
+		}
+	},
+	"forwardPorts": [3000, 5173, 8080],
+	"portsAttributes": {
+		"3000": {
+			"label": "Development Server",
+			"onAutoForward": "notify"
+		},
+		"5173": {
+			"label": "Vite Dev Server",
+			"onAutoForward": "notify"
+		},
+		"8080": {
+			"label": "Preview Server",
+			"onAutoForward": "notify"
+		}
+	},
+	"remoteUser": "node"
+}
