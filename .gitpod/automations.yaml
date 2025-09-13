@@ -1,0 +1,24 @@
+services:
+    bun-dev:
+        name: Bun Development Server
+        description: Runs the Bun development server with hot reloading
+        commands:
+            start: |
+                echo "Starting Bun development server..."
+                cd /workspaces/workspaces
+                bun run dev
+            ready: |
+                # Check if the development server is responding
+                curl -f http://localhost:3001 > /dev/null 2>&1
+                if [ $? -eq 0 ]; then
+                    echo "Bun development server is ready"
+                    exit 0
+                else
+                    echo "Bun development server is not ready"
+                    exit 1
+                fi
+            stop: |
+                echo "Stopping Bun development server..."
+                pkill -f "bun.*dev"
+        triggeredBy:
+            - postEnvironmentStart
