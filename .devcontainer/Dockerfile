@@ -8,9 +8,6 @@ RUN apt-get update && apt-get install -y \
     lsb-release \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Tailscale
-RUN curl -fsSL https://tailscale.com/install.sh | sh
-
 # Install Bun as the node user
 USER node
 RUN curl -fsSL https://bun.sh/install | bash
@@ -29,4 +26,4 @@ USER node
 WORKDIR /workspace
 
 # Verify installations
-RUN bun --version && tailscale version
+RUN bun --version
