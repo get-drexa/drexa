@@ -13,7 +13,7 @@ import {
 	SidebarRail,
 } from "@/components/ui/sidebar"
 
-function DashboardSidebar() {
+export function DashboardSidebar() {
 	return (
 		<Sidebar collapsible="icon">
 			<SidebarHeader>
@@ -75,5 +75,3 @@ function UserSwitcher() {
 		</DropdownMenu>
 	)
 }
-
-export default DashboardSidebar
