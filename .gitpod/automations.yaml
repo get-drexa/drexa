@@ -22,3 +22,27 @@ services:
                 pkill -f "bun.*dev"
         triggeredBy:
             - postEnvironmentStart
+    
+    convex-dev:
+        name: Convex Development Server
+        description: Runs the Convex development server for backend functions
+        commands:
+            start: |
+                echo "Starting Convex development server..."
+                cd /workspaces/workspaces
+                bunx convex dev
+            ready: |
+                # Check if Convex dev server is running by looking for the process
+                pgrep -f "convex.*dev" > /dev/null 2>&1
+                if [ $? -eq 0 ]; then
+                    echo "Convex development server is ready"
+                    exit 0
+                else
+                    echo "Convex development server is not ready"
+                    exit 1
+                fi
+            stop: |
+                echo "Stopping Convex development server..."
+                pkill -f "convex.*dev"
+        triggeredBy:
+            - postEnvironmentStart
