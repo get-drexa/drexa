@@ -19,13 +19,17 @@ const schema = defineSchema({
 		deletedAt: v.optional(v.string()),
 	})
 		.index("byDirectoryId", ["directoryId", "deletedAt"])
-		.index("byDeletedAt", ["deletedAt"]),
+		.index("byDeletedAt", ["deletedAt"])
+		.index("uniqueFileInDirectory", ["directoryId", "name", "deletedAt"]),
 	directories: defineTable({
 		name: v.string(),
 		parentId: v.optional(v.id("directories")),
 		createdAt: v.string(),
 		updatedAt: v.string(),
-	}).index("byParentId", ["parentId"]),
+		deletedAt: v.optional(v.string()),
+	})
+		.index("byParentId", ["parentId", "deletedAt"])
+		.index("uniqueDirectoryInDirectory", ["parentId", "name", "deletedAt"]),
 })
 
 export default schema

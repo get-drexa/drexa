@@ -1,9 +1,6 @@
 import { api } from "@convex/_generated/api"
 import type { Id } from "@convex/_generated/dataModel"
-import type {
-	DirectoryItem,
-	DirectoryItemKind,
-} from "@convex/model/directories"
+import type { DirectoryItem } from "@convex/model/directories"
 import { useMutation } from "@tanstack/react-query"
 import {
 	type ColumnDef,
@@ -13,8 +10,9 @@ import {
 	useReactTable,
 } from "@tanstack/react-table"
 import { useMutation as useContextMutation, useQuery } from "convex/react"
-import { atom, useAtomValue, useSetAtom, useStore } from "jotai"
-import { TextCursorInputIcon, TrashIcon } from "lucide-react"
+import { useAtom, useAtomValue, useSetAtom, useStore } from "jotai"
+import { CheckIcon, TextCursorInputIcon, TrashIcon, XIcon } from "lucide-react"
+import { useEffect, useId, useRef } from "react"
 import { toast } from "sonner"
 import { DirectoryIcon } from "@/components/icons/directory-icon"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -32,6 +30,16 @@ import {
 	TableHeader,
 	TableRow,
 } from "@/components/ui/table"
+import { TextFileIcon } from "../components/icons/text-file-icon"
+import { Button } from "../components/ui/button"
+import { LoadingSpinner } from "../components/ui/loading-spinner"
+import { withDefaultOnError } from "../lib/error"
+import { cn } from "../lib/utils"
+import {
+	contextMenuTargeItemAtom,
+	newItemKindAtom,
+	optimisticDeletedItemsAtom,
+} from "./state"
 
 function formatFileSize(bytes: number): string {
 	if (bytes === 0) return "0 B"
@@ -42,16 +50,6 @@ function formatFileSize(bytes: number): string {
 
 	return `${parseFloat((bytes / k ** i).toFixed(2))} ${sizes[i]}`
 }
-
-const contextMenuTargeItemAtom = atom<DirectoryItem | null>(null)
-const optimisticDeletedItemsAtom = atom(
-	new Set<Id<"files"> | Id<"directories">>(),
-)
-
-const itemBeingAddedAtom = atom<{
-	kind: DirectoryItemKind
-	name: string
-} | null>(null)
 
 const columns: ColumnDef<DirectoryItem>[] = [
 	{
@@ -84,7 +82,7 @@ const columns: ColumnDef<DirectoryItem>[] = [
 					return <FileNameCell initialName={row.original.doc.name} />
 				case "directory":
 					return (
-						<div className="font-mono">
+						<div className="flex items-center gap-2">
 							<DirectoryIcon />
 							{row.original.doc.name}
 						</div>
@@ -134,11 +132,10 @@ export function FileTableContextMenu({
 }) {
 	const store = useStore()
 	const setOptimisticDeletedItems = useSetAtom(optimisticDeletedItemsAtom)
-	const moveToTrash = useContextMutation(api.files.moveToTrash)
-	const moveToTrashMutation = useMutation({
-		mutationFn: (itemId: Id<"files"> | Id<"directories">) =>
-			moveToTrash({ itemId }),
-		onMutate: (itemId) => {
+	const moveToTrashMutation = useContextMutation(api.files.moveToTrash)
+	const { mutate: moveToTrash } = useMutation({
+		mutationFn: moveToTrashMutation,
+		onMutate: ({ itemId }) => {
 			setOptimisticDeletedItems((prev) => new Set([...prev, itemId]))
 		},
 		onSuccess: (itemId) => {
@@ -162,7 +159,10 @@ export function FileTableContextMenu({
 	const handleDelete = () => {
 		const selectedItem = store.get(contextMenuTargeItemAtom)
 		if (selectedItem) {
-			moveToTrashMutation.mutate(selectedItem.doc._id)
+			moveToTrash({
+				kind: selectedItem.kind,
+				itemId: selectedItem.doc._id,
+			})
 		}
 	}
 
@@ -267,20 +267,105 @@ export function FileTableContent() {
 }
 
 function NewItemRow() {
-	const itemBeingAdded = useAtomValue(itemBeingAddedAtom)
-	if (!itemBeingAdded) {
+	const inputRef = useRef<HTMLInputElement>(null)
+	const newItemFormId = useId()
+	const [newItemKind, setNewItemKind] = useAtom(newItemKindAtom)
+	const { mutate: createDirectory, isPending } = useMutation({
+		mutationFn: useContextMutation(api.files.createDirectory),
+		onSuccess: () => {
+			setNewItemKind(null)
+		},
+		onError: withDefaultOnError(() => {
+			setTimeout(() => {
+				inputRef.current?.focus()
+			}, 1)
+		}),
+	})
+
+	useEffect(() => {
+		if (newItemKind) {
+			setTimeout(() => {
+				inputRef.current?.focus()
+			}, 1)
+		}
+	}, [newItemKind])
+
+	if (!newItemKind) {
 		return null
 	}
+
+	const onSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+		event.preventDefault()
+
+		const formData = new FormData(event.currentTarget)
+		const itemName = formData.get("itemName") as string
+
+		if (itemName) {
+			createDirectory({ name: itemName })
+		} else {
+			toast.error("Please enter a name.")
+		}
+	}
+
+	const clearNewItemKind = () => {
+		// setItemBeingAdded(null)
+		setNewItemKind(null)
+	}
+
 	return (
-		<TableRow>
+		<TableRow className={cn("align-middle", { "opacity-50": isPending })}>
 			<TableCell />
-			<TableCell>
-				<input type="text" value={itemBeingAdded.name} />
+			<TableCell className="p-0">
+				<div className="flex items-center gap-2 px-2 py-1 h-full">
+					{isPending ? (
+						<LoadingSpinner className="size-6" />
+					) : (
+						<DirectoryIcon />
+					)}
+					<form
+						className="w-full"
+						id={newItemFormId}
+						onSubmit={onSubmit}
+					>
+						<input
+							ref={inputRef}
+							type="text"
+							name="itemName"
+							defaultValue={newItemKind}
+							disabled={isPending}
+							className="w-full h-8 px-2 bg-transparent border border-input rounded-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary"
+						/>
+					</form>
+				</div>
+			</TableCell>
+			<TableCell />
+			<TableCell align="right" className="space-x-2 p-1">
+				{!isPending ? (
+					<>
+						<Button
+							type="button"
+							form={newItemFormId}
+							variant="ghost"
+							size="icon"
+							onClick={clearNewItemKind}
+						>
+							<XIcon />
+						</Button>
+						<Button type="submit" form={newItemFormId} size="icon">
+							<CheckIcon />
+						</Button>
+					</>
+				) : null}
 			</TableCell>
 		</TableRow>
 	)
 }
 
 function FileNameCell({ initialName }: { initialName: string }) {
-	return <div>{initialName}</div>
+	return (
+		<div className="flex items-center gap-2">
+			<TextFileIcon />
+			{initialName}
+		</div>
+	)
 }

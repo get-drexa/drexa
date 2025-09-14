@@ -65,12 +65,24 @@ export const saveFile = mutation({
 
 export const moveToTrash = mutation({
 	args: {
+		kind: v.union(v.literal("file"), v.literal("directory")),
 		itemId: v.union(v.id("files"), v.id("directories")),
 	},
-	handler: async (ctx, { itemId }) => {
-		await ctx.db.patch(itemId, {
-			deletedAt: new Date().toISOString(),
-		})
+	handler: async (ctx, { itemId, kind }) => {
+		switch (kind) {
+			case "file":
+				await ctx.db.patch(itemId, {
+					deletedAt: new Date().toISOString(),
+				})
+				break
+			case "directory":
+				await Directories.moveToTrashRecursive(
+					ctx,
+					itemId as Id<"directories">,
+				)
+				break
+		}
+
 		return itemId
 	},
 })
