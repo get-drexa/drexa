@@ -45,7 +45,7 @@ chmod 600 "$CREDENTIAL_FILE"
 # Add Gitea credentials (adjust URL to match your Gitea instance)
 # Format: https://username:token@gitea.example.com
 # Using the token as both username and password is common for API tokens
-echo "https://$GITEA_ACCESS_TOKEN:$GITEA_ACCESS_TOKEN@gitea.nym.sh" >> "$CREDENTIAL_FILE"
+echo "https://kennethnym:$GITEA_ACCESS_TOKEN@code.nym.sh" >> "$CREDENTIAL_FILE"
 
 # Additional Git configurations for better experience
 git config --global init.defaultBranch main
@@ -71,10 +71,20 @@ if [ -n "$GPG_PRIVATE_KEY" ]; then
     # Import the private key with passphrase if provided
     if [ -n "$GPG_PRIVATE_KEY_PASSPHRASE" ]; then
         echo "Using provided passphrase for key import..."
-        echo "$GPG_PRIVATE_KEY" | gpg --batch --yes --pinentry-mode loopback --passphrase "$GPG_PRIVATE_KEY_PASSPHRASE" --import
+        # Create temporary file for the key
+        TEMP_KEY_FILE=$(mktemp)
+        echo -e "$GPG_PRIVATE_KEY" > "$TEMP_KEY_FILE"
+        chmod 600 "$TEMP_KEY_FILE"
+        gpg --batch --yes --pinentry-mode loopback --passphrase "$GPG_PRIVATE_KEY_PASSPHRASE" --import "$TEMP_KEY_FILE"
+        rm -f "$TEMP_KEY_FILE"
     else
         echo "No passphrase provided, importing key..."
-        echo "$GPG_PRIVATE_KEY" | gpg --batch --import
+        # Create temporary file for the key
+        TEMP_KEY_FILE=$(mktemp)
+        echo -e "$GPG_PRIVATE_KEY" > "$TEMP_KEY_FILE"
+        chmod 600 "$TEMP_KEY_FILE"
+        gpg --batch --import "$TEMP_KEY_FILE"
+        rm -f "$TEMP_KEY_FILE"
     fi
     
     if [ $? -eq 0 ]; then

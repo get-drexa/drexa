@@ -6,6 +6,7 @@ RUN apt-get update && apt-get install -y \
     ca-certificates \
     gnupg \
     lsb-release \
+    ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Bun as the node user
