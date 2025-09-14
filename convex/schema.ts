@@ -16,7 +16,10 @@ const schema = defineSchema({
 		size: v.number(),
 		createdAt: v.string(),
 		updatedAt: v.string(),
-	}).index("byDirectoryId", ["directoryId"]),
+		deletedAt: v.optional(v.string()),
+	})
+		.index("byDirectoryId", ["directoryId", "deletedAt"])
+		.index("byDeletedAt", ["deletedAt"]),
 	directories: defineTable({
 		name: v.string(),
 		parentId: v.optional(v.id("directories")),

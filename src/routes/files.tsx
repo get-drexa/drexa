@@ -1,14 +1,3 @@
-import { api } from "@convex/_generated/api"
-import { createFileRoute } from "@tanstack/react-router"
-import { useMutation, useQuery } from "convex/react"
-import {
-	ChevronDownIcon,
-	Loader2Icon,
-	PlusIcon,
-	UploadCloudIcon,
-} from "lucide-react"
-import { type ChangeEvent, useRef, useState } from "react"
-import { toast } from "sonner"
 import { DirectoryIcon } from "@/components/icons/directory-icon"
 import { TextFileIcon } from "@/components/icons/text-file-icon"
 import {
@@ -26,6 +15,17 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { SidebarTrigger } from "@/components/ui/sidebar"
 import { FileTable } from "@/files/file-table"
+import { api } from "@convex/_generated/api"
+import { createFileRoute } from "@tanstack/react-router"
+import { useMutation, useQuery } from "convex/react"
+import {
+	ChevronDownIcon,
+	Loader2Icon,
+	PlusIcon,
+	UploadCloudIcon,
+} from "lucide-react"
+import { useRef, useState, type ChangeEvent } from "react"
+import { toast } from "sonner"
 
 export const Route = createFileRoute("/files")({
 	component: FilesPage,

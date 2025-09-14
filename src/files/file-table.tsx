@@ -1,9 +1,21 @@
 import { api } from "@convex/_generated/api"
-import type { DirectoryItem } from "@convex/model/directories"
-import type { ColumnDef, Row } from "@tanstack/react-table"
-import { useQuery } from "convex/react"
+import type { Id } from "@convex/_generated/dataModel"
+import type {
+	DirectoryItem,
+	DirectoryItemKind,
+} from "@convex/model/directories"
+import { useMutation } from "@tanstack/react-query"
+import {
+	type ColumnDef,
+	flexRender,
+	getCoreRowModel,
+	type Row,
+	useReactTable,
+} from "@tanstack/react-table"
+import { useMutation as useContextMutation, useQuery } from "convex/react"
+import { atom, useAtomValue, useSetAtom, useStore } from "jotai"
 import { TextCursorInputIcon, TrashIcon } from "lucide-react"
-import { useState } from "react"
+import { toast } from "sonner"
 import { DirectoryIcon } from "@/components/icons/directory-icon"
 import { Checkbox } from "@/components/ui/checkbox"
 import {
@@ -12,7 +24,14 @@ import {
 	ContextMenuItem,
 	ContextMenuTrigger,
 } from "@/components/ui/context-menu"
-import { DataTable } from "@/components/ui/data-table"
+import {
+	Table,
+	TableBody,
+	TableCell,
+	TableHead,
+	TableHeader,
+	TableRow,
+} from "@/components/ui/table"
 
 function formatFileSize(bytes: number): string {
 	if (bytes === 0) return "0 B"
@@ -23,6 +42,16 @@ function formatFileSize(bytes: number): string {
 
 	return `${parseFloat((bytes / k ** i).toFixed(2))} ${sizes[i]}`
 }
+
+const contextMenuTargeItemAtom = atom<DirectoryItem | null>(null)
+const optimisticDeletedItemsAtom = atom(
+	new Set<Id<"files"> | Id<"directories">>(),
+)
+
+const itemBeingAddedAtom = atom<{
+	kind: DirectoryItemKind
+	name: string
+} | null>(null)
 
 const columns: ColumnDef<DirectoryItem>[] = [
 	{
@@ -89,14 +118,41 @@ const columns: ColumnDef<DirectoryItem>[] = [
 ]
 
 export function FileTable() {
-	const directory = useQuery(api.files.fetchDirectoryContent, {})
-	const [selectedItem, setSelectedItem] = useState<DirectoryItem | null>(null)
+	return (
+		<FileTableContextMenu>
+			<div className="w-full">
+				<FileTableContent />
+			</div>
+		</FileTableContextMenu>
+	)
+}
 
-	if (!directory) {
-		return null
-	}
+export function FileTableContextMenu({
+	children,
+}: {
+	children: React.ReactNode
+}) {
+	const store = useStore()
+	const setOptimisticDeletedItems = useSetAtom(optimisticDeletedItemsAtom)
+	const moveToTrash = useContextMutation(api.files.moveToTrash)
+	const moveToTrashMutation = useMutation({
+		mutationFn: (itemId: Id<"files"> | Id<"directories">) =>
+			moveToTrash({ itemId }),
+		onMutate: (itemId) => {
+			setOptimisticDeletedItems((prev) => new Set([...prev, itemId]))
+		},
+		onSuccess: (itemId) => {
+			setOptimisticDeletedItems((prev) => {
+				const newSet = new Set(prev)
+				newSet.delete(itemId)
+				return newSet
+			})
+			toast.success("Moved to trash")
+		},
+	})
 
 	const handleRename = () => {
+		const selectedItem = store.get(contextMenuTargeItemAtom)
 		if (selectedItem) {
 			console.log("Renaming:", selectedItem.doc.name)
 			// TODO: Implement rename functionality
@@ -104,27 +160,15 @@ export function FileTable() {
 	}
 
 	const handleDelete = () => {
+		const selectedItem = store.get(contextMenuTargeItemAtom)
 		if (selectedItem) {
-			console.log("Deleting:", selectedItem.doc.name)
-			// TODO: Implement delete functionality
+			moveToTrashMutation.mutate(selectedItem.doc._id)
 		}
-	}
-
-	const handleRowContextMenu = (row: Row<DirectoryItem>) => {
-		setSelectedItem(row.original)
 	}
 
 	return (
 		<ContextMenu>
-			<ContextMenuTrigger asChild>
-				<div className="w-full">
-					<DataTable
-						columns={columns}
-						data={directory}
-						onRowContextMenu={handleRowContextMenu}
-					/>
-				</div>
-			</ContextMenuTrigger>
+			<ContextMenuTrigger asChild>{children}</ContextMenuTrigger>
 			<ContextMenuContent>
 				<ContextMenuItem onClick={handleRename}>
 					<TextCursorInputIcon />
@@ -136,6 +180,104 @@ export function FileTable() {
 				</ContextMenuItem>
 			</ContextMenuContent>
 		</ContextMenu>
+	)
+}
+
+export function FileTableContent() {
+	const directory = useQuery(api.files.fetchDirectoryContent, {})
+	const optimisticDeletedItems = useAtomValue(optimisticDeletedItemsAtom)
+	const setContextMenuTargetItem = useSetAtom(contextMenuTargeItemAtom)
+
+	const handleRowContextMenu = (
+		row: Row<DirectoryItem>,
+		event: React.MouseEvent,
+	) => {
+		setContextMenuTargetItem(row.original)
+	}
+
+	const table = useReactTable({
+		data: directory || [],
+		columns,
+		getCoreRowModel: getCoreRowModel(),
+		enableRowSelection: true,
+		enableGlobalFilter: true,
+		globalFilterFn: (row, _columnId, _filterValue, _addMeta) => {
+			return !optimisticDeletedItems.has(row.original.doc._id)
+		},
+	})
+
+	if (!directory) {
+		return null
+	}
+
+	return (
+		<div className="overflow-hidden rounded-md border">
+			<Table>
+				<TableHeader>
+					{table.getHeaderGroups().map((headerGroup) => (
+						<TableRow key={headerGroup.id}>
+							{headerGroup.headers.map((header) => (
+								<TableHead key={header.id}>
+									{header.isPlaceholder
+										? null
+										: flexRender(
+												header.column.columnDef.header,
+												header.getContext(),
+											)}
+								</TableHead>
+							))}
+						</TableRow>
+					))}
+				</TableHeader>
+				<TableBody>
+					{table.getRowModel().rows?.length ? (
+						table.getRowModel().rows.map((row) => (
+							<TableRow
+								key={row.id}
+								data-state={row.getIsSelected() && "selected"}
+								onContextMenu={(e) => {
+									handleRowContextMenu(row, e)
+								}}
+							>
+								{row.getVisibleCells().map((cell) => (
+									<TableCell key={cell.id}>
+										{flexRender(
+											cell.column.columnDef.cell,
+											cell.getContext(),
+										)}
+									</TableCell>
+								))}
+							</TableRow>
+						))
+					) : (
+						<TableRow>
+							<TableCell
+								colSpan={columns.length}
+								className="text-center"
+							>
+								No results.
+							</TableCell>
+						</TableRow>
+					)}
+					<NewItemRow />
+				</TableBody>
+			</Table>
+		</div>
+	)
+}
+
+function NewItemRow() {
+	const itemBeingAdded = useAtomValue(itemBeingAddedAtom)
+	if (!itemBeingAdded) {
+		return null
+	}
+	return (
+		<TableRow>
+			<TableCell />
+			<TableCell>
+				<input type="text" value={itemBeingAdded.name} />
+			</TableCell>
+		</TableRow>
 	)
 }
 

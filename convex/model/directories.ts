@@ -12,6 +12,7 @@ type File = {
 }
 
 export type DirectoryItem = Directory | File
+export type DirectoryItemKind = DirectoryItem["kind"]
 
 export async function fetchContent(
 	ctx: QueryCtx,
@@ -20,7 +21,9 @@ export async function fetchContent(
 	const [files, directories] = await Promise.all([
 		ctx.db
 			.query("files")
-			.withIndex("byDirectoryId", (q) => q.eq("directoryId", directoryId))
+			.withIndex("byDirectoryId", (q) =>
+				q.eq("directoryId", directoryId).eq("deletedAt", undefined),
+			)
 			.collect(),
 		ctx.db
 			.query("directories")

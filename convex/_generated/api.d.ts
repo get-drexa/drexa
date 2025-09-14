@@ -15,6 +15,7 @@ import type {
 } from "convex/server";
 import type * as files from "../files.js";
 import type * as model_directories from "../model/directories.js";
+import type * as model_files from "../model/files.js";
 import type * as users from "../users.js";
 
 /**
@@ -28,6 +29,7 @@ import type * as users from "../users.js";
 declare const fullApi: ApiFromModules<{
   files: typeof files;
   "model/directories": typeof model_directories;
+  "model/files": typeof model_files;
   users: typeof users;
 }>;
 export declare const api: FilterApi<

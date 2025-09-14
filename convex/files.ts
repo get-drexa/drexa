@@ -62,3 +62,15 @@ export const saveFile = mutation({
 		})
 	},
 })
+
+export const moveToTrash = mutation({
+	args: {
+		itemId: v.union(v.id("files"), v.id("directories")),
+	},
+	handler: async (ctx, { itemId }) => {
+		await ctx.db.patch(itemId, {
+			deletedAt: new Date().toISOString(),
+		})
+		return itemId
+	},
+})
