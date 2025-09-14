@@ -45,7 +45,7 @@ chmod 600 "$CREDENTIAL_FILE"
 # Add Gitea credentials (adjust URL to match your Gitea instance)
 # Format: https://username:token@gitea.example.com
 # Using the token as both username and password is common for API tokens
-echo "https://kennethnym:$GITEA_ACCESS_TOKEN@code.nym.sh" >> "$CREDENTIAL_FILE"
+echo "https://$GITEA_USERNAME:$GITEA_ACCESS_TOKEN@code.nym.sh" >> "$CREDENTIAL_FILE"
 
 # Additional Git configurations for better experience
 git config --global init.defaultBranch main
