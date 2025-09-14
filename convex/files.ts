@@ -48,8 +48,12 @@ export const saveFile = mutation({
 		directoryId: v.optional(v.id("directories")),
 		storageId: v.id("_storage"),
 		userId: v.id("users"),
+		mimeType: v.optional(v.string()),
 	},
-	handler: async (ctx, { name, storageId, directoryId, userId, size }) => {
+	handler: async (
+		ctx,
+		{ name, storageId, directoryId, userId, size, mimeType },
+	) => {
 		const now = new Date().toISOString()
 		await ctx.db.insert("files", {
 			name,
@@ -57,6 +61,7 @@ export const saveFile = mutation({
 			storageId,
 			directoryId,
 			userId,
+			mimeType,
 			createdAt: now,
 			updatedAt: now,
 		})

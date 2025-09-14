@@ -55,6 +55,7 @@ export function FilesPage() {
 	)
 }
 
+// tags: upload, uploadfile, uploadfilebutton, fileupload, fileuploadbutton
 function UploadFileButton() {
 	const [isUploading, setIsUploading] = useState(false)
 	const currentUser = useConvexQuery(api.users.getCurrentUser)
@@ -90,6 +91,7 @@ function UploadFileButton() {
 					storageId,
 					name: file.name,
 					size: file.size,
+					mimeType: file.type,
 					userId: currentUser._id,
 				})
 

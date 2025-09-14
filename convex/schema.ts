@@ -14,6 +14,7 @@ const schema = defineSchema({
 		directoryId: v.optional(v.id("directories")),
 		name: v.string(),
 		size: v.number(),
+		mimeType: v.optional(v.string()),
 		createdAt: v.string(),
 		updatedAt: v.string(),
 		deletedAt: v.optional(v.string()),
