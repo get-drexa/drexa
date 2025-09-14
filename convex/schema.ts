@@ -24,11 +24,13 @@ const schema = defineSchema({
 		.index("uniqueFileInDirectory", ["directoryId", "name", "deletedAt"]),
 	directories: defineTable({
 		name: v.string(),
+		userId: v.id("users"),
 		parentId: v.optional(v.id("directories")),
 		createdAt: v.string(),
 		updatedAt: v.string(),
 		deletedAt: v.optional(v.string()),
 	})
+		.index("byUserId", ["userId"])
 		.index("byParentId", ["parentId", "deletedAt"])
 		.index("uniqueDirectoryInDirectory", ["parentId", "name", "deletedAt"]),
 })
