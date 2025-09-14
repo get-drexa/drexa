@@ -14,7 +14,7 @@
 			"version": "latest"
 		}
 	},
-	"postCreateCommand": "bun install",
+	"postCreateCommand": "./scripts/setup-git.sh",
 	"customizations": {
 		"vscode": {
 			"extensions": [
