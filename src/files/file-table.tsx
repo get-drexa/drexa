@@ -72,6 +72,7 @@ const columns: ColumnDef<DirectoryItem>[] = [
 		),
 		enableSorting: false,
 		enableHiding: false,
+		size: 24,
 	},
 	{
 		header: "Name",
@@ -82,13 +83,14 @@ const columns: ColumnDef<DirectoryItem>[] = [
 					return <FileNameCell initialName={row.original.doc.name} />
 				case "directory":
 					return (
-						<div className="flex items-center gap-2">
+						<div className="flex w-full items-center gap-2">
 							<DirectoryIcon className="size-4" />
 							{row.original.doc.name}
 						</div>
 					)
 			}
 		},
+		size: 1000,
 	},
 	{
 		header: "Size",
@@ -217,7 +219,10 @@ export function FileTableContent() {
 					{table.getHeaderGroups().map((headerGroup) => (
 						<TableRow key={headerGroup.id}>
 							{headerGroup.headers.map((header) => (
-								<TableHead key={header.id}>
+								<TableHead
+									key={header.id}
+									style={{ width: header.getSize() }}
+								>
 									{header.isPlaceholder
 										? null
 										: flexRender(
@@ -240,7 +245,10 @@ export function FileTableContent() {
 								}}
 							>
 								{row.getVisibleCells().map((cell) => (
-									<TableCell key={cell.id}>
+									<TableCell
+										key={cell.id}
+										style={{ width: cell.column.getSize() }}
+									>
 										{flexRender(
 											cell.column.columnDef.cell,
 											cell.getContext(),
@@ -250,19 +258,26 @@ export function FileTableContent() {
 							</TableRow>
 						))
 					) : (
-						<TableRow>
-							<TableCell
-								colSpan={columns.length}
-								className="text-center"
-							>
-								No results.
-							</TableCell>
-						</TableRow>
+						<NoResultsRow />
 					)}
 					<NewItemRow />
 				</TableBody>
 			</Table>
 		</div>
+	)
+}
+
+function NoResultsRow() {
+	const newItemKind = useAtomValue(newItemKindAtom)
+	if (newItemKind) {
+		return null
+	}
+	return (
+		<TableRow>
+			<TableCell colSpan={columns.length} className="text-center">
+				No results.
+			</TableCell>
+		</TableRow>
 	)
 }
 
@@ -363,7 +378,7 @@ function NewItemRow() {
 
 function FileNameCell({ initialName }: { initialName: string }) {
 	return (
-		<div className="flex items-center gap-2">
+		<div className="flex w-full items-center gap-2">
 			<TextFileIcon className="size-4" />
 			{initialName}
 		</div>
