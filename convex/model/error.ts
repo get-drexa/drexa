@@ -4,6 +4,7 @@ export enum Code {
 	DirectoryExists = "DirectoryExists",
 	FileExists = "FileExists",
 	Internal = "Internal",
+	Unauthenticated = "Unauthenticated",
 }
 
 export type ApplicationError = ConvexError<{ code: Code; message: string }>

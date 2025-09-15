@@ -3,11 +3,8 @@ import { v } from "convex/values"
 
 const schema = defineSchema({
 	users: defineTable({
-		name: v.string(),
-		email: v.string(),
-		createdAt: v.string(),
-		updatedAt: v.string(),
-	}),
+		jwtSubject: v.optional(v.string()), // JWT subject from identity provider (optional for migration)
+	}).index("byJwtSubject", ["jwtSubject"]), // Unique index for JWT subject lookup
 	files: defineTable({
 		storageId: v.id("_storage"),
 		userId: v.id("users"),
@@ -20,6 +17,7 @@ const schema = defineSchema({
 		deletedAt: v.optional(v.string()),
 	})
 		.index("byDirectoryId", ["directoryId", "deletedAt"])
+		.index("byUserId", ["userId", "deletedAt"])
 		.index("byDeletedAt", ["deletedAt"])
 		.index("uniqueFileInDirectory", ["directoryId", "name", "deletedAt"]),
 	directories: defineTable({
@@ -30,7 +28,7 @@ const schema = defineSchema({
 		updatedAt: v.string(),
 		deletedAt: v.optional(v.string()),
 	})
-		.index("byUserId", ["userId"])
+		.index("byUserId", ["userId", "deletedAt"])
 		.index("byParentId", ["parentId", "deletedAt"])
 		.index("uniqueDirectoryInDirectory", ["parentId", "name", "deletedAt"]),
 })

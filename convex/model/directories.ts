@@ -18,6 +18,7 @@ export type DirectoryItemKind = DirectoryItem["kind"]
 export async function fetchContent(
 	ctx: QueryCtx,
 	directoryId?: Id<"directories">,
+	userId?: Id<"users">,
 ): Promise<DirectoryItem[]> {
 	const [files, directories] = await Promise.all([
 		ctx.db
@@ -25,11 +26,13 @@ export async function fetchContent(
 			.withIndex("byDirectoryId", (q) =>
 				q.eq("directoryId", directoryId).eq("deletedAt", undefined),
 			)
+			.filter((q) => userId ? q.eq(q.field("userId"), userId) : q.neq(q.field("userId"), null))
 			.collect(),
 		ctx.db
 			.query("directories")
 			.withIndex("byParentId", (q) => q.eq("parentId", directoryId))
 			.filter((q) => q.eq(q.field("deletedAt"), undefined))
+			.filter((q) => userId ? q.eq(q.field("userId"), userId) : q.neq(q.field("userId"), null))
 			.collect(),
 	])
 
@@ -46,13 +49,25 @@ export async function fetchContent(
 
 export async function create(
 	ctx: MutationCtx,
-	{ name, parentId }: { name: string; parentId?: Id<"directories"> },
+	{ name, parentId, userId }: { name: string; parentId?: Id<"directories">; userId: Id<"users"> },
 ): Promise<Id<"directories">> {
+	// Check if parent directory exists and belongs to user
+	if (parentId) {
+		const parentDir = await ctx.db.get(parentId)
+		if (!parentDir || parentDir.userId !== userId) {
+			throw Err.create(
+				Err.Code.DirectoryExists,
+				"Parent directory not found or access denied",
+			)
+		}
+	}
+
 	const existing = await ctx.db
 		.query("directories")
 		.withIndex("uniqueDirectoryInDirectory", (q) =>
 			q.eq("parentId", parentId).eq("name", name),
 		)
+		.filter((q) => q.eq(q.field("userId"), userId))
 		.first()
 
 	if (existing) {
@@ -66,6 +81,7 @@ export async function create(
 	return await ctx.db.insert("directories", {
 		name,
 		parentId,
+		userId,
 		createdAt: now,
 		updatedAt: now,
 	})
@@ -74,6 +90,7 @@ export async function create(
 export async function moveToTrashRecursive(
 	ctx: MutationCtx,
 	directoryId: Id<"directories">,
+	userId: Id<"users">,
 ): Promise<void> {
 	const now = new Date().toISOString()
 
@@ -93,6 +110,7 @@ export async function moveToTrashRecursive(
 					.eq("directoryId", currentDirectoryId)
 					.eq("deletedAt", undefined),
 			)
+			.filter((q) => q.eq(q.field("userId"), userId))
 			.collect()
 
 		for (const file of files) {
@@ -104,6 +122,7 @@ export async function moveToTrashRecursive(
 			.withIndex("byParentId", (q) =>
 				q.eq("parentId", currentDirectoryId).eq("deletedAt", undefined),
 			)
+			.filter((q) => q.eq(q.field("userId"), userId))
 			.collect()
 
 		for (const subdirectory of subdirectories) {
