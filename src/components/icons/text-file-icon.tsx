@@ -1,4 +1,6 @@
-export function TextFileIcon() {
+import { cn } from "@/lib/utils"
+
+export function TextFileIcon({ className }: { className?: string }) {
 	return (
 		<svg
 			xmlns="http://www.w3.org/2000/svg"
@@ -6,7 +8,10 @@ export function TextFileIcon() {
 			height="24"
 			viewBox="0 0 24 24"
 			fill="currentColor"
-			className="icon icon-tabler icons-tabler-filled icon-tabler-file-text text-blue-300"
+			className={cn(
+				"icon icon-tabler icons-tabler-filled icon-tabler-file-text text-blue-300",
+				className,
+			)}
 		>
 			<title>Text File</title>
 			<path stroke="none" d="M0 0h24v24H0z" fill="none" />

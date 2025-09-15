@@ -83,7 +83,7 @@ const columns: ColumnDef<DirectoryItem>[] = [
 				case "directory":
 					return (
 						<div className="flex items-center gap-2">
-							<DirectoryIcon />
+							<DirectoryIcon className="size-4" />
 							{row.original.doc.name}
 						</div>
 					)
@@ -364,7 +364,7 @@ function NewItemRow() {
 function FileNameCell({ initialName }: { initialName: string }) {
 	return (
 		<div className="flex items-center gap-2">
-			<TextFileIcon />
+			<TextFileIcon className="size-4" />
 			{initialName}
 		</div>
 	)

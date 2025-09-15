@@ -1,4 +1,6 @@
-export function DirectoryIcon() {
+import { cn } from "@/lib/utils"
+
+export function DirectoryIcon({ className }: { className?: string }) {
 	return (
 		<svg
 			xmlns="http://www.w3.org/2000/svg"
@@ -6,7 +8,10 @@ export function DirectoryIcon() {
 			height="24"
 			viewBox="0 0 24 24"
 			fill="currentColor"
-			className="icon icon-tabler icons-tabler-filled icon-tabler-folder text-orange-300"
+			className={cn(
+				"icon icon-tabler icons-tabler-filled icon-tabler-folder text-orange-300",
+				className,
+			)}
 			aria-label="Directory"
 		>
 			<title>Directory</title>
