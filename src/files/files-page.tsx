@@ -1,8 +1,6 @@
 import { api } from "@convex/_generated/api"
-import {
-	useMutation as useConvexMutation,
-	useQuery as useConvexQuery,
-} from "convex/react"
+import { useMutation } from "@tanstack/react-query"
+import { useMutation as useConvexMutation } from "convex/react"
 import { useSetAtom } from "jotai"
 import {
 	ChevronDownIcon,
@@ -10,7 +8,7 @@ import {
 	PlusIcon,
 	UploadCloudIcon,
 } from "lucide-react"
-import { type ChangeEvent, useRef, useState } from "react"
+import { type ChangeEvent, useRef } from "react"
 import { toast } from "sonner"
 import {
 	DropdownMenu,
@@ -57,10 +55,32 @@ export function FilesPage() {
 
 // tags: upload, uploadfile, uploadfilebutton, fileupload, fileuploadbutton
 function UploadFileButton() {
-	const [isUploading, setIsUploading] = useState(false)
-	const currentUser = useConvexQuery(api.users.getCurrentUser)
 	const generateUploadUrl = useConvexMutation(api.files.generateUploadUrl)
 	const saveFile = useConvexMutation(api.files.saveFile)
+	const { mutate: uploadFile, isPending: isUploading } = useMutation({
+		mutationFn: async (file: File) => {
+			const uploadUrl = await generateUploadUrl()
+			const uploadResult = await fetch(uploadUrl, {
+				method: "POST",
+				body: file,
+				headers: {
+					"Content-Type": file.type,
+				},
+			})
+			const { storageId } = await uploadResult.json()
+
+			await saveFile({
+				storageId,
+				name: file.name,
+				size: file.size,
+				mimeType: file.type,
+			})
+		},
+		onSuccess: () => {
+			toast.success("File uploaded successfully.")
+		},
+	})
+
 	const fileInputRef = useRef<HTMLInputElement>(null)
 
 	const handleClick = () => {
@@ -68,41 +88,9 @@ function UploadFileButton() {
 	}
 
 	const onFileUpload = async (e: ChangeEvent<HTMLInputElement>) => {
-		if (!currentUser?._id) {
-			return
-		}
-
 		const file = e.target.files?.[0]
 		if (file) {
-			try {
-				setIsUploading(true)
-
-				const uploadUrl = await generateUploadUrl()
-				const uploadResult = await fetch(uploadUrl, {
-					method: "POST",
-					body: file,
-					headers: {
-						"Content-Type": file.type,
-					},
-				})
-				const { storageId } = await uploadResult.json()
-
-				await saveFile({
-					storageId,
-					name: file.name,
-					size: file.size,
-					mimeType: file.type,
-					userId: currentUser._id,
-				})
-
-				toast.success("File uploaded successfully.", {
-					position: "top-center",
-				})
-			} catch (error) {
-				console.error(error)
-			} finally {
-				setIsUploading(false)
-			}
+			uploadFile(file)
 		}
 	}
 
