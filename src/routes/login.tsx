@@ -9,5 +9,9 @@ export const Route = createFileRoute("/login")({
 function RouteComponent() {
 	const { signIn } = useAuth()
 
-	return <Button onClick={() => signIn()}>Login</Button>
+	return (
+		<div className="flex h-screen w-full items-center justify-center">
+			<Button onClick={() => signIn()}>Login</Button>
+		</div>
+	)
 }

@@ -3,8 +3,8 @@ import { v } from "convex/values"
 
 const schema = defineSchema({
 	users: defineTable({
-		jwtSubject: v.optional(v.string()), // JWT subject from identity provider (optional for migration)
-	}).index("byJwtSubject", ["jwtSubject"]), // Unique index for JWT subject lookup
+		jwtSubject: v.string(),
+	}).index("byJwtSubject", ["jwtSubject"]),
 	files: defineTable({
 		storageId: v.id("_storage"),
 		userId: v.id("users"),

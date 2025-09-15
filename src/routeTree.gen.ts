@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as AuthenticatedRouteImport } from './routes/_authenticated'
 import { Route as AuthenticatedIndexRouteImport } from './routes/_authenticated/index'
+import { Route as LoginCallbackRouteImport } from './routes/login_.callback'
 import { Route as AuthenticatedSidebarLayoutRouteImport } from './routes/_authenticated/_sidebar-layout'
 import { Route as AuthenticatedSidebarLayoutFilesRouteImport } from './routes/_authenticated/_sidebar-layout/files'
 
@@ -29,6 +30,11 @@ const AuthenticatedIndexRoute = AuthenticatedIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
+const LoginCallbackRoute = LoginCallbackRouteImport.update({
+  id: '/login_/callback',
+  path: '/login/callback',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AuthenticatedSidebarLayoutRoute =
   AuthenticatedSidebarLayoutRouteImport.update({
     id: '/_sidebar-layout',
@@ -43,11 +49,13 @@ const AuthenticatedSidebarLayoutFilesRoute =
 
 export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
+  '/login/callback': typeof LoginCallbackRoute
   '/': typeof AuthenticatedIndexRoute
   '/files': typeof AuthenticatedSidebarLayoutFilesRoute
 }
 export interface FileRoutesByTo {
   '/login': typeof LoginRoute
+  '/login/callback': typeof LoginCallbackRoute
   '/': typeof AuthenticatedIndexRoute
   '/files': typeof AuthenticatedSidebarLayoutFilesRoute
 }
@@ -56,19 +64,21 @@ export interface FileRoutesById {
   '/_authenticated': typeof AuthenticatedRouteWithChildren
   '/login': typeof LoginRoute
   '/_authenticated/_sidebar-layout': typeof AuthenticatedSidebarLayoutRouteWithChildren
+  '/login_/callback': typeof LoginCallbackRoute
   '/_authenticated/': typeof AuthenticatedIndexRoute
   '/_authenticated/_sidebar-layout/files': typeof AuthenticatedSidebarLayoutFilesRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/login' | '/' | '/files'
+  fullPaths: '/login' | '/login/callback' | '/' | '/files'
   fileRoutesByTo: FileRoutesByTo
-  to: '/login' | '/' | '/files'
+  to: '/login' | '/login/callback' | '/' | '/files'
   id:
     | '__root__'
     | '/_authenticated'
     | '/login'
     | '/_authenticated/_sidebar-layout'
+    | '/login_/callback'
     | '/_authenticated/'
     | '/_authenticated/_sidebar-layout/files'
   fileRoutesById: FileRoutesById
@@ -76,6 +86,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   AuthenticatedRoute: typeof AuthenticatedRouteWithChildren
   LoginRoute: typeof LoginRoute
+  LoginCallbackRoute: typeof LoginCallbackRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -100,6 +111,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/'
       preLoaderRoute: typeof AuthenticatedIndexRouteImport
       parentRoute: typeof AuthenticatedRoute
+    }
+    '/login_/callback': {
+      id: '/login_/callback'
+      path: '/login/callback'
+      fullPath: '/login/callback'
+      preLoaderRoute: typeof LoginCallbackRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/_authenticated/_sidebar-layout': {
       id: '/_authenticated/_sidebar-layout'
@@ -149,6 +167,7 @@ const AuthenticatedRouteWithChildren = AuthenticatedRoute._addFileChildren(
 const rootRouteChildren: RootRouteChildren = {
   AuthenticatedRoute: AuthenticatedRouteWithChildren,
   LoginRoute: LoginRoute,
+  LoginCallbackRoute: LoginCallbackRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

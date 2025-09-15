@@ -10,14 +10,10 @@ export enum Code {
 export type ApplicationError = ConvexError<{ code: Code; message: string }>
 
 export function isApplicationError(error: unknown): error is ApplicationError {
-	return (
-		error instanceof ConvexError &&
-		"code" in error.data &&
-		"message" in error.data
-	)
+	return error instanceof ConvexError && "code" in error.data
 }
 
-export function create(code: Code, message: string = "unknown error") {
+export function create(code: Code, message?: string) {
 	return new ConvexError({
 		code,
 		message,

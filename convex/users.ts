@@ -1,6 +1,6 @@
 import { mutation } from "./_generated/server"
 import { authenticatedQuery } from "./functions"
-import { getOrCreateUser, userIdentityOrThrow } from "./model/user"
+import * as Err from "./model/error"
 
 export const getCurrentUser = authenticatedQuery({
 	handler: async (ctx) => {
@@ -11,15 +11,22 @@ export const getCurrentUser = authenticatedQuery({
 
 export const syncUser = mutation({
 	handler: async (ctx) => {
-		// This function creates or updates the internal user from identity provider
-		const userId = await getOrCreateUser(ctx)
-		const identity = await userIdentityOrThrow(ctx)
-		
-		return {
-			userId,
-			jwtSubject: identity.subject,
-			name: identity.name,
-			email: identity.email,
+		const identity = await ctx.auth.getUserIdentity()
+		if (!identity) {
+			throw Err.create(Err.Code.Unauthenticated)
+		}
+
+		const existingUser = await ctx.db
+			.query("users")
+			.withIndex("byJwtSubject", (q) =>
+				q.eq("jwtSubject", identity.subject),
+			)
+			.first()
+
+		if (!existingUser) {
+			await ctx.db.insert("users", {
+				jwtSubject: identity.subject,
+			})
 		}
 	},
 })

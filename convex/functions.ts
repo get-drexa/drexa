@@ -1,39 +1,46 @@
+import type { UserIdentity } from "convex/server"
 import {
+	customCtx,
 	customMutation,
 	customQuery,
 } from "convex-helpers/server/customFunctions"
+import type { Doc } from "./_generated/dataModel"
+import type { MutationCtx, QueryCtx } from "./_generated/server"
 import { mutation, query } from "./_generated/server"
 import { userIdentityOrThrow, userOrThrow } from "./model/user"
+
+export type AuthenticatedQueryCtx = QueryCtx & {
+	user: Doc<"users">
+	identity: UserIdentity
+}
+
+export type AuthenticatedMutationCtx = MutationCtx & {
+	user: Doc<"users">
+	identity: UserIdentity
+}
 
 /**
  * Custom query that automatically provides authenticated user context
  * Throws an error if the user is not authenticated
  */
-export const authenticatedQuery = customQuery(query, {
-	args: {},
-	input: async (ctx, args) => {
+export const authenticatedQuery = customQuery(
+	query,
+	customCtx(async (ctx: QueryCtx) => {
 		const user = await userOrThrow(ctx)
 		const identity = await userIdentityOrThrow(ctx)
-		return {
-			ctx: { ...ctx, user, identity },
-			args,
-		}
-	},
-})
+		return { user, identity }
+	}),
+)
 
 /**
  * Custom mutation that automatically provides authenticated user context
  * Throws an error if the user is not authenticated
  */
-export const authenticatedMutation = customMutation(mutation, {
-	args: {},
-	input: async (ctx, args) => {
+export const authenticatedMutation = customMutation(
+	mutation,
+	customCtx(async (ctx: MutationCtx) => {
 		const user = await userOrThrow(ctx)
 		const identity = await userIdentityOrThrow(ctx)
-
-		return {
-			ctx: { ...ctx, user, identity },
-			args,
-		}
-	},
-})
+		return { user, identity }
+	}),
+)
