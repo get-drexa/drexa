@@ -3,6 +3,14 @@
   "workspaces": {
     "": {
       "name": "bun-react-template",
+      "devDependencies": {
+        "@biomejs/biome": "2.2.4",
+        "@types/bun": "latest",
+      },
+    },
+    "packages/web": {
+      "name": "@fileone/web",
+      "version": "0.1.0",
       "dependencies": {
         "@convex-dev/workos": "^0.0.1",
         "@radix-ui/react-checkbox": "^1.3.3",
@@ -33,9 +41,7 @@
         "tw-animate-css": "^1.3.8",
       },
       "devDependencies": {
-        "@biomejs/biome": "2.2.4",
         "@tanstack/router-cli": "^1.131.41",
-        "@types/bun": "latest",
         "@types/react": "^19",
         "@types/react-dom": "^19",
       },
@@ -173,6 +179,8 @@
     "@esbuild/win32-ia32": ["@esbuild/win32-ia32@0.25.4", "", { "os": "win32", "cpu": "ia32" }, "sha512-i1sW+1i+oWvQzSgfRcxxG2k4I9n3O9NRqy8U+uugaT2Dy7kLO9Y7wI72haOahxceMX8hZAzgGou1FhndRldxRg=="],
 
     "@esbuild/win32-x64": ["@esbuild/win32-x64@0.25.4", "", { "os": "win32", "cpu": "x64" }, "sha512-nOT2vZNw6hJ+z43oP1SPea/G/6AbN6X+bGNhNuq8NtRHy4wsMhw765IKLNmnjek7GvjWBYQ8Q5VBoYTFg9y1UQ=="],
+
+    "@fileone/web": ["@fileone/web@workspace:packages/web"],
 
     "@floating-ui/core": ["@floating-ui/core@1.7.3", "", { "dependencies": { "@floating-ui/utils": "^0.2.10" } }, "sha512-sGnvb5dmrJaKEZ+LDIpguvdX3bDlEllmv4/ClQ9awcmCZrlx5jQyyMWFM5kBI+EyNOCDDiKk8il0zeuX3Zlg/w=="],
 

@@ -1,5 +1,5 @@
 import { toast } from "sonner"
-import { Code as ErrorCode, isApplicationError } from "../../convex/model/error"
+import { Code as ErrorCode, isApplicationError } from "@convex/model/error"
 
 const ERROR_MESSAGE = {
 	[ErrorCode.DirectoryExists]: "Directory already exists",
