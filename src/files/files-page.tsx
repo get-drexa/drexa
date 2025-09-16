@@ -23,9 +23,9 @@ import {
 	BreadcrumbItem,
 	BreadcrumbList,
 	BreadcrumbPage,
+	BreadcrumbSeparator,
 } from "../components/ui/breadcrumb"
 import { Button } from "../components/ui/button"
-import { SidebarTrigger } from "../components/ui/sidebar"
 import { FileTable } from "./file-table"
 import { newItemKindAtom } from "./state"
 
@@ -33,12 +33,12 @@ export function FilesPage() {
 	return (
 		<>
 			<header className="flex py-2 shrink-0 items-center gap-2 border-b px-4 w-full">
-				<SidebarTrigger className="-ml-1.5" />
 				<Breadcrumb>
 					<BreadcrumbList>
 						<BreadcrumbItem>
-							<BreadcrumbPage>Files</BreadcrumbPage>
+							<BreadcrumbPage>All Files</BreadcrumbPage>
 						</BreadcrumbItem>
+						<BreadcrumbSeparator />
 					</BreadcrumbList>
 				</Breadcrumb>
 				<div className="ml-auto flex flex-row gap-2">
