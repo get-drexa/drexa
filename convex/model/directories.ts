@@ -1,5 +1,8 @@
 import type { Doc, Id } from "@convex/_generated/dataModel"
-import type { MutationCtx, QueryCtx } from "@convex/_generated/server"
+import type {
+	AuthenticatedMutationCtx,
+	AuthenticatedQueryCtx,
+} from "../functions"
 import * as Err from "./error"
 
 type Directory = {
@@ -16,23 +19,27 @@ export type DirectoryItem = Directory | File
 export type DirectoryItemKind = DirectoryItem["kind"]
 
 export async function fetchContent(
-	ctx: QueryCtx,
+	ctx: AuthenticatedQueryCtx,
 	directoryId?: Id<"directories">,
-	userId?: Id<"users">,
 ): Promise<DirectoryItem[]> {
 	const [files, directories] = await Promise.all([
 		ctx.db
 			.query("files")
 			.withIndex("byDirectoryId", (q) =>
-				q.eq("directoryId", directoryId).eq("deletedAt", undefined),
+				q
+					.eq("userId", ctx.user._id)
+					.eq("directoryId", directoryId)
+					.eq("deletedAt", undefined),
 			)
-			.filter((q) => userId ? q.eq(q.field("userId"), userId) : q.neq(q.field("userId"), null))
 			.collect(),
 		ctx.db
 			.query("directories")
-			.withIndex("byParentId", (q) => q.eq("parentId", directoryId))
-			.filter((q) => q.eq(q.field("deletedAt"), undefined))
-			.filter((q) => userId ? q.eq(q.field("userId"), userId) : q.neq(q.field("userId"), null))
+			.withIndex("byParentId", (q) =>
+				q
+					.eq("userId", ctx.user._id)
+					.eq("parentId", directoryId)
+					.eq("deletedAt", undefined),
+			)
 			.collect(),
 	])
 
@@ -48,16 +55,16 @@ export async function fetchContent(
 }
 
 export async function create(
-	ctx: MutationCtx,
-	{ name, parentId, userId }: { name: string; parentId?: Id<"directories">; userId: Id<"users"> },
+	ctx: AuthenticatedMutationCtx,
+	{ name, parentId }: { name: string; parentId?: Id<"directories"> },
 ): Promise<Id<"directories">> {
-	// Check if parent directory exists and belongs to user
+	let parentDir: Doc<"directories"> | null = null
 	if (parentId) {
-		const parentDir = await ctx.db.get(parentId)
-		if (!parentDir || parentDir.userId !== userId) {
+		parentDir = await ctx.db.get(parentId)
+		if (!parentDir) {
 			throw Err.create(
-				Err.Code.DirectoryExists,
-				"Parent directory not found or access denied",
+				Err.Code.DirectoryNotFound,
+				`Parent directory ${parentId} not found`,
 			)
 		}
 	}
@@ -65,9 +72,12 @@ export async function create(
 	const existing = await ctx.db
 		.query("directories")
 		.withIndex("uniqueDirectoryInDirectory", (q) =>
-			q.eq("parentId", parentId).eq("name", name),
+			q
+				.eq("userId", ctx.user._id)
+				.eq("parentId", parentId)
+				.eq("name", name)
+				.eq("deletedAt", undefined),
 		)
-		.filter((q) => q.eq(q.field("userId"), userId))
 		.first()
 
 	if (existing) {
@@ -81,16 +91,16 @@ export async function create(
 	return await ctx.db.insert("directories", {
 		name,
 		parentId,
-		userId,
+		userId: ctx.user._id,
 		createdAt: now,
 		updatedAt: now,
+		path: parentDir ? `${parentDir.path}/${name}` : "/",
 	})
 }
 
 export async function moveToTrashRecursive(
-	ctx: MutationCtx,
+	ctx: AuthenticatedMutationCtx,
 	directoryId: Id<"directories">,
-	userId: Id<"users">,
 ): Promise<void> {
 	const now = new Date().toISOString()
 
@@ -107,10 +117,10 @@ export async function moveToTrashRecursive(
 			.query("files")
 			.withIndex("byDirectoryId", (q) =>
 				q
+					.eq("userId", ctx.user._id)
 					.eq("directoryId", currentDirectoryId)
 					.eq("deletedAt", undefined),
 			)
-			.filter((q) => q.eq(q.field("userId"), userId))
 			.collect()
 
 		for (const file of files) {
@@ -120,9 +130,11 @@ export async function moveToTrashRecursive(
 		const subdirectories = await ctx.db
 			.query("directories")
 			.withIndex("byParentId", (q) =>
-				q.eq("parentId", currentDirectoryId).eq("deletedAt", undefined),
+				q
+					.eq("userId", ctx.user._id)
+					.eq("parentId", currentDirectoryId)
+					.eq("deletedAt", undefined),
 			)
-			.filter((q) => q.eq(q.field("userId"), userId))
 			.collect()
 
 		for (const subdirectory of subdirectories) {

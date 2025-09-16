@@ -2,6 +2,7 @@ import { ConvexError } from "convex/values"
 
 export enum Code {
 	DirectoryExists = "DirectoryExists",
+	DirectoryNotFound = "DirectoryNotFound",
 	FileExists = "FileExists",
 	Internal = "Internal",
 	Unauthenticated = "Unauthenticated",

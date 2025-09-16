@@ -1,5 +1,5 @@
+import type { Id } from "@convex/_generated/dataModel"
 import { v } from "convex/values"
-import type { Id } from "./_generated/dataModel"
 import { authenticatedMutation, authenticatedQuery } from "./functions"
 import type { DirectoryItem } from "./model/directories"
 import * as Directories from "./model/directories"
@@ -18,8 +18,9 @@ export const fetchFiles = authenticatedQuery({
 	handler: async (ctx, { directoryId }) => {
 		return await ctx.db
 			.query("files")
-			.withIndex("byDirectoryId", (q) => q.eq("directoryId", directoryId))
-			.filter((q) => q.eq(q.field("userId"), ctx.user._id))
+			.withIndex("byDirectoryId", (q) =>
+				q.eq("userId", ctx.user._id).eq("directoryId", directoryId),
+			)
 			.collect()
 	},
 })
@@ -29,7 +30,7 @@ export const fetchDirectoryContent = authenticatedQuery({
 		directoryId: v.optional(v.id("directories")),
 	},
 	handler: async (ctx, { directoryId }): Promise<DirectoryItem[]> => {
-		return await Directories.fetchContent(ctx, directoryId, ctx.user._id)
+		return await Directories.fetchContent(ctx, directoryId)
 	},
 })
 
@@ -42,7 +43,6 @@ export const createDirectory = authenticatedMutation({
 		return await Directories.create(ctx, {
 			name,
 			parentId: directoryId,
-			userId: ctx.user._id,
 		})
 	},
 })
@@ -77,7 +77,6 @@ export const moveToTrash = authenticatedMutation({
 		itemId: v.union(v.id("files"), v.id("directories")),
 	},
 	handler: async (ctx, { itemId, kind }) => {
-		// Verify ownership before allowing deletion
 		switch (kind) {
 			case "file": {
 				const file = await ctx.db.get(itemId as Id<"files">)
@@ -97,7 +96,6 @@ export const moveToTrash = authenticatedMutation({
 				await Directories.moveToTrashRecursive(
 					ctx,
 					itemId as Id<"directories">,
-					ctx.user._id,
 				)
 				break
 			}

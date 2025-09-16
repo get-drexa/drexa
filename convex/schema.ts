@@ -16,12 +16,18 @@ const schema = defineSchema({
 		updatedAt: v.string(),
 		deletedAt: v.optional(v.string()),
 	})
-		.index("byDirectoryId", ["directoryId", "deletedAt"])
+		.index("byDirectoryId", ["userId", "directoryId", "deletedAt"])
 		.index("byUserId", ["userId", "deletedAt"])
 		.index("byDeletedAt", ["deletedAt"])
-		.index("uniqueFileInDirectory", ["directoryId", "name", "deletedAt"]),
+		.index("uniqueFileInDirectory", [
+			"userId",
+			"directoryId",
+			"name",
+			"deletedAt",
+		]),
 	directories: defineTable({
 		name: v.string(),
+		path: v.string(),
 		userId: v.id("users"),
 		parentId: v.optional(v.id("directories")),
 		createdAt: v.string(),
@@ -29,8 +35,14 @@ const schema = defineSchema({
 		deletedAt: v.optional(v.string()),
 	})
 		.index("byUserId", ["userId", "deletedAt"])
-		.index("byParentId", ["parentId", "deletedAt"])
-		.index("uniqueDirectoryInDirectory", ["parentId", "name", "deletedAt"]),
+		.index("byParentId", ["userId", "parentId", "deletedAt"])
+		.index("uniqueDirectoryInDirectory", [
+			"userId",
+			"parentId",
+			"name",
+			"deletedAt",
+		])
+		.index("byPath", ["path", "deletedAt"]),
 })
 
 export default schema
