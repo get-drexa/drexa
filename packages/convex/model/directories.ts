@@ -1,4 +1,5 @@
 import type { Doc, Id } from "@fileone/convex/_generated/dataModel"
+import { joinPath, PATH_SEPARATOR } from "@fileone/path"
 import type {
 	AuthenticatedMutationCtx,
 	AuthenticatedQueryCtx,
@@ -94,7 +95,7 @@ export async function create(
 		userId: ctx.user._id,
 		createdAt: now,
 		updatedAt: now,
-		path: parentDir ? `${parentDir.path}/${name}` : "/",
+		path: parentDir ? joinPath(parentDir.path, name) : PATH_SEPARATOR,
 	})
 }
 
