@@ -1,0 +1,8 @@
+{
+	"name": "@fileone/path",
+	"module": "index.ts",
+	"type": "module",
+	"peerDependencies": {
+		"typescript": "^5"
+	}
+}
