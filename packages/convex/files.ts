@@ -1,4 +1,4 @@
-import type { Id } from "@convex/_generated/dataModel"
+import type { Id } from "@fileone/convex/_generated/dataModel"
 import { v } from "convex/values"
 import { authenticatedMutation, authenticatedQuery } from "./functions"
 import type { DirectoryItem } from "./model/directories"

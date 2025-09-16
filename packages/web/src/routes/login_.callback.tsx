@@ -1,4 +1,4 @@
-import { api } from "@convex/_generated/api"
+import { api } from "@fileone/convex/_generated/api"
 import { useMutation } from "@tanstack/react-query"
 import { createFileRoute, useNavigate } from "@tanstack/react-router"
 import { useConvexAuth, useMutation as useConvexMutation } from "convex/react"

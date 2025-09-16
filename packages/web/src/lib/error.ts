@@ -1,5 +1,8 @@
+import {
+	Code as ErrorCode,
+	isApplicationError,
+} from "@fileone/convex/model/error"
 import { toast } from "sonner"
-import { Code as ErrorCode, isApplicationError } from "@convex/model/error"
 
 const ERROR_MESSAGE = {
 	[ErrorCode.DirectoryExists]: "Directory already exists",

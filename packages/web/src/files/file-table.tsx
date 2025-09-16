@@ -1,6 +1,5 @@
-import { api } from "@convex/_generated/api"
-import type { Id } from "@convex/_generated/dataModel"
-import type { DirectoryItem } from "@convex/model/directories"
+import { api } from "@fileone/convex/_generated/api"
+import type { DirectoryItem } from "@fileone/convex/model/directories"
 import { useMutation } from "@tanstack/react-query"
 import {
 	type ColumnDef,

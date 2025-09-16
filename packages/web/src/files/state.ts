@@ -1,9 +1,9 @@
-import { atom } from "jotai"
-import type { Id } from "@convex/_generated/dataModel"
+import type { Id } from "@fileone/convex/_generated/dataModel"
 import type {
 	DirectoryItem,
 	DirectoryItemKind,
-} from "@convex/model/directories"
+} from "@fileone/convex/model/directories"
+import { atom } from "jotai"
 
 export const contextMenuTargeItemAtom = atom<DirectoryItem | null>(null)
 export const optimisticDeletedItemsAtom = atom(

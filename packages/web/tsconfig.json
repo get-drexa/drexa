@@ -23,8 +23,7 @@
 
 		"baseUrl": ".",
 		"paths": {
-			"@/*": ["./src/*"],
-			"@convex/*": ["../../convex/*"]
+			"@/*": ["./src/*"]
 		},
 
 		// Some stricter flags (disabled by default)

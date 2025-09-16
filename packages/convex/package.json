@@ -1,0 +1,9 @@
+{
+	"name": "@fileone/convex",
+	"module": "index.ts",
+	"type": "module",
+	"peerDependencies": {
+		"typescript": "^5",
+		"convex": "^1.27.0"
+	}
+}
