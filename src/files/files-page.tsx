@@ -33,7 +33,7 @@ export function FilesPage() {
 	return (
 		<>
 			<header className="flex py-2 shrink-0 items-center gap-2 border-b px-4 w-full">
-				<SidebarTrigger className="-ml-1" />
+				<SidebarTrigger className="-ml-1.5" />
 				<Breadcrumb>
 					<BreadcrumbList>
 						<BreadcrumbItem>
@@ -46,7 +46,7 @@ export function FilesPage() {
 					<UploadFileButton />
 				</div>
 			</header>
-			<div className="p-4 w-full">
+			<div className="w-full">
 				<FileTable />
 			</div>
 		</>

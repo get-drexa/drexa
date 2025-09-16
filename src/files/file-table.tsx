@@ -213,13 +213,14 @@ export function FileTableContent() {
 	}
 
 	return (
-		<div className="overflow-hidden rounded-md border">
+		<div className="overflow-hidden">
 			<Table>
 				<TableHeader>
 					{table.getHeaderGroups().map((headerGroup) => (
-						<TableRow key={headerGroup.id}>
+						<TableRow className="px-4" key={headerGroup.id}>
 							{headerGroup.headers.map((header) => (
 								<TableHead
+									className="first:pl-4 last:pr-4"
 									key={header.id}
 									style={{ width: header.getSize() }}
 								>
@@ -246,6 +247,7 @@ export function FileTableContent() {
 							>
 								{row.getVisibleCells().map((cell) => (
 									<TableCell
+										className="first:pl-4 last:pr-4"
 										key={cell.id}
 										style={{ width: cell.column.getSize() }}
 									>
