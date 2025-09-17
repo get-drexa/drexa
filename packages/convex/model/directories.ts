@@ -21,15 +21,34 @@ export type DirectoryItemKind = DirectoryItem["kind"]
 
 export async function fetchContent(
 	ctx: AuthenticatedQueryCtx,
-	directoryId?: Id<"directories">,
+	{
+		path,
+		directoryId,
+	}: { path?: string; directoryId?: Id<"directories"> } = {},
 ): Promise<DirectoryItem[]> {
+	let dirId: Id<"directories"> | undefined
+	if (path) {
+		dirId = await ctx.db
+			.query("directories")
+			.withIndex("byPath", (q) =>
+				q
+					.eq("userId", ctx.user._id)
+					.eq("path", path)
+					.eq("deletedAt", undefined),
+			)
+			.first()
+			.then((dir) => dir?._id)
+	} else if (directoryId) {
+		dirId = directoryId
+	}
+
 	const [files, directories] = await Promise.all([
 		ctx.db
 			.query("files")
 			.withIndex("byDirectoryId", (q) =>
 				q
 					.eq("userId", ctx.user._id)
-					.eq("directoryId", directoryId)
+					.eq("directoryId", dirId)
 					.eq("deletedAt", undefined),
 			)
 			.collect(),
@@ -38,7 +57,7 @@ export async function fetchContent(
 			.withIndex("byParentId", (q) =>
 				q
 					.eq("userId", ctx.user._id)
-					.eq("parentId", directoryId)
+					.eq("parentId", dirId)
 					.eq("deletedAt", undefined),
 			)
 			.collect(),
@@ -95,7 +114,7 @@ export async function create(
 		userId: ctx.user._id,
 		createdAt: now,
 		updatedAt: now,
-		path: parentDir ? joinPath(parentDir.path, name) : PATH_SEPARATOR,
+		path: parentDir ? joinPath(parentDir.path, name) : joinPath("", name),
 	})
 }
 

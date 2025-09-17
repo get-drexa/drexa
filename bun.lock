@@ -6,10 +6,14 @@
       "devDependencies": {
         "@biomejs/biome": "2.2.4",
         "@types/bun": "latest",
+        "convex": "^1.27.0",
       },
     },
     "packages/convex": {
       "name": "@fileone/convex",
+      "dependencies": {
+        "@fileone/path": "workspace:*",
+      },
       "peerDependencies": {
         "convex": "^1.27.0",
         "typescript": "^5",

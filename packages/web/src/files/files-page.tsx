@@ -1,5 +1,7 @@
 import { api } from "@fileone/convex/_generated/api"
+import { splitPath } from "@fileone/path"
 import { useMutation } from "@tanstack/react-query"
+import { useParams } from "@tanstack/react-router"
 import { useMutation as useConvexMutation } from "convex/react"
 import { useSetAtom } from "jotai"
 import {
@@ -8,7 +10,7 @@ import {
 	PlusIcon,
 	UploadCloudIcon,
 } from "lucide-react"
-import { type ChangeEvent, useRef } from "react"
+import { type ChangeEvent, Fragment, useRef } from "react"
 import { toast } from "sonner"
 import {
 	DropdownMenu,
@@ -29,16 +31,23 @@ import { Button } from "../components/ui/button"
 import { FileTable } from "./file-table"
 import { newItemKindAtom } from "./state"
 
-export function FilesPage() {
+export function FilesPage({ path }: { path: string }) {
 	return (
 		<>
-			<header className="flex py-2 shrink-0 items-center gap-2 border-b px-4 w-full">
+			<header className="flex py-1 shrink-0 items-center gap-2 border-b px-4 w-full">
 				<Breadcrumb>
 					<BreadcrumbList>
 						<BreadcrumbItem>
 							<BreadcrumbPage>All Files</BreadcrumbPage>
 						</BreadcrumbItem>
-						<BreadcrumbSeparator />
+						{splitPath(path).map((p) => (
+							<Fragment key={p}>
+								<BreadcrumbSeparator />
+								<BreadcrumbItem>
+									<BreadcrumbPage>{p}</BreadcrumbPage>
+								</BreadcrumbItem>
+							</Fragment>
+						))}
 					</BreadcrumbList>
 				</Breadcrumb>
 				<div className="ml-auto flex flex-row gap-2">
@@ -47,7 +56,7 @@ export function FilesPage() {
 				</div>
 			</header>
 			<div className="w-full">
-				<FileTable />
+				<FileTable path={path} />
 			</div>
 		</>
 	)

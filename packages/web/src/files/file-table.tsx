@@ -1,6 +1,8 @@
 import { api } from "@fileone/convex/_generated/api"
+import type { Doc } from "@fileone/convex/_generated/dataModel"
 import type { DirectoryItem } from "@fileone/convex/model/directories"
 import { useMutation } from "@tanstack/react-query"
+import { Link } from "@tanstack/react-router"
 import {
 	type ColumnDef,
 	flexRender,
@@ -81,12 +83,7 @@ const columns: ColumnDef<DirectoryItem>[] = [
 				case "file":
 					return <FileNameCell initialName={row.original.doc.name} />
 				case "directory":
-					return (
-						<div className="flex w-full items-center gap-2">
-							<DirectoryIcon className="size-4" />
-							{row.original.doc.name}
-						</div>
-					)
+					return <DirectoryNameCell directory={row.original.doc} />
 			}
 		},
 		size: 1000,
@@ -116,11 +113,11 @@ const columns: ColumnDef<DirectoryItem>[] = [
 	},
 ]
 
-export function FileTable() {
+export function FileTable({ path }: { path: string }) {
 	return (
 		<FileTableContextMenu>
 			<div className="w-full">
-				<FileTableContent />
+				<FileTableContent path={path} />
 			</div>
 		</FileTableContextMenu>
 	)
@@ -184,8 +181,8 @@ export function FileTableContextMenu({
 	)
 }
 
-export function FileTableContent() {
-	const directory = useQuery(api.files.fetchDirectoryContent, {})
+export function FileTableContent({ path }: { path: string }) {
+	const directory = useQuery(api.files.fetchDirectoryContent, { path })
 	const optimisticDeletedItems = useAtomValue(optimisticDeletedItemsAtom)
 	const setContextMenuTargetItem = useSetAtom(contextMenuTargeItemAtom)
 
@@ -374,6 +371,17 @@ function NewItemRow() {
 				) : null}
 			</TableCell>
 		</TableRow>
+	)
+}
+
+function DirectoryNameCell({ directory }: { directory: Doc<"directories"> }) {
+	return (
+		<div className="flex w-full items-center gap-2">
+			<DirectoryIcon className="size-4" />
+			<Link className="hover:underline" to={`/files/${directory.path}`}>
+				{directory.name}
+			</Link>
+		</div>
 	)
 }
 

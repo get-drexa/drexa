@@ -42,7 +42,7 @@ const schema = defineSchema({
 			"name",
 			"deletedAt",
 		])
-		.index("byPath", ["path", "deletedAt"]),
+		.index("byPath", ["userId", "path", "deletedAt"]),
 })
 
 export default schema

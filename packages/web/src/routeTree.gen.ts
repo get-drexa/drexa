@@ -14,7 +14,7 @@ import { Route as AuthenticatedRouteImport } from './routes/_authenticated'
 import { Route as AuthenticatedIndexRouteImport } from './routes/_authenticated/index'
 import { Route as LoginCallbackRouteImport } from './routes/login_.callback'
 import { Route as AuthenticatedSidebarLayoutRouteImport } from './routes/_authenticated/_sidebar-layout'
-import { Route as AuthenticatedSidebarLayoutFilesRouteImport } from './routes/_authenticated/_sidebar-layout/files'
+import { Route as AuthenticatedSidebarLayoutFilesSplatRouteImport } from './routes/_authenticated/_sidebar-layout/files.$'
 
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
@@ -40,10 +40,10 @@ const AuthenticatedSidebarLayoutRoute =
     id: '/_sidebar-layout',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
-const AuthenticatedSidebarLayoutFilesRoute =
-  AuthenticatedSidebarLayoutFilesRouteImport.update({
-    id: '/files',
-    path: '/files',
+const AuthenticatedSidebarLayoutFilesSplatRoute =
+  AuthenticatedSidebarLayoutFilesSplatRouteImport.update({
+    id: '/files/$',
+    path: '/files/$',
     getParentRoute: () => AuthenticatedSidebarLayoutRoute,
   } as any)
 
@@ -51,13 +51,13 @@ export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
   '/login/callback': typeof LoginCallbackRoute
   '/': typeof AuthenticatedIndexRoute
-  '/files': typeof AuthenticatedSidebarLayoutFilesRoute
+  '/files/$': typeof AuthenticatedSidebarLayoutFilesSplatRoute
 }
 export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/login/callback': typeof LoginCallbackRoute
   '/': typeof AuthenticatedIndexRoute
-  '/files': typeof AuthenticatedSidebarLayoutFilesRoute
+  '/files/$': typeof AuthenticatedSidebarLayoutFilesSplatRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -66,13 +66,13 @@ export interface FileRoutesById {
   '/_authenticated/_sidebar-layout': typeof AuthenticatedSidebarLayoutRouteWithChildren
   '/login_/callback': typeof LoginCallbackRoute
   '/_authenticated/': typeof AuthenticatedIndexRoute
-  '/_authenticated/_sidebar-layout/files': typeof AuthenticatedSidebarLayoutFilesRoute
+  '/_authenticated/_sidebar-layout/files/$': typeof AuthenticatedSidebarLayoutFilesSplatRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/login' | '/login/callback' | '/' | '/files'
+  fullPaths: '/login' | '/login/callback' | '/' | '/files/$'
   fileRoutesByTo: FileRoutesByTo
-  to: '/login' | '/login/callback' | '/' | '/files'
+  to: '/login' | '/login/callback' | '/' | '/files/$'
   id:
     | '__root__'
     | '/_authenticated'
@@ -80,7 +80,7 @@ export interface FileRouteTypes {
     | '/_authenticated/_sidebar-layout'
     | '/login_/callback'
     | '/_authenticated/'
-    | '/_authenticated/_sidebar-layout/files'
+    | '/_authenticated/_sidebar-layout/files/$'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -126,23 +126,24 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedSidebarLayoutRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
-    '/_authenticated/_sidebar-layout/files': {
-      id: '/_authenticated/_sidebar-layout/files'
-      path: '/files'
-      fullPath: '/files'
-      preLoaderRoute: typeof AuthenticatedSidebarLayoutFilesRouteImport
+    '/_authenticated/_sidebar-layout/files/$': {
+      id: '/_authenticated/_sidebar-layout/files/$'
+      path: '/files/$'
+      fullPath: '/files/$'
+      preLoaderRoute: typeof AuthenticatedSidebarLayoutFilesSplatRouteImport
       parentRoute: typeof AuthenticatedSidebarLayoutRoute
     }
   }
 }
 
 interface AuthenticatedSidebarLayoutRouteChildren {
-  AuthenticatedSidebarLayoutFilesRoute: typeof AuthenticatedSidebarLayoutFilesRoute
+  AuthenticatedSidebarLayoutFilesSplatRoute: typeof AuthenticatedSidebarLayoutFilesSplatRoute
 }
 
 const AuthenticatedSidebarLayoutRouteChildren: AuthenticatedSidebarLayoutRouteChildren =
   {
-    AuthenticatedSidebarLayoutFilesRoute: AuthenticatedSidebarLayoutFilesRoute,
+    AuthenticatedSidebarLayoutFilesSplatRoute:
+      AuthenticatedSidebarLayoutFilesSplatRoute,
   }
 
 const AuthenticatedSidebarLayoutRouteWithChildren =
