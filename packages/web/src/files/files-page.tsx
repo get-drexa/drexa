@@ -1,7 +1,7 @@
 import { api } from "@fileone/convex/_generated/api"
-import { splitPath } from "@fileone/path"
+import { baseName, splitPath } from "@fileone/path"
 import { useMutation } from "@tanstack/react-query"
-import { useParams } from "@tanstack/react-router"
+import { Link } from "@tanstack/react-router"
 import { useMutation as useConvexMutation } from "convex/react"
 import { useSetAtom } from "jotai"
 import {
@@ -23,6 +23,7 @@ import { TextFileIcon } from "../components/icons/text-file-icon"
 import {
 	Breadcrumb,
 	BreadcrumbItem,
+	BreadcrumbLink,
 	BreadcrumbList,
 	BreadcrumbPage,
 	BreadcrumbSeparator,
@@ -35,21 +36,7 @@ export function FilesPage({ path }: { path: string }) {
 	return (
 		<>
 			<header className="flex py-1 shrink-0 items-center gap-2 border-b px-4 w-full">
-				<Breadcrumb>
-					<BreadcrumbList>
-						<BreadcrumbItem>
-							<BreadcrumbPage>All Files</BreadcrumbPage>
-						</BreadcrumbItem>
-						{splitPath(path).map((p) => (
-							<Fragment key={p}>
-								<BreadcrumbSeparator />
-								<BreadcrumbItem>
-									<BreadcrumbPage>{p}</BreadcrumbPage>
-								</BreadcrumbItem>
-							</Fragment>
-						))}
-					</BreadcrumbList>
-				</Breadcrumb>
+				<FilePathBreadcrumb path={path} />
 				<div className="ml-auto flex flex-row gap-2">
 					<NewDirectoryItemDropdown />
 					<UploadFileButton />
@@ -59,6 +46,36 @@ export function FilesPage({ path }: { path: string }) {
 				<FileTable path={path} />
 			</div>
 		</>
+	)
+}
+
+function FilePathBreadcrumb({ path }: { path: string }) {
+	const pathComponents = splitPath(path)
+	const base = baseName(path)
+	return (
+		<Breadcrumb>
+			<BreadcrumbList>
+				<BreadcrumbItem>
+					<BreadcrumbLink asChild>
+						<Link to="/files">All Files</Link>
+					</BreadcrumbLink>
+				</BreadcrumbItem>
+				{pathComponents.map((p) => (
+					<Fragment key={p}>
+						<BreadcrumbSeparator />
+						{p === base ? (
+							<BreadcrumbPage>{p}</BreadcrumbPage>
+						) : (
+							<BreadcrumbItem>
+								<BreadcrumbLink asChild>
+									<Link to={`/files/${p}`}>{p}</Link>
+								</BreadcrumbLink>
+							</BreadcrumbItem>
+						)}
+					</Fragment>
+				))}
+			</BreadcrumbList>
+		</Breadcrumb>
 	)
 }
 
