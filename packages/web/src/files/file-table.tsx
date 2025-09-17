@@ -67,7 +67,7 @@ const columns: ColumnDef<DirectoryItem>[] = [
 		cell: ({ row }) => (
 			<Checkbox
 				checked={row.getIsSelected()}
-				onCheckedChange={(value) => row.toggleSelected(!!value)}
+				onCheckedChange={row.getToggleSelectedHandler()}
 				aria-label="Select row"
 			/>
 		),
@@ -129,6 +129,7 @@ export function FileTableContextMenu({
 	children: React.ReactNode
 }) {
 	const store = useStore()
+	const target = useAtomValue(contextMenuTargeItemAtom)
 	const setOptimisticDeletedItems = useSetAtom(optimisticDeletedItemsAtom)
 	const moveToTrashMutation = useContextMutation(api.files.moveToTrash)
 	const { mutate: moveToTrash } = useMutation({
@@ -167,16 +168,18 @@ export function FileTableContextMenu({
 	return (
 		<ContextMenu>
 			<ContextMenuTrigger asChild>{children}</ContextMenuTrigger>
-			<ContextMenuContent>
-				<ContextMenuItem onClick={handleRename}>
-					<TextCursorInputIcon />
-					Rename
-				</ContextMenuItem>
-				<ContextMenuItem onClick={handleDelete}>
-					<TrashIcon />
-					Move to trash
-				</ContextMenuItem>
-			</ContextMenuContent>
+			{target && (
+				<ContextMenuContent key={target?.doc._id}>
+					<ContextMenuItem onClick={handleRename}>
+						<TextCursorInputIcon />
+						Rename
+					</ContextMenuItem>
+					<ContextMenuItem onClick={handleDelete}>
+						<TrashIcon />
+						Move to trash
+					</ContextMenuItem>
+				</ContextMenuContent>
+			)}
 		</ContextMenu>
 	)
 }
@@ -185,12 +188,19 @@ export function FileTableContent({ path }: { path: string }) {
 	const directory = useQuery(api.files.fetchDirectoryContent, { path })
 	const optimisticDeletedItems = useAtomValue(optimisticDeletedItemsAtom)
 	const setContextMenuTargetItem = useSetAtom(contextMenuTargeItemAtom)
+	const store = useStore()
 
 	const handleRowContextMenu = (
 		row: Row<DirectoryItem>,
-		event: React.MouseEvent,
+		_event: React.MouseEvent,
 	) => {
-		setContextMenuTargetItem(row.original)
+		const target = store.get(contextMenuTargeItemAtom)
+		if (target === row.original) {
+			setContextMenuTargetItem(null)
+		} else {
+			selectRow(row)
+			setContextMenuTargetItem(row.original)
+		}
 	}
 
 	const table = useReactTable({
@@ -202,7 +212,13 @@ export function FileTableContent({ path }: { path: string }) {
 		globalFilterFn: (row, _columnId, _filterValue, _addMeta) => {
 			return !optimisticDeletedItems.has(row.original.doc._id)
 		},
+		getRowId: (row) => row.doc._id,
 	})
+
+	const selectRow = (row: Row<DirectoryItem>) => {
+		table.toggleAllPageRowsSelected(false)
+		row.toggleSelected(true)
+	}
 
 	if (!directory) {
 		return null
@@ -237,6 +253,9 @@ export function FileTableContent({ path }: { path: string }) {
 							<TableRow
 								key={row.id}
 								data-state={row.getIsSelected() && "selected"}
+								onClick={() => {
+									selectRow(row)
+								}}
 								onContextMenu={(e) => {
 									handleRowContextMenu(row, e)
 								}}
