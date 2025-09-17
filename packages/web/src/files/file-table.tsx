@@ -216,8 +216,11 @@ export function FileTableContent({ path }: { path: string }) {
 	})
 
 	const selectRow = (row: Row<DirectoryItem>) => {
-		table.toggleAllPageRowsSelected(false)
-		row.toggleSelected(true)
+		console.log("row.getIsSelected()", row.getIsSelected())
+		if (!row.getIsSelected()) {
+			table.toggleAllPageRowsSelected(false)
+			row.toggleSelected(true)
+		}
 	}
 
 	if (!directory) {
