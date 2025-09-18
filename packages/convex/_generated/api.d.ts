@@ -17,6 +17,7 @@ import type * as files from "../files.js";
 import type * as functions from "../functions.js";
 import type * as model_directories from "../model/directories.js";
 import type * as model_error from "../model/error.js";
+import type * as model_files from "../model/files.js";
 import type * as model_user from "../model/user.js";
 import type * as users from "../users.js";
 
@@ -33,6 +34,7 @@ declare const fullApi: ApiFromModules<{
   functions: typeof functions;
   "model/directories": typeof model_directories;
   "model/error": typeof model_error;
+  "model/files": typeof model_files;
   "model/user": typeof model_user;
   users: typeof users;
 }>;

@@ -30,6 +30,7 @@ import {
 } from "../components/ui/breadcrumb"
 import { Button } from "../components/ui/button"
 import { FileTable } from "./file-table"
+import { RenameFileDialog } from "./rename-file-dialog"
 import { newItemKindAtom } from "./state"
 
 export function FilesPage({ path }: { path: string }) {
@@ -45,6 +46,7 @@ export function FilesPage({ path }: { path: string }) {
 			<div className="w-full">
 				<FileTable path={path} />
 			</div>
+			<RenameFileDialog />
 		</>
 	)
 }

@@ -3,6 +3,7 @@ import { v } from "convex/values"
 import { authenticatedMutation, authenticatedQuery } from "./functions"
 import type { DirectoryItem } from "./model/directories"
 import * as Directories from "./model/directories"
+import * as Files from "./model/files"
 
 export const generateUploadUrl = authenticatedMutation({
 	handler: async (ctx) => {
@@ -69,6 +70,17 @@ export const saveFile = authenticatedMutation({
 			createdAt: now,
 			updatedAt: now,
 		})
+	},
+})
+
+export const renameFile = authenticatedMutation({
+	args: {
+		directoryId: v.optional(v.id("directories")),
+		itemId: v.id("files"),
+		newName: v.string(),
+	},
+	handler: async (ctx, { directoryId, itemId, newName }) => {
+		await Files.renameFile(ctx, { directoryId, itemId, newName })
 	},
 })
 

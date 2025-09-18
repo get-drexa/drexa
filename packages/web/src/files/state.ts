@@ -14,3 +14,9 @@ export const optimisticDeletedItemsAtom = atom(
 export const selectedFileRowsAtom = atom<RowSelectionState>({})
 
 export const newItemKindAtom = atom<DirectoryItemKind | null>(null)
+
+export const itemBeingRenamedAtom = atom<{
+	kind: DirectoryItemKind
+	originalItem: DirectoryItem
+	name: string
+} | null>(null)

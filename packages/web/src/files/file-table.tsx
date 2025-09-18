@@ -38,6 +38,7 @@ import { withDefaultOnError } from "../lib/error"
 import { cn } from "../lib/utils"
 import {
 	contextMenuTargeItemAtom,
+	itemBeingRenamedAtom,
 	newItemKindAtom,
 	optimisticDeletedItemsAtom,
 } from "./state"
@@ -132,6 +133,7 @@ export function FileTableContextMenu({
 	const target = useAtomValue(contextMenuTargeItemAtom)
 	const setOptimisticDeletedItems = useSetAtom(optimisticDeletedItemsAtom)
 	const moveToTrashMutation = useContextMutation(api.files.moveToTrash)
+	const setItemBeingRenamed = useSetAtom(itemBeingRenamedAtom)
 	const { mutate: moveToTrash } = useMutation({
 		mutationFn: moveToTrashMutation,
 		onMutate: ({ itemId }) => {
@@ -150,8 +152,11 @@ export function FileTableContextMenu({
 	const handleRename = () => {
 		const selectedItem = store.get(contextMenuTargeItemAtom)
 		if (selectedItem) {
-			console.log("Renaming:", selectedItem.doc.name)
-			// TODO: Implement rename functionality
+			setItemBeingRenamed({
+				kind: selectedItem.kind,
+				originalItem: selectedItem,
+				name: selectedItem.doc.name,
+			})
 		}
 	}
 
@@ -169,7 +174,7 @@ export function FileTableContextMenu({
 		<ContextMenu>
 			<ContextMenuTrigger asChild>{children}</ContextMenuTrigger>
 			{target && (
-				<ContextMenuContent key={target?.doc._id}>
+				<ContextMenuContent>
 					<ContextMenuItem onClick={handleRename}>
 						<TextCursorInputIcon />
 						Rename
