@@ -405,7 +405,7 @@ function DirectoryNameCell({ directory }: { directory: Doc<"directories"> }) {
 			<DirectoryIcon className="size-4" />
 			<Link
 				className="hover:underline"
-				to={`/directories/${directory.path}`}
+				to={`/directories/${directory._id}`}
 			>
 				{directory.name}
 			</Link>
