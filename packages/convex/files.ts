@@ -68,7 +68,7 @@ export const saveFile = authenticatedMutation({
 	args: {
 		name: v.string(),
 		size: v.number(),
-		directoryId: v.optional(v.id("directories")),
+		directoryId: v.id("directories"),
 		storageId: v.id("_storage"),
 		mimeType: v.optional(v.string()),
 	},

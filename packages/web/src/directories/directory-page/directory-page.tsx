@@ -85,6 +85,7 @@ function FilePathBreadcrumb({ path }: { path: string }) {
 
 // tags: upload, uploadfile, uploadfilebutton, fileupload, fileuploadbutton
 function UploadFileButton() {
+	const { directory } = useContext(DirectoryPageContext)
 	const generateUploadUrl = useConvexMutation(api.files.generateUploadUrl)
 	const saveFile = useConvexMutation(api.files.saveFile)
 	const { mutate: uploadFile, isPending: isUploading } = useMutation({
@@ -104,6 +105,7 @@ function UploadFileButton() {
 				name: file.name,
 				size: file.size,
 				mimeType: file.type,
+				directoryId: directory._id,
 			})
 		},
 		onSuccess: () => {
