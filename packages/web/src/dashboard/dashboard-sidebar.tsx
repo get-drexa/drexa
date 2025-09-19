@@ -1,5 +1,7 @@
+import { api } from "@fileone/convex/_generated/api"
 import { Link, useLocation } from "@tanstack/react-router"
 import { useAuth } from "@workos-inc/authkit-react"
+import { useQuery as useConvexQuery } from "convex/react"
 import {
 	ChevronDownIcon,
 	FilesIcon,
@@ -59,15 +61,31 @@ function MainSidebarMenu() {
 					</Link>
 				</SidebarMenuButton>
 			</SidebarMenuItem>
-			<SidebarMenuItem>
-				<SidebarMenuButton asChild isActive={isActive("/files")}>
-					<Link to="/files">
-						<FilesIcon />
-						<span>All Files</span>
-					</Link>
-				</SidebarMenuButton>
-			</SidebarMenuItem>
+			<AllFilesItem />
 		</SidebarMenu>
+	)
+}
+
+function AllFilesItem() {
+	const location = useLocation()
+	const rootDirectory = useConvexQuery(api.files.fetchRootDirectory)
+
+	if (!rootDirectory) return null
+
+	return (
+		<SidebarMenuItem>
+			<SidebarMenuButton
+				asChild
+				isActive={location.pathname.startsWith(
+					`/directories/${rootDirectory._id}`,
+				)}
+			>
+				<Link to={`/directories/${rootDirectory._id}`}>
+					<FilesIcon />
+					<span>All Files</span>
+				</Link>
+			</SidebarMenuButton>
+		</SidebarMenuItem>
 	)
 }
 

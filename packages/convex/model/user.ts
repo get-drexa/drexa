@@ -1,4 +1,3 @@
-import type { Id } from "../_generated/dataModel"
 import type { MutationCtx, QueryCtx } from "../_generated/server"
 import type { AuthenticatedMutationCtx } from "../functions"
 import * as Err from "./error"
@@ -40,7 +39,17 @@ export async function userOrThrow(ctx: QueryCtx | MutationCtx) {
 }
 
 export async function register(ctx: AuthenticatedMutationCtx) {
-	await ctx.db.insert("users", {
-		jwtSubject: ctx.identity.subject,
-	})
+	const now = new Date().toISOString()
+	await Promise.all([
+		ctx.db.insert("users", {
+			jwtSubject: ctx.identity.subject,
+		}),
+		ctx.db.insert("directories", {
+			name: "",
+			path: "",
+			userId: ctx.user._id,
+			createdAt: now,
+			updatedAt: now,
+		}),
+	])
 }

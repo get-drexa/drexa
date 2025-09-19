@@ -15,6 +15,7 @@ import { Route as AuthenticatedIndexRouteImport } from './routes/_authenticated/
 import { Route as LoginCallbackRouteImport } from './routes/login_.callback'
 import { Route as AuthenticatedSidebarLayoutRouteImport } from './routes/_authenticated/_sidebar-layout'
 import { Route as AuthenticatedSidebarLayoutFilesSplatRouteImport } from './routes/_authenticated/_sidebar-layout/files.$'
+import { Route as AuthenticatedSidebarLayoutDirectoriesDirectoryIdRouteImport } from './routes/_authenticated/_sidebar-layout/directories.$directoryId'
 
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
@@ -46,17 +47,25 @@ const AuthenticatedSidebarLayoutFilesSplatRoute =
     path: '/files/$',
     getParentRoute: () => AuthenticatedSidebarLayoutRoute,
   } as any)
+const AuthenticatedSidebarLayoutDirectoriesDirectoryIdRoute =
+  AuthenticatedSidebarLayoutDirectoriesDirectoryIdRouteImport.update({
+    id: '/directories/$directoryId',
+    path: '/directories/$directoryId',
+    getParentRoute: () => AuthenticatedSidebarLayoutRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
   '/login/callback': typeof LoginCallbackRoute
   '/': typeof AuthenticatedIndexRoute
+  '/directories/$directoryId': typeof AuthenticatedSidebarLayoutDirectoriesDirectoryIdRoute
   '/files/$': typeof AuthenticatedSidebarLayoutFilesSplatRoute
 }
 export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/login/callback': typeof LoginCallbackRoute
   '/': typeof AuthenticatedIndexRoute
+  '/directories/$directoryId': typeof AuthenticatedSidebarLayoutDirectoriesDirectoryIdRoute
   '/files/$': typeof AuthenticatedSidebarLayoutFilesSplatRoute
 }
 export interface FileRoutesById {
@@ -66,13 +75,24 @@ export interface FileRoutesById {
   '/_authenticated/_sidebar-layout': typeof AuthenticatedSidebarLayoutRouteWithChildren
   '/login_/callback': typeof LoginCallbackRoute
   '/_authenticated/': typeof AuthenticatedIndexRoute
+  '/_authenticated/_sidebar-layout/directories/$directoryId': typeof AuthenticatedSidebarLayoutDirectoriesDirectoryIdRoute
   '/_authenticated/_sidebar-layout/files/$': typeof AuthenticatedSidebarLayoutFilesSplatRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/login' | '/login/callback' | '/' | '/files/$'
+  fullPaths:
+    | '/login'
+    | '/login/callback'
+    | '/'
+    | '/directories/$directoryId'
+    | '/files/$'
   fileRoutesByTo: FileRoutesByTo
-  to: '/login' | '/login/callback' | '/' | '/files/$'
+  to:
+    | '/login'
+    | '/login/callback'
+    | '/'
+    | '/directories/$directoryId'
+    | '/files/$'
   id:
     | '__root__'
     | '/_authenticated'
@@ -80,6 +100,7 @@ export interface FileRouteTypes {
     | '/_authenticated/_sidebar-layout'
     | '/login_/callback'
     | '/_authenticated/'
+    | '/_authenticated/_sidebar-layout/directories/$directoryId'
     | '/_authenticated/_sidebar-layout/files/$'
   fileRoutesById: FileRoutesById
 }
@@ -133,15 +154,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedSidebarLayoutFilesSplatRouteImport
       parentRoute: typeof AuthenticatedSidebarLayoutRoute
     }
+    '/_authenticated/_sidebar-layout/directories/$directoryId': {
+      id: '/_authenticated/_sidebar-layout/directories/$directoryId'
+      path: '/directories/$directoryId'
+      fullPath: '/directories/$directoryId'
+      preLoaderRoute: typeof AuthenticatedSidebarLayoutDirectoriesDirectoryIdRouteImport
+      parentRoute: typeof AuthenticatedSidebarLayoutRoute
+    }
   }
 }
 
 interface AuthenticatedSidebarLayoutRouteChildren {
+  AuthenticatedSidebarLayoutDirectoriesDirectoryIdRoute: typeof AuthenticatedSidebarLayoutDirectoriesDirectoryIdRoute
   AuthenticatedSidebarLayoutFilesSplatRoute: typeof AuthenticatedSidebarLayoutFilesSplatRoute
 }
 
 const AuthenticatedSidebarLayoutRouteChildren: AuthenticatedSidebarLayoutRouteChildren =
   {
+    AuthenticatedSidebarLayoutDirectoriesDirectoryIdRoute:
+      AuthenticatedSidebarLayoutDirectoriesDirectoryIdRoute,
     AuthenticatedSidebarLayoutFilesSplatRoute:
       AuthenticatedSidebarLayoutFilesSplatRoute,
   }

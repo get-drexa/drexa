@@ -26,6 +26,21 @@ export const fetchFiles = authenticatedQuery({
 	},
 })
 
+export const fetchRootDirectory = authenticatedQuery({
+	handler: async (ctx) => {
+		return await Directories.fetchRoot(ctx)
+	},
+})
+
+export const fetchDirectory = authenticatedQuery({
+	args: {
+		directoryId: v.id("directories"),
+	},
+	handler: async (ctx, { directoryId }) => {
+		return await Directories.fetch(ctx, { directoryId })
+	},
+})
+
 export const fetchDirectoryContent = authenticatedQuery({
 	args: {
 		directoryId: v.optional(v.id("directories")),
@@ -39,7 +54,7 @@ export const fetchDirectoryContent = authenticatedQuery({
 export const createDirectory = authenticatedMutation({
 	args: {
 		name: v.string(),
-		directoryId: v.optional(v.id("directories")),
+		directoryId: v.id("directories"),
 	},
 	handler: async (ctx, { name, directoryId }): Promise<Id<"directories">> => {
 		return await Directories.create(ctx, {

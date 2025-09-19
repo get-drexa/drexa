@@ -19,6 +19,22 @@ type File = {
 export type DirectoryItem = Directory | File
 export type DirectoryItemKind = DirectoryItem["kind"]
 
+export async function fetchRoot(ctx: AuthenticatedQueryCtx) {
+	return await ctx.db
+		.query("directories")
+		.withIndex("byParentId", (q) =>
+			q.eq("userId", ctx.user._id).eq("parentId", undefined),
+		)
+		.first()
+}
+
+export async function fetch(
+	ctx: AuthenticatedQueryCtx,
+	{ directoryId }: { directoryId: Id<"directories"> },
+) {
+	return await ctx.db.get(directoryId)
+}
+
 export async function fetchContent(
 	ctx: AuthenticatedQueryCtx,
 	{
@@ -76,17 +92,14 @@ export async function fetchContent(
 
 export async function create(
 	ctx: AuthenticatedMutationCtx,
-	{ name, parentId }: { name: string; parentId?: Id<"directories"> },
+	{ name, parentId }: { name: string; parentId: Id<"directories"> },
 ): Promise<Id<"directories">> {
-	let parentDir: Doc<"directories"> | null = null
-	if (parentId) {
-		parentDir = await ctx.db.get(parentId)
-		if (!parentDir) {
-			throw Err.create(
-				Err.Code.DirectoryNotFound,
-				`Parent directory ${parentId} not found`,
-			)
-		}
+	const parentDir = await ctx.db.get(parentId)
+	if (!parentDir) {
+		throw Err.create(
+			Err.Code.DirectoryNotFound,
+			`Parent directory ${parentId} not found`,
+		)
 	}
 
 	const existing = await ctx.db
