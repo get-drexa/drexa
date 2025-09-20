@@ -22,3 +22,8 @@ export const itemBeingRenamedAtom = atom<{
 } | null>(null)
 
 export const openedFileAtom = atom<Doc<"files"> | null>(null)
+
+export const dragInfoAtom = atom<{
+	source: DirectoryItem
+	items: Id<"files">[]
+} | null>(null)

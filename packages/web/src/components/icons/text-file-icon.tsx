@@ -1,6 +1,10 @@
+import type React from "react"
 import { cn } from "@/lib/utils"
 
-export function TextFileIcon({ className }: { className?: string }) {
+export function TextFileIcon({
+	className,
+	...props
+}: React.ComponentProps<"svg">) {
 	return (
 		<svg
 			xmlns="http://www.w3.org/2000/svg"
@@ -12,6 +16,7 @@ export function TextFileIcon({ className }: { className?: string }) {
 				"icon icon-tabler icons-tabler-filled icon-tabler-file-text text-blue-300",
 				className,
 			)}
+			{...props}
 		>
 			<title>Text File</title>
 			<path stroke="none" d="M0 0h24v24H0z" fill="none" />

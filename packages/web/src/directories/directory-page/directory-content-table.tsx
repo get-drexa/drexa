@@ -1,5 +1,5 @@
 import { api } from "@fileone/convex/_generated/api"
-import type { Doc } from "@fileone/convex/_generated/dataModel"
+import type { Doc, Id } from "@fileone/convex/_generated/dataModel"
 import type { DirectoryItem } from "@fileone/convex/model/directories"
 import { useMutation } from "@tanstack/react-query"
 import { Link } from "@tanstack/react-router"
@@ -13,7 +13,7 @@ import {
 import { useMutation as useContextMutation } from "convex/react"
 import { useAtom, useAtomValue, useSetAtom, useStore } from "jotai"
 import { CheckIcon, TextCursorInputIcon, TrashIcon, XIcon } from "lucide-react"
-import { useContext, useEffect, useId, useRef } from "react"
+import { useContext, useEffect, useId, useRef, useState } from "react"
 import { toast } from "sonner"
 import { DirectoryIcon } from "@/components/icons/directory-icon"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -39,6 +39,7 @@ import { cn } from "../../lib/utils"
 import { DirectoryPageContext } from "./context"
 import {
 	contextMenuTargeItemAtom,
+	dragInfoAtom,
 	itemBeingRenamedAtom,
 	newItemKindAtom,
 	openedFileAtom,
@@ -255,31 +256,18 @@ export function DirectoryContentTableContent() {
 				</TableHeader>
 				<TableBody>
 					{table.getRowModel().rows?.length ? (
-						table.getRowModel().rows.map((row) => (
-							<TableRow
-								key={row.id}
-								data-state={row.getIsSelected() && "selected"}
-								onClick={() => {
-									selectRow(row)
-								}}
-								onContextMenu={(e) => {
-									handleRowContextMenu(row, e)
-								}}
-							>
-								{row.getVisibleCells().map((cell) => (
-									<TableCell
-										className="first:pl-4 last:pr-4"
-										key={cell.id}
-										style={{ width: cell.column.getSize() }}
-									>
-										{flexRender(
-											cell.column.columnDef.cell,
-											cell.getContext(),
-										)}
-									</TableCell>
-								))}
-							</TableRow>
-						))
+						table
+							.getRowModel()
+							.rows.map((row) => (
+								<FileItemRow
+									key={row.id}
+									row={row}
+									onClick={() => selectRow(row)}
+									onContextMenu={(e) =>
+										handleRowContextMenu(row, e)
+									}
+								/>
+							))
 					) : (
 						<NoResultsRow />
 					)}
@@ -400,6 +388,110 @@ function NewItemRow() {
 	)
 }
 
+function FileItemRow({
+	row,
+	onClick,
+	onContextMenu,
+}: {
+	row: Row<DirectoryItem>
+	onClick: () => void
+	onContextMenu: (e: React.MouseEvent) => void
+}) {
+	const [isDraggedOver, setIsDraggedOver] = useState(false)
+	const ref = useRef<HTMLTableRowElement>(null)
+	const setDragInfo = useSetAtom(dragInfoAtom)
+	const store = useStore()
+
+	const { mutate: moveFiles } = useMutation({
+		mutationFn: useContextMutation(api.files.moveFiles),
+		onSuccess: ({
+			items,
+			targetDirectory,
+		}: {
+			items: Id<"files">[]
+			targetDirectory: Doc<"directories">
+		}) => {
+			toast.success(
+				`${items.length} files moved to ${targetDirectory.name}`,
+			)
+		},
+	})
+
+	function onDragStart(e: React.DragEvent<HTMLTableRowElement>) {
+		if (row.original.kind === "file") {
+			e.dataTransfer.setData(
+				"application/x-internal",
+				JSON.stringify(row.original),
+			)
+			setDragInfo({
+				source: row.original,
+				items: [row.original.doc._id],
+			})
+		}
+	}
+
+	function onDrop(_e: React.DragEvent<HTMLTableRowElement>) {
+		const dragInfo = store.get(dragInfoAtom)
+		if (dragInfo && row.original.kind === "directory") {
+			moveFiles({
+				targetDirectoryId: row.original.doc._id,
+				items: dragInfo.items,
+			})
+		}
+	}
+
+	function onDragOver(e: React.DragEvent<HTMLTableRowElement>) {
+		const dragInfo = store.get(dragInfoAtom)
+		if (
+			dragInfo &&
+			dragInfo.source !== row.original &&
+			row.original.kind === "directory"
+		) {
+			e.preventDefault()
+			e.dataTransfer.dropEffect = "move"
+			setIsDraggedOver(true)
+		} else {
+			e.dataTransfer.dropEffect = "none"
+		}
+	}
+
+	function onDragLeave() {
+		setIsDraggedOver(false)
+	}
+
+	function onDragEnd() {
+		setIsDraggedOver(false)
+		setDragInfo(null)
+	}
+
+	return (
+		<TableRow
+			draggable
+			ref={ref}
+			key={row.id}
+			data-state={row.getIsSelected() && "selected"}
+			onClick={onClick}
+			onContextMenu={onContextMenu}
+			onDragStart={onDragStart}
+			onDrop={onDrop}
+			onDragOver={onDragOver}
+			onDragLeave={onDragLeave}
+			onDragEnd={onDragEnd}
+			className={cn({ "bg-muted": isDraggedOver })}
+		>
+			{row.getVisibleCells().map((cell) => (
+				<TableCell
+					className="first:pl-4 last:pr-4"
+					key={cell.id}
+					style={{ width: cell.column.getSize() }}
+				>
+					{flexRender(cell.column.columnDef.cell, cell.getContext())}
+				</TableCell>
+			))}
+		</TableRow>
+	)
+}
+
 function DirectoryNameCell({ directory }: { directory: Doc<"directories"> }) {
 	return (
 		<div className="flex w-full items-center gap-2">
@@ -416,6 +508,7 @@ function DirectoryNameCell({ directory }: { directory: Doc<"directories"> }) {
 
 function FileNameCell({ file }: { file: Doc<"files"> }) {
 	const setOpenedFile = useSetAtom(openedFileAtom)
+
 	return (
 		<div className="flex w-full items-center gap-2">
 			<TextFileIcon className="size-4" />

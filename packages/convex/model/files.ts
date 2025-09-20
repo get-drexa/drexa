@@ -34,3 +34,28 @@ export async function renameFile(
 
 	await ctx.db.patch(itemId, { name: newName })
 }
+
+export async function moveFiles(
+	ctx: AuthenticatedMutationCtx,
+	{
+		targetDirectoryId,
+		items,
+	}: {
+		targetDirectoryId: Id<"directories">
+		items: Id<"files">[]
+	},
+) {
+	const targetDirectory = await ctx.db.get(targetDirectoryId)
+	if (!targetDirectory) {
+		throw Err.create(
+			Err.Code.DirectoryNotFound,
+			"Target directory not found",
+		)
+	}
+	await Promise.all(
+		items.map((itemId) =>
+			ctx.db.patch(itemId, { directoryId: targetDirectoryId }),
+		),
+	)
+	return { items, targetDirectory }
+}
