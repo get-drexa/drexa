@@ -4,6 +4,7 @@ import { DialogTitle } from "@radix-ui/react-dialog"
 import { useQuery as useConvexQuery } from "convex/react"
 import { atom, useAtom, useAtomValue, useSetAtom } from "jotai"
 import {
+	DownloadIcon,
 	Maximize2Icon,
 	Minimize2Icon,
 	XIcon,
@@ -86,7 +87,7 @@ function PreviewContent({
 			<DialogHeader className="border-b border-b-border p-4 flex flex-row items-center justify-between">
 				<DialogTitle>{file.name}</DialogTitle>
 				<div className="flex flex-row items-center space-x-2">
-					<Toolbar />
+					<Toolbar fileUrl={fileUrl} file={file} />
 					<Button variant="ghost" size="icon" asChild>
 						<DialogClose>
 							<XIcon />
@@ -102,7 +103,7 @@ function PreviewContent({
 	)
 }
 
-function Toolbar() {
+function Toolbar({ fileUrl, file }: { fileUrl: string; file: Doc<"files"> }) {
 	const setZoomLevel = useSetAtom(zoomLevelAtom)
 	const zoomInterval = useRef<ReturnType<typeof setInterval> | null>(null)
 
@@ -153,6 +154,17 @@ function Toolbar() {
 				onMouseUp={stopZooming}
 			>
 				<ZoomOutIcon />
+			</Button>
+			<Button asChild>
+				<a
+					href={fileUrl}
+					download={file.name}
+					target="_blank"
+					className="flex flex-row items-center"
+				>
+					<DownloadIcon />
+					<span className="sr-only md:not-sr-only">Download</span>
+				</a>
 			</Button>
 		</div>
 	)
