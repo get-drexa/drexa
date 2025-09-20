@@ -1,5 +1,5 @@
 import { api } from "@fileone/convex/_generated/api"
-import { baseName, splitPath } from "@fileone/path"
+import type { PathComponent } from "@fileone/convex/model/filesystem"
 import { useMutation } from "@tanstack/react-query"
 import { Link } from "@tanstack/react-router"
 import { useMutation as useConvexMutation } from "convex/react"
@@ -10,7 +10,7 @@ import {
 	PlusIcon,
 	UploadCloudIcon,
 } from "lucide-react"
-import { type ChangeEvent, Fragment, useContext, useRef } from "react"
+import React, { type ChangeEvent, Fragment, useContext, useRef } from "react"
 import { toast } from "sonner"
 import { ImagePreviewDialog } from "@/components/image-preview-dialog"
 import {
@@ -36,11 +36,10 @@ import { RenameFileDialog } from "./rename-file-dialog"
 import { newItemKindAtom, openedFileAtom } from "./state"
 
 export function DirectoryPage() {
-	const { directory } = useContext(DirectoryPageContext)
 	return (
 		<>
 			<header className="flex py-1 shrink-0 items-center gap-2 border-b px-4 w-full">
-				<FilePathBreadcrumb path={directory.path} />
+				<FilePathBreadcrumb />
 				<div className="ml-auto flex flex-row gap-2">
 					<NewDirectoryItemDropdown />
 					<UploadFileButton />
@@ -55,36 +54,50 @@ export function DirectoryPage() {
 	)
 }
 
-function FilePathBreadcrumb({ path }: { path: string }) {
-	const { rootDirectory } = useContext(DirectoryPageContext)
-	const pathComponents = splitPath(path)
-	const base = baseName(path)
+function FilePathBreadcrumb() {
+	const { rootDirectory, directory } = useContext(DirectoryPageContext)
+
+	console.log(directory.path)
+
+	const breadcrumbItems: React.ReactNode[] = []
+	for (let i = 1; i < directory.path.length - 1; i++) {
+		breadcrumbItems.push(
+			<Fragment key={directory.path[i]!.id}>
+				<BreadcrumbSeparator />
+				<FilePathBreadcrumbItem component={directory.path[i]!} />
+			</Fragment>,
+		)
+	}
+
 	return (
 		<Breadcrumb>
 			<BreadcrumbList>
+				{rootDirectory._id === directory._id ? (
+					<BreadcrumbItem>
+						<BreadcrumbPage>All Files</BreadcrumbPage>
+					</BreadcrumbItem>
+				) : (
+					<FilePathBreadcrumbItem component={directory.path[0]!} />
+				)}
+				{breadcrumbItems}
+				<BreadcrumbSeparator />
 				<BreadcrumbItem>
-					<BreadcrumbLink asChild>
-						<Link to={`/directories/${rootDirectory._id}`}>
-							All Files
-						</Link>
-					</BreadcrumbLink>
+					<BreadcrumbPage>{directory.name}</BreadcrumbPage>{" "}
 				</BreadcrumbItem>
-				{pathComponents.map((p) => (
-					<Fragment key={p}>
-						<BreadcrumbSeparator />
-						{p === base ? (
-							<BreadcrumbPage>{p}</BreadcrumbPage>
-						) : (
-							<BreadcrumbItem>
-								<BreadcrumbLink asChild>
-									<Link to={`/directories/${p}`}>{p}</Link>
-								</BreadcrumbLink>
-							</BreadcrumbItem>
-						)}
-					</Fragment>
-				))}
 			</BreadcrumbList>
 		</Breadcrumb>
+	)
+}
+
+function FilePathBreadcrumbItem({ component }: { component: PathComponent }) {
+	return (
+		<BreadcrumbItem>
+			<BreadcrumbLink asChild>
+				<Link to={`/directories/${component.id}`}>
+					{component.name || "All Files"}
+				</Link>
+			</BreadcrumbLink>
+		</BreadcrumbItem>
 	)
 }
 

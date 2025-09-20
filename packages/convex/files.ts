@@ -54,10 +54,9 @@ export const fetchDirectory = authenticatedQuery({
 export const fetchDirectoryContent = authenticatedQuery({
 	args: {
 		directoryId: v.optional(v.id("directories")),
-		path: v.optional(v.string()),
 	},
-	handler: async (ctx, { directoryId, path }): Promise<DirectoryItem[]> => {
-		return await Directories.fetchContent(ctx, { directoryId, path })
+	handler: async (ctx, { directoryId }): Promise<DirectoryItem[]> => {
+		return await Directories.fetchContent(ctx, { directoryId })
 	},
 })
 

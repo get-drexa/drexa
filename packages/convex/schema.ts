@@ -27,7 +27,6 @@ const schema = defineSchema({
 		]),
 	directories: defineTable({
 		name: v.string(),
-		path: v.string(),
 		userId: v.id("users"),
 		parentId: v.optional(v.id("directories")),
 		createdAt: v.string(),
@@ -41,8 +40,7 @@ const schema = defineSchema({
 			"parentId",
 			"name",
 			"deletedAt",
-		])
-		.index("byPath", ["userId", "path", "deletedAt"]),
+		]),
 })
 
 export default schema

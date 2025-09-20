@@ -1,10 +1,10 @@
 import type { Doc, Id } from "@fileone/convex/_generated/dataModel"
-import { joinPath, PATH_SEPARATOR } from "@fileone/path"
 import type {
 	AuthenticatedMutationCtx,
 	AuthenticatedQueryCtx,
 } from "../functions"
 import * as Err from "./error"
+import type { FilePath, ReverseFilePath } from "./filesystem"
 
 type Directory = {
 	kind: "directory"
@@ -19,6 +19,8 @@ type File = {
 export type DirectoryItem = Directory | File
 export type DirectoryItemKind = DirectoryItem["kind"]
 
+export type DirectoryInfo = Doc<"directories"> & { path: FilePath }
+
 export async function fetchRoot(ctx: AuthenticatedQueryCtx) {
 	return await ctx.db
 		.query("directories")
@@ -31,30 +33,36 @@ export async function fetchRoot(ctx: AuthenticatedQueryCtx) {
 export async function fetch(
 	ctx: AuthenticatedQueryCtx,
 	{ directoryId }: { directoryId: Id<"directories"> },
-) {
-	return await ctx.db.get(directoryId)
+): Promise<DirectoryInfo> {
+	const directory = await ctx.db.get(directoryId)
+	if (!directory) {
+		throw Err.create(
+			Err.Code.DirectoryNotFound,
+			`Directory ${directoryId} not found`,
+		)
+	}
+
+	const path: ReverseFilePath = [{ id: directoryId, name: directory.name }]
+	let parentDirId = directory.parentId
+	while (parentDirId) {
+		const parentDir = await ctx.db.get(parentDirId)
+		if (parentDir) {
+			path.push({ id: parentDir._id, name: parentDir.name })
+			parentDirId = parentDir.parentId
+		} else {
+			throw Err.create(Err.Code.Internal)
+		}
+	}
+
+	return { ...directory, path: path.reverse() as FilePath }
 }
 
 export async function fetchContent(
 	ctx: AuthenticatedQueryCtx,
-	{
-		path,
-		directoryId,
-	}: { path?: string; directoryId?: Id<"directories"> } = {},
+	{ directoryId }: { directoryId?: Id<"directories"> } = {},
 ): Promise<DirectoryItem[]> {
 	let dirId: Id<"directories"> | undefined
-	if (path) {
-		dirId = await ctx.db
-			.query("directories")
-			.withIndex("byPath", (q) =>
-				q
-					.eq("userId", ctx.user._id)
-					.eq("path", path)
-					.eq("deletedAt", undefined),
-			)
-			.first()
-			.then((dir) => dir?._id)
-	} else if (directoryId) {
+	if (directoryId) {
 		dirId = directoryId
 	}
 
@@ -127,7 +135,6 @@ export async function create(
 		userId: ctx.user._id,
 		createdAt: now,
 		updatedAt: now,
-		path: parentDir ? joinPath(parentDir.path, name) : joinPath("", name),
 	})
 }
 

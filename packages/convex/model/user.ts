@@ -46,7 +46,6 @@ export async function register(ctx: AuthenticatedMutationCtx) {
 		}),
 		ctx.db.insert("directories", {
 			name: "",
-			path: "",
 			userId: ctx.user._id,
 			createdAt: now,
 			updatedAt: now,
