@@ -84,8 +84,10 @@ function PreviewContent({
 			showCloseButton={false}
 			className="p-0 lg:min-w-1/3 gap-0"
 		>
-			<DialogHeader className="border-b border-b-border p-4 flex flex-row items-center justify-between">
-				<DialogTitle>{file.name}</DialogTitle>
+			<DialogHeader className="overflow-auto border-b border-b-border p-4 flex flex-row items-center justify-between">
+				<DialogTitle className="truncate flex-1">
+					{file.name}
+				</DialogTitle>
 				<div className="flex flex-row items-center space-x-2">
 					<Toolbar fileUrl={fileUrl} file={file} />
 					<Button variant="ghost" size="icon" asChild>
@@ -133,7 +135,7 @@ function Toolbar({ fileUrl, file }: { fileUrl: string; file: Doc<"files"> }) {
 	}
 
 	return (
-		<div className="flex flex-row items-center space-x-2 border-r border-r-border pr-2">
+		<div className="flex flex-row items-center space-x-2 border-r border-r-border pr-4">
 			<ResetZoomButton />
 			<Button
 				variant="ghost"
@@ -201,6 +203,7 @@ function ImagePreview({
 		<img
 			src={fileUrl}
 			alt={file.name}
+			className="object-contain"
 			style={{ transform: `scale(${zoomLevel})` }}
 		/>
 	)
