@@ -3,6 +3,7 @@ import type { DirectoryItem } from "@fileone/convex/model/directories"
 import { createContext } from "react"
 
 type DirectoryPageContextType = {
+	rootDirectory: Doc<"directories">
 	directory: Doc<"directories">
 	directoryContent: DirectoryItem[]
 }

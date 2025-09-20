@@ -12,6 +12,15 @@ export const generateUploadUrl = authenticatedMutation({
 	},
 })
 
+export const generateFileUrl = authenticatedQuery({
+	args: {
+		storageId: v.id("_storage"),
+	},
+	handler: async (ctx, { storageId }) => {
+		return await ctx.storage.getUrl(storageId)
+	},
+})
+
 export const fetchFiles = authenticatedQuery({
 	args: {
 		directoryId: v.optional(v.id("directories")),

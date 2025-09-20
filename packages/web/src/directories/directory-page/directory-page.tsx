@@ -3,7 +3,7 @@ import { baseName, splitPath } from "@fileone/path"
 import { useMutation } from "@tanstack/react-query"
 import { Link } from "@tanstack/react-router"
 import { useMutation as useConvexMutation } from "convex/react"
-import { useSetAtom } from "jotai"
+import { useAtom, useSetAtom } from "jotai"
 import {
 	ChevronDownIcon,
 	Loader2Icon,
@@ -12,6 +12,7 @@ import {
 } from "lucide-react"
 import { type ChangeEvent, Fragment, useContext, useRef } from "react"
 import { toast } from "sonner"
+import { ImagePreviewDialog } from "@/components/image-preview-dialog"
 import {
 	DropdownMenu,
 	DropdownMenuContent,
@@ -32,7 +33,7 @@ import { Button } from "../../components/ui/button"
 import { DirectoryPageContext } from "./context"
 import { DirectoryContentTable } from "./directory-content-table"
 import { RenameFileDialog } from "./rename-file-dialog"
-import { newItemKindAtom } from "./state"
+import { newItemKindAtom, openedFileAtom } from "./state"
 
 export function DirectoryPage() {
 	const { directory } = useContext(DirectoryPageContext)
@@ -49,6 +50,7 @@ export function DirectoryPage() {
 				<DirectoryContentTable />
 			</div>
 			<RenameFileDialog />
+			<PreviewDialog />
 		</>
 	)
 }
@@ -183,4 +185,26 @@ function NewDirectoryItemDropdown() {
 			</DropdownMenuContent>
 		</DropdownMenu>
 	)
+}
+
+function PreviewDialog() {
+	const [openedFile, setOpenedFile] = useAtom(openedFileAtom)
+
+	if (!openedFile) return null
+
+	console.log("openedFile", openedFile)
+
+	switch (openedFile.mimeType) {
+		case "image/jpeg":
+		case "image/png":
+		case "image/gif":
+			return (
+				<ImagePreviewDialog
+					file={openedFile}
+					onClose={() => setOpenedFile(null)}
+				/>
+			)
+		default:
+			return null
+	}
 }

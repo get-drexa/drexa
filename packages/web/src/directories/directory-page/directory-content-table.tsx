@@ -41,6 +41,7 @@ import {
 	contextMenuTargeItemAtom,
 	itemBeingRenamedAtom,
 	newItemKindAtom,
+	openedFileAtom,
 	optimisticDeletedItemsAtom,
 } from "./state"
 
@@ -83,7 +84,7 @@ const columns: ColumnDef<DirectoryItem>[] = [
 		cell: ({ row }) => {
 			switch (row.original.kind) {
 				case "file":
-					return <FileNameCell initialName={row.original.doc.name} />
+					return <FileNameCell file={row.original.doc} />
 				case "directory":
 					return <DirectoryNameCell directory={row.original.doc} />
 			}
@@ -413,11 +414,20 @@ function DirectoryNameCell({ directory }: { directory: Doc<"directories"> }) {
 	)
 }
 
-function FileNameCell({ initialName }: { initialName: string }) {
+function FileNameCell({ file }: { file: Doc<"files"> }) {
+	const setOpenedFile = useSetAtom(openedFileAtom)
 	return (
 		<div className="flex w-full items-center gap-2">
 			<TextFileIcon className="size-4" />
-			{initialName}
+			<button
+				type="button"
+				className="hover:underline cursor-pointer"
+				onClick={() => {
+					setOpenedFile(file)
+				}}
+			>
+				{file.name}
+			</button>
 		</div>
 	)
 }

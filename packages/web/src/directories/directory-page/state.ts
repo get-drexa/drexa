@@ -1,4 +1,4 @@
-import type { Id } from "@fileone/convex/_generated/dataModel"
+import type { Doc, Id } from "@fileone/convex/_generated/dataModel"
 import type {
 	DirectoryItem,
 	DirectoryItemKind,
@@ -20,3 +20,5 @@ export const itemBeingRenamedAtom = atom<{
 	originalItem: DirectoryItem
 	name: string
 } | null>(null)
+
+export const openedFileAtom = atom<Doc<"files"> | null>(null)
