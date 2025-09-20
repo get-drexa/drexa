@@ -5,5 +5,5 @@ export const Route = createFileRoute("/_authenticated/")({
 })
 
 function RouteComponent() {
-	return <Navigate replace to="/files" />
+	return <Navigate replace to="/home" />
 }
