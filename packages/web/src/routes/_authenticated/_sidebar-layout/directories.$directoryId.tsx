@@ -13,6 +13,7 @@ export const Route = createFileRoute(
 
 function RouteComponent() {
 	const { directoryId } = Route.useParams()
+	const rootDirectory = useConvexQuery(api.files.fetchRootDirectory)
 	const directory = useConvexQuery(api.files.fetchDirectory, {
 		directoryId,
 	})
@@ -20,12 +21,14 @@ function RouteComponent() {
 		directoryId,
 	})
 
-	if (!directory || !directoryContent) {
+	if (!directory || !directoryContent || !rootDirectory) {
 		return <DirectoryPageSkeleton />
 	}
 
 	return (
-		<DirectoryPageContext value={{ directory, directoryContent }}>
+		<DirectoryPageContext
+			value={{ rootDirectory, directory, directoryContent }}
+		>
 			<DirectoryPage />
 		</DirectoryPageContext>
 	)

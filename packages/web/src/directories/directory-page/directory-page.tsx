@@ -54,6 +54,7 @@ export function DirectoryPage() {
 }
 
 function FilePathBreadcrumb({ path }: { path: string }) {
+	const { rootDirectory } = useContext(DirectoryPageContext)
 	const pathComponents = splitPath(path)
 	const base = baseName(path)
 	return (
@@ -61,7 +62,9 @@ function FilePathBreadcrumb({ path }: { path: string }) {
 			<BreadcrumbList>
 				<BreadcrumbItem>
 					<BreadcrumbLink asChild>
-						<Link to="/directories">All Files</Link>
+						<Link to={`/directories/${rootDirectory._id}`}>
+							All Files
+						</Link>
 					</BreadcrumbLink>
 				</BreadcrumbItem>
 				{pathComponents.map((p) => (
