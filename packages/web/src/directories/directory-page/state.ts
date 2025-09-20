@@ -5,6 +5,7 @@ import type {
 } from "@fileone/convex/model/directories"
 import type { RowSelectionState } from "@tanstack/react-table"
 import { atom } from "jotai"
+import type { FileDragInfo } from "../../files/use-file-drop"
 
 export const contextMenuTargeItemAtom = atom<DirectoryItem | null>(null)
 export const optimisticDeletedItemsAtom = atom(
@@ -23,7 +24,4 @@ export const itemBeingRenamedAtom = atom<{
 
 export const openedFileAtom = atom<Doc<"files"> | null>(null)
 
-export const dragInfoAtom = atom<{
-	source: DirectoryItem
-	items: Id<"files">[]
-} | null>(null)
+export const dragInfoAtom = atom<FileDragInfo | null>(null)

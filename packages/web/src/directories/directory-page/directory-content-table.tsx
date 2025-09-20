@@ -34,6 +34,7 @@ import {
 import { TextFileIcon } from "../../components/icons/text-file-icon"
 import { Button } from "../../components/ui/button"
 import { LoadingSpinner } from "../../components/ui/loading-spinner"
+import { useFileDrop } from "../../files/use-file-drop"
 import { withDefaultOnError } from "../../lib/error"
 import { cn } from "../../lib/utils"
 import { DirectoryPageContext } from "./context"
@@ -397,27 +398,15 @@ function FileItemRow({
 	onClick: () => void
 	onContextMenu: (e: React.MouseEvent) => void
 }) {
-	const [isDraggedOver, setIsDraggedOver] = useState(false)
 	const ref = useRef<HTMLTableRowElement>(null)
 	const setDragInfo = useSetAtom(dragInfoAtom)
-	const store = useStore()
 
-	const { mutate: moveFiles } = useMutation({
-		mutationFn: useContextMutation(api.files.moveFiles),
-		onSuccess: ({
-			items,
-			targetDirectory,
-		}: {
-			items: Id<"files">[]
-			targetDirectory: Doc<"directories">
-		}) => {
-			toast.success(
-				`${items.length} files moved to ${targetDirectory.name}`,
-			)
-		},
+	const { isDraggedOver, dropHandlers } = useFileDrop({
+		item: row.original,
+		dragInfoAtom,
 	})
 
-	function onDragStart(e: React.DragEvent<HTMLTableRowElement>) {
+	const handleDragStart = (e: React.DragEvent) => {
 		if (row.original.kind === "file") {
 			e.dataTransfer.setData(
 				"application/x-internal",
@@ -430,37 +419,7 @@ function FileItemRow({
 		}
 	}
 
-	function onDrop(_e: React.DragEvent<HTMLTableRowElement>) {
-		const dragInfo = store.get(dragInfoAtom)
-		if (dragInfo && row.original.kind === "directory") {
-			moveFiles({
-				targetDirectoryId: row.original.doc._id,
-				items: dragInfo.items,
-			})
-		}
-	}
-
-	function onDragOver(e: React.DragEvent<HTMLTableRowElement>) {
-		const dragInfo = store.get(dragInfoAtom)
-		if (
-			dragInfo &&
-			dragInfo.source !== row.original &&
-			row.original.kind === "directory"
-		) {
-			e.preventDefault()
-			e.dataTransfer.dropEffect = "move"
-			setIsDraggedOver(true)
-		} else {
-			e.dataTransfer.dropEffect = "none"
-		}
-	}
-
-	function onDragLeave() {
-		setIsDraggedOver(false)
-	}
-
-	function onDragEnd() {
-		setIsDraggedOver(false)
+	const handleDragEnd = () => {
 		setDragInfo(null)
 	}
 
@@ -472,11 +431,9 @@ function FileItemRow({
 			data-state={row.getIsSelected() && "selected"}
 			onClick={onClick}
 			onContextMenu={onContextMenu}
-			onDragStart={onDragStart}
-			onDrop={onDrop}
-			onDragOver={onDragOver}
-			onDragLeave={onDragLeave}
-			onDragEnd={onDragEnd}
+			onDragStart={handleDragStart}
+			onDragEnd={handleDragEnd}
+			{...dropHandlers}
 			className={cn({ "bg-muted": isDraggedOver })}
 		>
 			{row.getVisibleCells().map((cell) => (
