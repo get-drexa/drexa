@@ -1,6 +1,10 @@
 import { api } from "@fileone/convex/_generated/api"
-import type { Doc, Id } from "@fileone/convex/_generated/dataModel"
+import type { Doc } from "@fileone/convex/_generated/dataModel"
 import type { DirectoryItem } from "@fileone/convex/model/directories"
+import {
+	newDirectoryHandle,
+	newFileHandle,
+} from "@fileone/convex/model/filesystem"
 import { useMutation } from "@tanstack/react-query"
 import { Link } from "@tanstack/react-router"
 import {
@@ -13,7 +17,7 @@ import {
 import { useMutation as useContextMutation } from "convex/react"
 import { useAtom, useAtomValue, useSetAtom, useStore } from "jotai"
 import { CheckIcon, TextCursorInputIcon, TrashIcon, XIcon } from "lucide-react"
-import { useContext, useEffect, useId, useRef, useState } from "react"
+import { useContext, useEffect, useId, useRef } from "react"
 import { toast } from "sonner"
 import { DirectoryIcon } from "@/components/icons/directory-icon"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -402,7 +406,10 @@ function FileItemRow({
 	const setDragInfo = useSetAtom(dragInfoAtom)
 
 	const { isDraggedOver, dropHandlers } = useFileDrop({
-		item: row.original,
+		item:
+			row.original.kind === "directory"
+				? newDirectoryHandle(row.original.doc._id)
+				: null,
 		dragInfoAtom,
 	})
 
@@ -412,9 +419,10 @@ function FileItemRow({
 				"application/x-internal",
 				JSON.stringify(row.original),
 			)
+			const fileHandle = newFileHandle(row.original.doc._id)
 			setDragInfo({
-				source: row.original,
-				items: [row.original.doc._id],
+				source: fileHandle,
+				items: [fileHandle],
 			})
 		}
 	}

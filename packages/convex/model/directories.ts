@@ -5,6 +5,7 @@ import type {
 } from "../functions"
 import * as Err from "./error"
 import type { FilePath, ReverseFilePath } from "./filesystem"
+import { newDirectoryHandle } from "./filesystem"
 
 type Directory = {
 	kind: "directory"
@@ -42,12 +43,20 @@ export async function fetch(
 		)
 	}
 
-	const path: ReverseFilePath = [{ id: directoryId, name: directory.name }]
+	const path: ReverseFilePath = [
+		{
+			handle: newDirectoryHandle(directoryId),
+			name: directory.name,
+		},
+	]
 	let parentDirId = directory.parentId
 	while (parentDirId) {
 		const parentDir = await ctx.db.get(parentDirId)
 		if (parentDir) {
-			path.push({ id: parentDir._id, name: parentDir.name })
+			path.push({
+				handle: newDirectoryHandle(parentDir._id),
+				name: parentDir.name,
+			})
 			parentDirId = parentDir.parentId
 		} else {
 			throw Err.create(Err.Code.Internal)

@@ -1,6 +1,10 @@
 import { api } from "@fileone/convex/_generated/api"
 import type { Doc, Id } from "@fileone/convex/_generated/dataModel"
-import type { DirectoryItem } from "@fileone/convex/model/directories"
+import type {
+	DirectoryHandle,
+	FileHandle,
+	FileSystemHandle,
+} from "@fileone/convex/model/filesystem"
 import { useMutation } from "@tanstack/react-query"
 import { useMutation as useContextMutation } from "convex/react"
 import type { Atom } from "jotai"
@@ -9,14 +13,17 @@ import { useState } from "react"
 import { toast } from "sonner"
 
 export interface FileDragInfo {
-	source: DirectoryItem
-	items: Id<"files">[]
+	source: FileSystemHandle
+	items: FileHandle[]
 }
 
 export interface UseFileDropOptions {
-	item: DirectoryItem
+	item: DirectoryHandle | null
 	dragInfoAtom: Atom<FileDragInfo | null>
-	onDropSuccess?: (items: Id<"files">[], targetDirectory: Doc<"directories">) => void
+	onDropSuccess?: (
+		items: Id<"files">[],
+		targetDirectory: Doc<"directories">,
+	) => void
 }
 
 export interface UseFileDropReturn {
@@ -54,10 +61,10 @@ export function useFileDrop({
 
 	const handleDrop = (_e: React.DragEvent) => {
 		const dragInfo = store.get(dragInfoAtom)
-		if (dragInfo && item.kind === "directory") {
+		if (dragInfo && item) {
 			moveFiles({
-				targetDirectoryId: item.doc._id,
-				items: dragInfo.items,
+				targetDirectoryId: item.id,
+				items: dragInfo.items.map((item) => item.id),
 			})
 		}
 		setIsDraggedOver(false)
@@ -65,11 +72,7 @@ export function useFileDrop({
 
 	const handleDragOver = (e: React.DragEvent) => {
 		const dragInfo = store.get(dragInfoAtom)
-		if (
-			dragInfo &&
-			dragInfo.source !== item &&
-			item.kind === "directory"
-		) {
+		if (dragInfo && item) {
 			e.preventDefault()
 			e.dataTransfer.dropEffect = "move"
 			setIsDraggedOver(true)

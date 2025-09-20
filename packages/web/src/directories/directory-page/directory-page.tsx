@@ -1,5 +1,8 @@
 import { api } from "@fileone/convex/_generated/api"
-import type { PathComponent } from "@fileone/convex/model/filesystem"
+import type {
+	DirectoryHandle,
+	PathComponent,
+} from "@fileone/convex/model/filesystem"
 import { useMutation } from "@tanstack/react-query"
 import { Link } from "@tanstack/react-router"
 import { useMutation as useConvexMutation } from "convex/react"
@@ -30,10 +33,17 @@ import {
 	BreadcrumbSeparator,
 } from "../../components/ui/breadcrumb"
 import { Button } from "../../components/ui/button"
+import {
+	Tooltip,
+	TooltipContent,
+	TooltipTrigger,
+} from "../../components/ui/tooltip"
+import { useFileDrop } from "../../files/use-file-drop"
+import { cn } from "../../lib/utils"
 import { DirectoryPageContext } from "./context"
 import { DirectoryContentTable } from "./directory-content-table"
 import { RenameFileDialog } from "./rename-file-dialog"
-import { newItemKindAtom, openedFileAtom } from "./state"
+import { dragInfoAtom, newItemKindAtom, openedFileAtom } from "./state"
 
 export function DirectoryPage() {
 	return (
@@ -57,12 +67,10 @@ export function DirectoryPage() {
 function FilePathBreadcrumb() {
 	const { rootDirectory, directory } = useContext(DirectoryPageContext)
 
-	console.log(directory.path)
-
 	const breadcrumbItems: React.ReactNode[] = []
 	for (let i = 1; i < directory.path.length - 1; i++) {
 		breadcrumbItems.push(
-			<Fragment key={directory.path[i]!.id}>
+			<Fragment key={directory.path[i]!.handle.id}>
 				<BreadcrumbSeparator />
 				<FilePathBreadcrumbItem component={directory.path[i]!} />
 			</Fragment>,
@@ -90,14 +98,29 @@ function FilePathBreadcrumb() {
 }
 
 function FilePathBreadcrumbItem({ component }: { component: PathComponent }) {
+	const { isDraggedOver, dropHandlers } = useFileDrop({
+		item: component.handle as DirectoryHandle,
+		dragInfoAtom,
+	})
+
+	const dirName = component.name || "All Files"
+
 	return (
-		<BreadcrumbItem>
-			<BreadcrumbLink asChild>
-				<Link to={`/directories/${component.id}`}>
-					{component.name || "All Files"}
-				</Link>
-			</BreadcrumbLink>
-		</BreadcrumbItem>
+		<Tooltip open={isDraggedOver}>
+			<TooltipTrigger asChild>
+				<BreadcrumbItem
+					className={cn({ "bg-muted": isDraggedOver })}
+					{...dropHandlers}
+				>
+					<BreadcrumbLink asChild>
+						<Link to={`/directories/${component.handle.id}`}>
+							{dirName}
+						</Link>
+					</BreadcrumbLink>
+				</BreadcrumbItem>
+			</TooltipTrigger>
+			<TooltipContent>Move to {dirName}</TooltipContent>
+		</Tooltip>
 	)
 }
 
