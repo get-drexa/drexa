@@ -6,6 +6,7 @@ import { AuthKitProvider, useAuth } from "@workos-inc/authkit-react"
 import { ConvexReactClient } from "convex/react"
 import { toast } from "sonner"
 import { formatError } from "@/lib/error"
+import { useKeyboardModifierListener } from "@/lib/keyboard"
 
 export const Route = createRootRoute({
 	component: RootLayout,
@@ -25,6 +26,8 @@ const queryClient = new QueryClient({
 })
 
 function RootLayout() {
+	useKeyboardModifierListener()
+
 	return (
 		<QueryClientProvider client={queryClient}>
 			<AuthKitProvider

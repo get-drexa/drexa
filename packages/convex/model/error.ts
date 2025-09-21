@@ -17,6 +17,7 @@ export function isApplicationError(error: unknown): error is ApplicationError {
 export function create(code: Code, message?: string) {
 	return new ConvexError({
 		code,
-		message,
+		message:
+			code === Code.Internal ? "Internal application error" : message,
 	})
 }

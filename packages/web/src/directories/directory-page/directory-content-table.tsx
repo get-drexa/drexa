@@ -35,6 +35,10 @@ import {
 	TableHeader,
 	TableRow,
 } from "@/components/ui/table"
+import {
+	isControlOrCommandKeyActive,
+	keyboardModifierAtom,
+} from "@/lib/keyboard"
 import { TextFileIcon } from "../../components/icons/text-file-icon"
 import { Button } from "../../components/ui/button"
 import { LoadingSpinner } from "../../components/ui/loading-spinner"
@@ -67,15 +71,18 @@ const columns: ColumnDef<DirectoryItem>[] = [
 		header: ({ table }) => (
 			<Checkbox
 				checked={table.getIsAllPageRowsSelected()}
-				onCheckedChange={(value) =>
+				onCheckedChange={(value) => {
 					table.toggleAllPageRowsSelected(!!value)
-				}
+				}}
 				aria-label="Select all"
 			/>
 		),
 		cell: ({ row }) => (
 			<Checkbox
 				checked={row.getIsSelected()}
+				onClick={(e) => {
+					e.stopPropagation()
+				}}
 				onCheckedChange={row.getToggleSelectedHandler()}
 				aria-label="Select row"
 			/>
@@ -229,10 +236,25 @@ export function DirectoryContentTableContent() {
 	})
 
 	const selectRow = (row: Row<DirectoryItem>) => {
-		console.log("row.getIsSelected()", row.getIsSelected())
-		if (!row.getIsSelected()) {
-			table.toggleAllPageRowsSelected(false)
+		const keyboardModifiers = store.get(keyboardModifierAtom)
+		const isMultiSelectMode = isControlOrCommandKeyActive(keyboardModifiers)
+		const isRowSelected = row.getIsSelected()
+		console.log({ isMultiSelectMode, isRowSelected })
+		if (isRowSelected && isMultiSelectMode) {
+			row.toggleSelected(false)
+		} else if (isRowSelected && !isMultiSelectMode) {
+			table.setRowSelection({
+				[row.id]: true,
+			})
 			row.toggleSelected(true)
+		} else if (!isRowSelected) {
+			if (isMultiSelectMode) {
+				row.toggleSelected(true)
+			} else {
+				table.setRowSelection({
+					[row.id]: true,
+				})
+			}
 		}
 	}
 
