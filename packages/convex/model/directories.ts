@@ -171,6 +171,43 @@ export async function move(
 		sourceDirectories: DirectoryHandle[]
 	},
 ): Promise<void> {
+	const conflictCheckResults = await Promise.allSettled(
+		sourceDirectories.map((directory) =>
+			ctx.db.get(directory.id).then((d) => {
+				if (!d) {
+					throw Err.create(
+						Err.Code.DirectoryNotFound,
+						`Directory ${directory.id} not found`,
+					)
+				}
+				return ctx.db
+					.query("directories")
+					.withIndex("uniqueDirectoryInDirectory", (q) =>
+						q
+							.eq("userId", ctx.user._id)
+							.eq("parentId", targetDirectory.id)
+							.eq("name", d.name)
+							.eq("deletedAt", undefined),
+					)
+					.first()
+			}),
+		),
+	)
+
+	const errors: Err.ApplicationError[] = []
+	for (const result of conflictCheckResults) {
+		if (result.status === "fulfilled" && result.value) {
+			errors.push(
+				Err.create(
+					Err.Code.Conflict,
+					`Directory ${targetDirectory.id} already contains a directory with name ${result.value.name}`,
+				),
+			)
+		} else if (result.status === "rejected") {
+			errors.push(Err.create(Err.Code.Internal))
+		}
+	}
+
 	await Promise.all(
 		sourceDirectories.map((directory) =>
 			ctx.db.patch(directory.id, { parentId: targetDirectory.id }),
