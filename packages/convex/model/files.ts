@@ -1,6 +1,7 @@
 import type { Id } from "../_generated/dataModel"
 import type { AuthenticatedMutationCtx } from "../functions"
 import * as Err from "./error"
+import type { DirectoryHandle, FileHandle } from "./filesystem"
 
 export async function renameFile(
 	ctx: AuthenticatedMutationCtx,
@@ -35,27 +36,19 @@ export async function renameFile(
 	await ctx.db.patch(itemId, { name: newName })
 }
 
-export async function moveFiles(
+export async function move(
 	ctx: AuthenticatedMutationCtx,
 	{
-		targetDirectoryId,
+		targetDirectory: targetDirectoryHandle,
 		items,
 	}: {
-		targetDirectoryId: Id<"directories">
-		items: Id<"files">[]
+		targetDirectory: DirectoryHandle
+		items: FileHandle[]
 	},
 ) {
-	const targetDirectory = await ctx.db.get(targetDirectoryId)
-	if (!targetDirectory) {
-		throw Err.create(
-			Err.Code.DirectoryNotFound,
-			"Target directory not found",
-		)
-	}
 	await Promise.all(
-		items.map((itemId) =>
-			ctx.db.patch(itemId, { directoryId: targetDirectoryId }),
+		items.map((item) =>
+			ctx.db.patch(item.id, { directoryId: targetDirectoryHandle.id }),
 		),
 	)
-	return { items, targetDirectory }
 }

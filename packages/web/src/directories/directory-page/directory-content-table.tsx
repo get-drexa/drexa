@@ -2,6 +2,7 @@ import { api } from "@fileone/convex/_generated/api"
 import type { Doc } from "@fileone/convex/_generated/dataModel"
 import type { DirectoryItem } from "@fileone/convex/model/directories"
 import {
+	type FileSystemHandle,
 	newDirectoryHandle,
 	newFileHandle,
 } from "@fileone/convex/model/filesystem"
@@ -12,6 +13,7 @@ import {
 	flexRender,
 	getCoreRowModel,
 	type Row,
+	type Table as TableType,
 	useReactTable,
 } from "@tanstack/react-table"
 import { useMutation as useContextMutation } from "convex/react"
@@ -302,6 +304,7 @@ export function DirectoryContentTableContent() {
 						table.getRowModel().rows.map((row) => (
 							<FileItemRow
 								key={row.id}
+								table={table}
 								row={row}
 								onClick={() => selectRow(row)}
 								onContextMenu={(e) =>
@@ -439,11 +442,13 @@ function NewItemRow() {
 }
 
 function FileItemRow({
+	table,
 	row,
 	onClick,
 	onContextMenu,
 	onDoubleClick,
 }: {
+	table: TableType<DirectoryItem>
 	row: Row<DirectoryItem>
 	onClick: () => void
 	onContextMenu: (e: React.MouseEvent) => void
@@ -461,17 +466,30 @@ function FileItemRow({
 	})
 
 	const handleDragStart = (e: React.DragEvent) => {
-		if (row.original.kind === "file") {
-			e.dataTransfer.setData(
-				"application/x-internal",
-				JSON.stringify(row.original),
-			)
-			const fileHandle = newFileHandle(row.original.doc._id)
-			setDragInfo({
-				source: fileHandle,
-				items: [fileHandle],
-			})
+		let source: FileSystemHandle
+		switch (row.original.kind) {
+			case "file":
+				source = newFileHandle(row.original.doc._id)
+				break
+			case "directory":
+				source = newDirectoryHandle(row.original.doc._id)
+				break
 		}
+
+		// biome-ignore lint/suspicious/useIterableCallbackReturn: the switch statement is exhaustive
+		const draggedItems = table.getSelectedRowModel().rows.map((row) => {
+			switch (row.original.kind) {
+				case "file":
+					return newFileHandle(row.original.doc._id)
+				case "directory":
+					return newDirectoryHandle(row.original.doc._id)
+			}
+		})
+
+		setDragInfo({
+			source,
+			items: draggedItems,
+		})
 	}
 
 	const handleDragEnd = () => {

@@ -141,13 +141,3 @@ export const moveToTrash = authenticatedMutation({
 		return itemId
 	},
 })
-
-export const moveFiles = authenticatedMutation({
-	args: {
-		targetDirectoryId: v.id("directories"),
-		items: v.array(v.id("files")),
-	},
-	handler: async (ctx, { targetDirectoryId, items }) => {
-		return await Files.moveFiles(ctx, { targetDirectoryId, items })
-	},
-})

@@ -4,7 +4,7 @@ import type {
 	AuthenticatedQueryCtx,
 } from "../functions"
 import * as Err from "./error"
-import type { FilePath, ReverseFilePath } from "./filesystem"
+import type { DirectoryHandle, FilePath, ReverseFilePath } from "./filesystem"
 import { newDirectoryHandle } from "./filesystem"
 
 type Directory = {
@@ -29,6 +29,20 @@ export async function fetchRoot(ctx: AuthenticatedQueryCtx) {
 			q.eq("userId", ctx.user._id).eq("parentId", undefined),
 		)
 		.first()
+}
+
+export async function fetchHandle(
+	ctx: AuthenticatedQueryCtx,
+	handle: DirectoryHandle,
+): Promise<Doc<"directories">> {
+	const directory = await ctx.db.get(handle.id)
+	if (!directory || directory.userId !== ctx.user._id) {
+		throw Err.create(
+			Err.Code.DirectoryNotFound,
+			`Directory ${handle.id} not found`,
+		)
+	}
+	return directory
 }
 
 export async function fetch(
@@ -145,6 +159,23 @@ export async function create(
 		createdAt: now,
 		updatedAt: now,
 	})
+}
+
+export async function move(
+	ctx: AuthenticatedMutationCtx,
+	{
+		targetDirectory,
+		sourceDirectories,
+	}: {
+		targetDirectory: DirectoryHandle
+		sourceDirectories: DirectoryHandle[]
+	},
+): Promise<void> {
+	await Promise.all(
+		sourceDirectories.map((directory) =>
+			ctx.db.patch(directory.id, { parentId: targetDirectory.id }),
+		),
+	)
 }
 
 export async function moveToTrashRecursive(

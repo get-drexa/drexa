@@ -1,9 +1,9 @@
 export enum Platform {
-	Windows = 'windows',
-	MacOS = 'macos',
-	Linux = 'linux',
-	Android = 'android',
-	iOS = 'ios'
+	Windows = "windows",
+	MacOS = "macos",
+	Linux = "linux",
+	Android = "android",
+	iOS = "ios",
 }
 
 // Internal global variables (computed once at module load)
