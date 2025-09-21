@@ -149,6 +149,7 @@ export function DirectoryContentTableContextMenu({
 	const setOptimisticDeletedItems = useSetAtom(optimisticDeletedItemsAtom)
 	const moveToTrashMutation = useContextMutation(api.files.moveToTrash)
 	const setItemBeingRenamed = useSetAtom(itemBeingRenamedAtom)
+	const setContextMenuTargetItem = useSetAtom(contextMenuTargeItemAtom)
 	const { mutate: moveToTrash } = useMutation({
 		mutationFn: moveToTrashMutation,
 		onMutate: ({ itemId }) => {
@@ -186,7 +187,13 @@ export function DirectoryContentTableContextMenu({
 	}
 
 	return (
-		<ContextMenu>
+		<ContextMenu
+			onOpenChange={(open) => {
+				if (!open) {
+					setContextMenuTargetItem(null)
+				}
+			}}
+		>
 			<ContextMenuTrigger asChild>{children}</ContextMenuTrigger>
 			{target && (
 				<ContextMenuContent>
