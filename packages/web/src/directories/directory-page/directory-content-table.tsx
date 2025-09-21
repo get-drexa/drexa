@@ -6,7 +6,7 @@ import {
 	newFileHandle,
 } from "@fileone/convex/model/filesystem"
 import { useMutation } from "@tanstack/react-query"
-import { Link } from "@tanstack/react-router"
+import { Link, useNavigate } from "@tanstack/react-router"
 import {
 	type ColumnDef,
 	flexRender,
@@ -216,6 +216,7 @@ export function DirectoryContentTableContent() {
 	const optimisticDeletedItems = useAtomValue(optimisticDeletedItemsAtom)
 	const setContextMenuTargetItem = useSetAtom(contextMenuTargeItemAtom)
 	const store = useStore()
+	const navigate = useNavigate()
 
 	const handleRowContextMenu = (
 		row: Row<DirectoryItem>,
@@ -265,6 +266,14 @@ export function DirectoryContentTableContent() {
 		}
 	}
 
+	const handleRowDoubleClick = (row: Row<DirectoryItem>) => {
+		if (row.original.kind === "directory") {
+			navigate({
+				to: `/directories/${row.original.doc._id}`,
+			})
+		}
+	}
+
 	return (
 		<div className="overflow-hidden">
 			<Table>
@@ -290,18 +299,19 @@ export function DirectoryContentTableContent() {
 				</TableHeader>
 				<TableBody>
 					{table.getRowModel().rows?.length ? (
-						table
-							.getRowModel()
-							.rows.map((row) => (
-								<FileItemRow
-									key={row.id}
-									row={row}
-									onClick={() => selectRow(row)}
-									onContextMenu={(e) =>
-										handleRowContextMenu(row, e)
-									}
-								/>
-							))
+						table.getRowModel().rows.map((row) => (
+							<FileItemRow
+								key={row.id}
+								row={row}
+								onClick={() => selectRow(row)}
+								onContextMenu={(e) =>
+									handleRowContextMenu(row, e)
+								}
+								onDoubleClick={() => {
+									handleRowDoubleClick(row)
+								}}
+							/>
+						))
 					) : (
 						<NoResultsRow />
 					)}
@@ -426,10 +436,12 @@ function FileItemRow({
 	row,
 	onClick,
 	onContextMenu,
+	onDoubleClick,
 }: {
 	row: Row<DirectoryItem>
 	onClick: () => void
 	onContextMenu: (e: React.MouseEvent) => void
+	onDoubleClick: () => void
 }) {
 	const ref = useRef<HTMLTableRowElement>(null)
 	const setDragInfo = useSetAtom(dragInfoAtom)
@@ -467,6 +479,7 @@ function FileItemRow({
 			key={row.id}
 			data-state={row.getIsSelected() && "selected"}
 			onClick={onClick}
+			onDoubleClick={onDoubleClick}
 			onContextMenu={onContextMenu}
 			onDragStart={handleDragStart}
 			onDragEnd={handleDragEnd}
