@@ -353,11 +353,17 @@ function NewItemRow() {
 		}),
 	})
 
+	// Auto-focus the input when newItemKind changes to a truthy value
 	useEffect(() => {
-		if (newItemKind) {
-			setTimeout(() => {
-				inputRef.current?.focus()
-			}, 1)
+		if (newItemKind && inputRef.current) {
+			// Use requestAnimationFrame to ensure the component is fully rendered
+			// and the dropdown has completed its close cycle
+			requestAnimationFrame(() => {
+				if (inputRef.current) {
+					inputRef.current.focus()
+					inputRef.current.select() // Also select the default text for better UX
+				}
+			})
 		}
 	}, [newItemKind])
 
@@ -389,9 +395,9 @@ function NewItemRow() {
 			<TableCell className="p-0">
 				<div className="flex items-center gap-2 px-2 py-1 h-full">
 					{isPending ? (
-						<LoadingSpinner className="size-6" />
+						<LoadingSpinner className="size-4" />
 					) : (
-						<DirectoryIcon />
+						<DirectoryIcon className="size-4" />
 					)}
 					<form
 						className="w-full"

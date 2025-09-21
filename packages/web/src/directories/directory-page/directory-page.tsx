@@ -6,7 +6,7 @@ import type {
 import { useMutation } from "@tanstack/react-query"
 import { Link } from "@tanstack/react-router"
 import { useMutation as useConvexMutation } from "convex/react"
-import { useAtom, useSetAtom } from "jotai"
+import { useAtom, useAtomValue, useSetAtom } from "jotai"
 import {
 	ChevronDownIcon,
 	Loader2Icon,
@@ -195,9 +195,17 @@ function UploadFileButton() {
 
 function NewDirectoryItemDropdown() {
 	const setNewItemKind = useSetAtom(newItemKindAtom)
+	const newItemKind = useAtomValue(newItemKindAtom)
 
 	const addNewDirectory = () => {
 		setNewItemKind("directory")
+	}
+
+	const handleCloseAutoFocus = (event: Event) => {
+		// If we just created a new item, prevent the dropdown from restoring focus to the trigger
+		if (newItemKind) {
+			event.preventDefault()
+		}
 	}
 
 	return (
@@ -209,7 +217,7 @@ function NewDirectoryItemDropdown() {
 					<ChevronDownIcon className="pl-1 size-4 shrink-0" />
 				</Button>
 			</DropdownMenuTrigger>
-			<DropdownMenuContent>
+			<DropdownMenuContent onCloseAutoFocus={handleCloseAutoFocus}>
 				<DropdownMenuItem>
 					<TextFileIcon />
 					Text file
