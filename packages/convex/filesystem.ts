@@ -46,7 +46,8 @@ export const moveItems = authenticatedMutation({
 					break
 			}
 		}
-		await Promise.all([
+
+		const [fileMoveResult, directoryMoveResult] = await Promise.all([
 			Files.move(ctx, {
 				targetDirectory: targetDirectoryHandle,
 				items: fileHandles,
@@ -57,6 +58,9 @@ export const moveItems = authenticatedMutation({
 			}),
 		])
 
-		return { items, targetDirectory }
+		return {
+			moved: [...directoryMoveResult.moved, ...fileMoveResult.moved],
+			errors: [...fileMoveResult.errors, ...directoryMoveResult.errors],
+		}
 	},
 })

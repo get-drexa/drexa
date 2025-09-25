@@ -46,9 +46,59 @@ export async function move(
 		items: FileHandle[]
 	},
 ) {
-	await Promise.all(
-		items.map((item) =>
-			ctx.db.patch(item.id, { directoryId: targetDirectoryHandle.id }),
+	const conflictCheckResults = await Promise.allSettled(
+		items.map((fileHandle) =>
+			ctx.db.get(fileHandle.id).then((f) => {
+				if (!f) {
+					throw Err.create(
+						Err.Code.FileNotFound,
+						`File ${fileHandle.id} not found`,
+					)
+				}
+				return ctx.db
+					.query("files")
+					.withIndex("uniqueFileInDirectory", (q) =>
+						q
+							.eq("userId", ctx.user._id)
+							.eq("directoryId", targetDirectoryHandle.id)
+							.eq("name", f.name)
+							.eq("deletedAt", undefined),
+					)
+					.first()
+			}),
 		),
 	)
+
+	const errors: Err.ApplicationErrorData[] = []
+	const okFiles: FileHandle[] = []
+	conflictCheckResults.forEach((result, i) => {
+		if (result.status === "fulfilled") {
+			if (result.value) {
+				errors.push(
+					Err.createJson(
+						Err.Code.Conflict,
+						`Directory ${targetDirectoryHandle.id} already contains a file with name ${result.value.name}`,
+					),
+				)
+			} else {
+				okFiles.push(items[i])
+			}
+		} else if (result.status === "rejected") {
+			errors.push(Err.createJson(Err.Code.Internal))
+		}
+	})
+
+	const results = await Promise.allSettled(
+		okFiles.map((handle) =>
+			ctx.db.patch(handle.id, { directoryId: targetDirectoryHandle.id }),
+		),
+	)
+
+	for (const updateResult of results) {
+		if (updateResult.status === "rejected") {
+			errors.push(Err.createJson(Err.Code.Internal))
+		}
+	}
+
+	return { moved: okFiles, errors }
 }

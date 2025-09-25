@@ -8,6 +8,10 @@ const ERROR_MESSAGE = {
 	[ErrorCode.DirectoryExists]: "Directory already exists",
 	[ErrorCode.FileExists]: "File already exists",
 	[ErrorCode.Internal]: "Internal application error",
+	[ErrorCode.Conflict]: "Conflict",
+	[ErrorCode.DirectoryNotFound]: "Directory not found",
+	[ErrorCode.FileNotFound]: "File not found",
+	[ErrorCode.Unauthenticated]: "Unauthenticated",
 } as const
 
 export function formatError(error: unknown): string {

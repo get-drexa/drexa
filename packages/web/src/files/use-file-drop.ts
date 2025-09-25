@@ -1,5 +1,6 @@
 import { api } from "@fileone/convex/_generated/api"
 import type { Doc, Id } from "@fileone/convex/_generated/dataModel"
+import * as Err from "@fileone/convex/model/error"
 import type {
 	DirectoryHandle,
 	FileSystemHandle,
@@ -44,20 +45,31 @@ export function useFileDrop({
 	const { mutate: moveDroppedItems } = useMutation({
 		mutationFn: useContextMutation(api.filesystem.moveItems),
 		onSuccess: ({
-			items,
-			targetDirectory,
+			moved,
+			errors,
 		}: {
-			items: FileSystemHandle[]
-			targetDirectory: Doc<"directories">
+			moved: FileSystemHandle[]
+			errors: Err.ApplicationErrorData[]
 		}) => {
-			toast.success(
-				`${items.length} items moved to ${targetDirectory.name}`,
-			)
+			const conflictCount = errors.reduce((acc, error) => {
+				if (error.code === Err.Code.Conflict) {
+					return acc + 1
+				}
+				return acc
+			}, 0)
+			if (conflictCount > 0) {
+				toast.warning(
+					`${moved.length} items moved${conflictCount > 0 ? `, ${conflictCount} conflicts` : ""}`,
+				)
+			} else {
+				toast.success(`${moved.length} items moved!`)
+			}
 		},
 	})
 
 	const handleDrop = (_e: React.DragEvent) => {
 		const dragInfo = store.get(dragInfoAtom)
+		console.log("dragInfo", dragInfo)
 		if (dragInfo && item) {
 			moveDroppedItems({
 				targetDirectory: item,

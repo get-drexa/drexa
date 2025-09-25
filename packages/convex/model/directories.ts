@@ -170,7 +170,7 @@ export async function move(
 		targetDirectory: DirectoryHandle
 		sourceDirectories: DirectoryHandle[]
 	},
-): Promise<void> {
+) {
 	const conflictCheckResults = await Promise.allSettled(
 		sourceDirectories.map((directory) =>
 			ctx.db.get(directory.id).then((d) => {
@@ -194,25 +194,40 @@ export async function move(
 		),
 	)
 
-	const errors: Err.ApplicationError[] = []
-	for (const result of conflictCheckResults) {
-		if (result.status === "fulfilled" && result.value) {
-			errors.push(
-				Err.create(
-					Err.Code.Conflict,
-					`Directory ${targetDirectory.id} already contains a directory with name ${result.value.name}`,
-				),
-			)
+	console.log(sourceDirectories)
+
+	const errors: Err.ApplicationErrorData[] = []
+	const okDirectories: DirectoryHandle[] = []
+	conflictCheckResults.forEach((result, i) => {
+		if (result.status === "fulfilled") {
+			if (result.value) {
+				errors.push(
+					Err.createJson(
+						Err.Code.Conflict,
+						`Directory ${targetDirectory.id} already contains a directory with name ${result.value.name}`,
+					),
+				)
+			} else {
+				okDirectories.push(sourceDirectories[i])
+			}
 		} else if (result.status === "rejected") {
-			errors.push(Err.create(Err.Code.Internal))
+			errors.push(Err.createJson(Err.Code.Internal))
+		}
+	})
+
+	const results = await Promise.allSettled(
+		okDirectories.map((handle) =>
+			ctx.db.patch(handle.id, { parentId: targetDirectory.id }),
+		),
+	)
+
+	for (const updateResult of results) {
+		if (updateResult.status === "rejected") {
+			errors.push(Err.createJson(Err.Code.Internal))
 		}
 	}
 
-	await Promise.all(
-		sourceDirectories.map((directory) =>
-			ctx.db.patch(directory.id, { parentId: targetDirectory.id }),
-		),
-	)
+	return { moved: okDirectories, errors }
 }
 
 export async function moveToTrashRecursive(

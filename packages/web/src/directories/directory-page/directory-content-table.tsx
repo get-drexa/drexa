@@ -485,6 +485,7 @@ function FileItemRow({
 					return newDirectoryHandle(row.original.doc._id)
 			}
 		})
+		draggedItems.push(source)
 
 		setDragInfo({
 			source,
