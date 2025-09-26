@@ -53,7 +53,7 @@ import {
 	contextMenuTargeItemAtom,
 	dragInfoAtom,
 	itemBeingRenamedAtom,
-	newItemKindAtom,
+	newFileTypeAtom,
 	openedFileAtom,
 	optimisticDeletedItemsAtom,
 } from "./state"
@@ -332,7 +332,6 @@ export function DirectoryContentTableContent() {
 					) : (
 						<NoResultsRow />
 					)}
-					<NewItemRow />
 				</TableBody>
 			</Table>
 		</div>
@@ -340,116 +339,10 @@ export function DirectoryContentTableContent() {
 }
 
 function NoResultsRow() {
-	const newItemKind = useAtomValue(newItemKindAtom)
-	if (newItemKind) {
-		return null
-	}
 	return (
 		<TableRow>
 			<TableCell colSpan={columns.length} className="text-center">
 				No results.
-			</TableCell>
-		</TableRow>
-	)
-}
-
-function NewItemRow() {
-	const { directory } = useContext(DirectoryPageContext)
-	const inputRef = useRef<HTMLInputElement>(null)
-	const newItemFormId = useId()
-	const [newItemKind, setNewItemKind] = useAtom(newItemKindAtom)
-	const { mutate: createDirectory, isPending } = useMutation({
-		mutationFn: useContextMutation(api.files.createDirectory),
-		onSuccess: () => {
-			setNewItemKind(null)
-		},
-		onError: withDefaultOnError(() => {
-			setTimeout(() => {
-				inputRef.current?.focus()
-			}, 1)
-		}),
-	})
-
-	// Auto-focus the input when newItemKind changes to a truthy value
-	useEffect(() => {
-		if (newItemKind && inputRef.current) {
-			// Use requestAnimationFrame to ensure the component is fully rendered
-			// and the dropdown has completed its close cycle
-			requestAnimationFrame(() => {
-				if (inputRef.current) {
-					inputRef.current.focus()
-					inputRef.current.select() // Also select the default text for better UX
-				}
-			})
-		}
-	}, [newItemKind])
-
-	if (!newItemKind) {
-		return null
-	}
-
-	const onSubmit = (event: React.FormEvent<HTMLFormElement>) => {
-		event.preventDefault()
-
-		const formData = new FormData(event.currentTarget)
-		const itemName = formData.get("itemName") as string
-
-		if (itemName) {
-			createDirectory({ name: itemName, directoryId: directory._id })
-		} else {
-			toast.error("Please enter a name.")
-		}
-	}
-
-	const clearNewItemKind = () => {
-		// setItemBeingAdded(null)
-		setNewItemKind(null)
-	}
-
-	return (
-		<TableRow className={cn("align-middle", { "opacity-50": isPending })}>
-			<TableCell />
-			<TableCell className="p-0">
-				<div className="flex items-center gap-2 px-2 py-1 h-full">
-					{isPending ? (
-						<LoadingSpinner className="size-4" />
-					) : (
-						<DirectoryIcon className="size-4" />
-					)}
-					<form
-						className="w-full"
-						id={newItemFormId}
-						onSubmit={onSubmit}
-					>
-						<input
-							ref={inputRef}
-							type="text"
-							name="itemName"
-							defaultValue={newItemKind}
-							disabled={isPending}
-							className="w-full h-8 px-2 bg-transparent border border-input rounded-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary"
-						/>
-					</form>
-				</div>
-			</TableCell>
-			<TableCell />
-			<TableCell align="right" className="space-x-2 p-1">
-				{!isPending ? (
-					<>
-						<Button
-							type="button"
-							form={newItemFormId}
-							variant="ghost"
-							size="icon"
-							onClick={clearNewItemKind}
-						>
-							<XIcon />
-						</Button>
-						<Button type="submit" form={newItemFormId} size="icon">
-							<CheckIcon />
-						</Button>
-					</>
-				) : null}
 			</TableCell>
 		</TableRow>
 	)

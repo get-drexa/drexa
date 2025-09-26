@@ -1,5 +1,10 @@
 import type { Id } from "../_generated/dataModel"
 
+export enum FileType {
+	File = "File",
+	Directory = "Directory",
+}
+
 export type DirectoryPathComponent = {
 	handle: DirectoryHandle
 	name: string

@@ -1,7 +1,8 @@
 import { api } from "@fileone/convex/_generated/api"
-import type {
-	DirectoryHandle,
-	PathComponent,
+import {
+	type DirectoryHandle,
+	FileType,
+	type PathComponent,
 } from "@fileone/convex/model/filesystem"
 import { useMutation } from "@tanstack/react-query"
 import { Link } from "@tanstack/react-router"
@@ -38,14 +39,17 @@ import {
 	TooltipContent,
 	TooltipTrigger,
 } from "../../components/ui/tooltip"
+import { WithAtom } from "../../components/with-atom"
 import { useFileDrop } from "../../files/use-file-drop"
 import { cn } from "../../lib/utils"
 import { DirectoryPageContext } from "./context"
 import { DirectoryContentTable } from "./directory-content-table"
+import { NewDirectoryDialog } from "./new-directory-dialog"
 import { RenameFileDialog } from "./rename-file-dialog"
-import { dragInfoAtom, newItemKindAtom, openedFileAtom } from "./state"
+import { dragInfoAtom, newFileTypeAtom, openedFileAtom } from "./state"
 
 export function DirectoryPage() {
+	const { directory } = useContext(DirectoryPageContext)
 	return (
 		<>
 			<header className="flex py-1 shrink-0 items-center gap-2 border-b px-4 w-full">
@@ -60,6 +64,19 @@ export function DirectoryPage() {
 			</div>
 			<RenameFileDialog />
 			<PreviewDialog />
+			<WithAtom atom={newFileTypeAtom}>
+				{(newFileType, setNewFileType) => (
+					<NewDirectoryDialog
+						open={newFileType === FileType.Directory}
+						directoryId={directory._id}
+						onOpenChange={(open) => {
+							if (!open) {
+								setNewFileType(null)
+							}
+						}}
+					/>
+				)}
+			</WithAtom>
 		</>
 	)
 }
@@ -194,16 +211,15 @@ function UploadFileButton() {
 }
 
 function NewDirectoryItemDropdown() {
-	const setNewItemKind = useSetAtom(newItemKindAtom)
-	const newItemKind = useAtomValue(newItemKindAtom)
+	const [newFileType, setNewFileType] = useAtom(newFileTypeAtom)
 
 	const addNewDirectory = () => {
-		setNewItemKind("directory")
+		setNewFileType(FileType.Directory)
 	}
 
 	const handleCloseAutoFocus = (event: Event) => {
 		// If we just created a new item, prevent the dropdown from restoring focus to the trigger
-		if (newItemKind) {
+		if (newFileType) {
 			event.preventDefault()
 		}
 	}
@@ -235,8 +251,6 @@ function PreviewDialog() {
 	const [openedFile, setOpenedFile] = useAtom(openedFileAtom)
 
 	if (!openedFile) return null
-
-	console.log("openedFile", openedFile)
 
 	switch (openedFile.mimeType) {
 		case "image/jpeg":

@@ -3,6 +3,7 @@ import type {
 	DirectoryItem,
 	DirectoryItemKind,
 } from "@fileone/convex/model/directories"
+import type { FileType } from "@fileone/convex/model/filesystem"
 import type { RowSelectionState } from "@tanstack/react-table"
 import { atom } from "jotai"
 import type { FileDragInfo } from "../../files/use-file-drop"
@@ -14,7 +15,7 @@ export const optimisticDeletedItemsAtom = atom(
 
 export const selectedFileRowsAtom = atom<RowSelectionState>({})
 
-export const newItemKindAtom = atom<DirectoryItemKind | null>(null)
+export const newFileTypeAtom = atom<FileType | null>(null)
 
 export const itemBeingRenamedAtom = atom<{
 	kind: DirectoryItemKind
