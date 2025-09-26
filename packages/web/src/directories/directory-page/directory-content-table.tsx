@@ -3,6 +3,7 @@ import type { Doc } from "@fileone/convex/_generated/dataModel"
 import type { DirectoryItem } from "@fileone/convex/model/directories"
 import {
 	type FileSystemHandle,
+	isSameHandle,
 	newDirectoryHandle,
 	newFileHandle,
 } from "@fileone/convex/model/filesystem"
@@ -458,7 +459,7 @@ function FileItemRow({
 	const setDragInfo = useSetAtom(dragInfoAtom)
 
 	const { isDraggedOver, dropHandlers } = useFileDrop({
-		item:
+		destItem:
 			row.original.kind === "directory"
 				? newDirectoryHandle(row.original.doc._id)
 				: null,
@@ -476,16 +477,24 @@ function FileItemRow({
 				break
 		}
 
-		// biome-ignore lint/suspicious/useIterableCallbackReturn: the switch statement is exhaustive
-		const draggedItems = table.getSelectedRowModel().rows.map((row) => {
-			switch (row.original.kind) {
-				case "file":
-					return newFileHandle(row.original.doc._id)
-				case "directory":
-					return newDirectoryHandle(row.original.doc._id)
+		let draggedItems: FileSystemHandle[]
+		// drag all selections, but only if the currently dragged row is also selected
+		if (row.getIsSelected()) {
+			// biome-ignore lint/suspicious/useIterableCallbackReturn: the switch statement is exhaustive
+			draggedItems = table.getSelectedRowModel().rows.map((row) => {
+				switch (row.original.kind) {
+					case "file":
+						return newFileHandle(row.original.doc._id)
+					case "directory":
+						return newDirectoryHandle(row.original.doc._id)
+				}
+			})
+			if (!draggedItems.some((item) => isSameHandle(item, source))) {
+				draggedItems.push(source)
 			}
-		})
-		draggedItems.push(source)
+		} else {
+			draggedItems = [source]
+		}
 
 		setDragInfo({
 			source,

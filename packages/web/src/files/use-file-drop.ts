@@ -1,14 +1,15 @@
 import { api } from "@fileone/convex/_generated/api"
 import type { Doc, Id } from "@fileone/convex/_generated/dataModel"
 import * as Err from "@fileone/convex/model/error"
-import type {
-	DirectoryHandle,
-	FileSystemHandle,
+import {
+	type DirectoryHandle,
+	type FileSystemHandle,
+	isSameHandle,
 } from "@fileone/convex/model/filesystem"
 import { useMutation } from "@tanstack/react-query"
 import { useMutation as useContextMutation } from "convex/react"
-import type { Atom } from "jotai"
-import { useStore } from "jotai"
+import type { PrimitiveAtom } from "jotai"
+import { useSetAtom, useStore } from "jotai"
 import { useState } from "react"
 import { toast } from "sonner"
 
@@ -18,8 +19,8 @@ export interface FileDragInfo {
 }
 
 export interface UseFileDropOptions {
-	item: DirectoryHandle | null
-	dragInfoAtom: Atom<FileDragInfo | null>
+	destItem: DirectoryHandle | null
+	dragInfoAtom: PrimitiveAtom<FileDragInfo | null>
 	onDropSuccess?: (
 		items: Id<"files">[],
 		targetDirectory: Doc<"directories">,
@@ -36,10 +37,11 @@ export interface UseFileDropReturn {
 }
 
 export function useFileDrop({
-	item,
+	destItem,
 	dragInfoAtom,
 }: UseFileDropOptions): UseFileDropReturn {
 	const [isDraggedOver, setIsDraggedOver] = useState(false)
+	const setDragInfo = useSetAtom(dragInfoAtom)
 	const store = useStore()
 
 	const { mutate: moveDroppedItems } = useMutation({
@@ -69,19 +71,25 @@ export function useFileDrop({
 
 	const handleDrop = (_e: React.DragEvent) => {
 		const dragInfo = store.get(dragInfoAtom)
-		console.log("dragInfo", dragInfo)
-		if (dragInfo && item) {
-			moveDroppedItems({
-				targetDirectory: item,
-				items: dragInfo.items,
-			})
+		console.log("handleDrop", { dragInfo, destItem })
+		if (dragInfo && destItem) {
+			const items = dragInfo.items.filter(
+				(item) => !isSameHandle(item, destItem),
+			)
+			if (items.length > 0) {
+				moveDroppedItems({
+					targetDirectory: destItem,
+					items,
+				})
+			}
 		}
 		setIsDraggedOver(false)
+		setDragInfo(null)
 	}
 
 	const handleDragOver = (e: React.DragEvent) => {
 		const dragInfo = store.get(dragInfoAtom)
-		if (dragInfo && item) {
+		if (dragInfo && destItem) {
 			e.preventDefault()
 			e.dataTransfer.dropEffect = "move"
 			setIsDraggedOver(true)

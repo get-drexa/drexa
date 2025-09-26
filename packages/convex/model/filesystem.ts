@@ -35,3 +35,10 @@ export function newDirectoryHandle(id: Id<"directories">): DirectoryHandle {
 export function newFileHandle(id: Id<"files">): FileHandle {
 	return { kind: "file", id }
 }
+
+export function isSameHandle(
+	handle1: FileSystemHandle,
+	handle2: FileSystemHandle,
+): boolean {
+	return handle1.kind === handle2.kind && handle1.id === handle2.id
+}

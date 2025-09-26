@@ -194,8 +194,6 @@ export async function move(
 		),
 	)
 
-	console.log(sourceDirectories)
-
 	const errors: Err.ApplicationErrorData[] = []
 	const okDirectories: DirectoryHandle[] = []
 	conflictCheckResults.forEach((result, i) => {
@@ -215,11 +213,22 @@ export async function move(
 		}
 	})
 
-	const results = await Promise.allSettled(
-		okDirectories.map((handle) =>
-			ctx.db.patch(handle.id, { parentId: targetDirectory.id }),
-		),
-	)
+	const ignoredHandles = new Set<DirectoryHandle>()
+
+	const promises: Promise<void>[] = []
+	for (const handle of okDirectories) {
+		if (handle.id === targetDirectory.id) {
+			// if the directory that needs to be moved is the same as the dest directory
+			// it is silently ignored
+			ignoredHandles.add(handle)
+		} else {
+			promises.push(
+				ctx.db.patch(handle.id, { parentId: targetDirectory.id }),
+			)
+		}
+	}
+
+	const results = await Promise.allSettled(promises)
 
 	for (const updateResult of results) {
 		if (updateResult.status === "rejected") {
@@ -227,7 +236,10 @@ export async function move(
 		}
 	}
 
-	return { moved: okDirectories, errors }
+	return {
+		moved: okDirectories.filter((handle) => !ignoredHandles.has(handle)),
+		errors,
+	}
 }
 
 export async function moveToTrashRecursive(

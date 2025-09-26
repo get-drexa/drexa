@@ -1,6 +1,6 @@
 import { ConvexError } from "convex/values"
 
-    export enum Code {
+export enum Code {
 	Conflict = "Conflict",
 	DirectoryExists = "DirectoryExists",
 	DirectoryNotFound = "DirectoryNotFound",

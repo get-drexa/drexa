@@ -99,7 +99,7 @@ function FilePathBreadcrumb() {
 
 function FilePathBreadcrumbItem({ component }: { component: PathComponent }) {
 	const { isDraggedOver, dropHandlers } = useFileDrop({
-		item: component.handle as DirectoryHandle,
+		destItem: component.handle as DirectoryHandle,
 		dragInfoAtom,
 	})
 
