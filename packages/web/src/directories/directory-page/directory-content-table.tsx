@@ -221,6 +221,31 @@ export function DirectoryContentTableContent() {
 	const store = useStore()
 	const navigate = useNavigate()
 
+	const table = useReactTable({
+		data: directoryContent || [],
+		columns,
+		getCoreRowModel: getCoreRowModel(),
+		enableRowSelection: true,
+		enableGlobalFilter: true,
+		globalFilterFn: (row, _columnId, _filterValue, _addMeta) => {
+			return !optimisticDeletedItems.has(row.original.doc._id)
+		},
+		getRowId: (row) => row.doc._id,
+	})
+
+	useEffect(
+		function escapeToClearSelections() {
+			const handleEscape = (e: KeyboardEvent) => {
+				if (e.key === "Escape") {
+					table.setRowSelection({})
+				}
+			}
+			window.addEventListener("keydown", handleEscape)
+			return () => window.removeEventListener("keydown", handleEscape)
+		},
+		[table.setRowSelection],
+	)
+
 	const handleRowContextMenu = (
 		row: Row<DirectoryItem>,
 		_event: React.MouseEvent,
@@ -233,18 +258,6 @@ export function DirectoryContentTableContent() {
 			setContextMenuTargetItem(row.original)
 		}
 	}
-
-	const table = useReactTable({
-		data: directoryContent || [],
-		columns,
-		getCoreRowModel: getCoreRowModel(),
-		enableRowSelection: true,
-		enableGlobalFilter: true,
-		globalFilterFn: (row, _columnId, _filterValue, _addMeta) => {
-			return !optimisticDeletedItems.has(row.original.doc._id)
-		},
-		getRowId: (row) => row.doc._id,
-	})
 
 	const selectRow = (row: Row<DirectoryItem>) => {
 		const keyboardModifiers = store.get(keyboardModifierAtom)
