@@ -14,7 +14,7 @@ import {
 	PlusIcon,
 	UploadCloudIcon,
 } from "lucide-react"
-import React, { type ChangeEvent, Fragment, useContext, useRef } from "react"
+import React, { type ChangeEvent, Fragment, useContext, useEffect, useRef } from "react"
 import { toast } from "sonner"
 import { ImagePreviewDialog } from "@/components/image-preview-dialog"
 import {
@@ -42,6 +42,7 @@ import {
 import { WithAtom } from "../../components/with-atom"
 import { useFileDrop } from "../../files/use-file-drop"
 import { cn } from "../../lib/utils"
+import { isControlOrCommandKeyActive, keyboardModifierAtom } from "../../lib/keyboard"
 import { DirectoryPageContext } from "./context"
 import { DirectoryContentTable } from "./directory-content-table"
 import { NewDirectoryDialog } from "./new-directory-dialog"
@@ -50,6 +51,26 @@ import { dragInfoAtom, newFileTypeAtom, openedFileAtom } from "./state"
 
 export function DirectoryPage() {
 	const { directory } = useContext(DirectoryPageContext)
+	const setNewFileType = useSetAtom(newFileTypeAtom)
+	const keyboardModifiers = useAtomValue(keyboardModifierAtom)
+
+	// Keyboard shortcut handler for Cmd/Ctrl+Shift+N to create new directory
+	useEffect(() => {
+		const handleKeyDown = (event: KeyboardEvent) => {
+			if (
+				event.key === "N" &&
+				event.shiftKey &&
+				isControlOrCommandKeyActive(keyboardModifiers)
+			) {
+				event.preventDefault()
+				setNewFileType(FileType.Directory)
+			}
+		}
+
+		window.addEventListener("keydown", handleKeyDown)
+		return () => window.removeEventListener("keydown", handleKeyDown)
+	}, [keyboardModifiers, setNewFileType])
+
 	return (
 		<>
 			<header className="flex py-1 shrink-0 items-center gap-2 border-b px-4 w-full">
