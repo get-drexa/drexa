@@ -1,4 +1,3 @@
-import { api } from "@fileone/convex/_generated/api"
 import type { Doc } from "@fileone/convex/_generated/dataModel"
 import {
 	type DirectoryHandle,
@@ -11,7 +10,6 @@ import {
 	newFileHandle,
 	newFileSystemHandle,
 } from "@fileone/convex/model/filesystem"
-import { useMutation } from "@tanstack/react-query"
 import { Link, useNavigate } from "@tanstack/react-router"
 import {
 	type ColumnDef,
@@ -21,19 +19,10 @@ import {
 	type Table as TableType,
 	useReactTable,
 } from "@tanstack/react-table"
-import { useMutation as useContextMutation } from "convex/react"
-import { useAtom, useAtomValue, useSetAtom, useStore } from "jotai"
-import { TextCursorInputIcon, TrashIcon } from "lucide-react"
+import { useAtomValue, useSetAtom, useStore } from "jotai"
 import { useContext, useEffect, useRef } from "react"
-import { toast } from "sonner"
 import { DirectoryIcon } from "@/components/icons/directory-icon"
 import { Checkbox } from "@/components/ui/checkbox"
-import {
-	ContextMenu,
-	ContextMenuContent,
-	ContextMenuItem,
-	ContextMenuTrigger,
-} from "@/components/ui/context-menu"
 import {
 	Table,
 	TableBody,
@@ -50,10 +39,10 @@ import { TextFileIcon } from "../../components/icons/text-file-icon"
 import { useFileDrop } from "../../files/use-file-drop"
 import { cn } from "../../lib/utils"
 import { DirectoryPageContext } from "./context"
+import { DirectoryContentContextMenu } from "./directory-content-context-menu"
 import {
 	contextMenuTargeItemsAtom,
 	dragInfoAtom,
-	itemBeingRenamedAtom,
 	openedFileAtom,
 	optimisticDeletedItemsAtom,
 } from "./state"
@@ -134,97 +123,15 @@ const columns: ColumnDef<FileSystemItem>[] = [
 
 export function DirectoryContentTable() {
 	return (
-		<DirectoryContentTableContextMenu>
+		<DirectoryContentContextMenu>
 			<div className="w-full">
 				<DirectoryContentTableContent />
 			</div>
-		</DirectoryContentTableContextMenu>
+		</DirectoryContentContextMenu>
 	)
 }
 
-export function DirectoryContentTableContextMenu({
-	children,
-}: {
-	children: React.ReactNode
-}) {
-	const store = useStore()
-	const [target, setTarget] = useAtom(contextMenuTargeItemsAtom)
-	const setOptimisticDeletedItems = useSetAtom(optimisticDeletedItemsAtom)
-	const moveToTrashMutation = useContextMutation(api.filesystem.moveToTrash)
-	const setItemBeingRenamed = useSetAtom(itemBeingRenamedAtom)
-	const { mutate: moveToTrash } = useMutation({
-		mutationFn: moveToTrashMutation,
-		onMutate: ({ handles }) => {
-			setOptimisticDeletedItems(
-				(prev) =>
-					new Set([...prev, ...handles.map((handle) => handle.id)]),
-			)
-		},
-		onSuccess: ({ deleted, errors }, { handles }) => {
-			setOptimisticDeletedItems((prev) => {
-				const newSet = new Set(prev)
-				for (const handle of handles) {
-					newSet.delete(handle.id)
-				}
-				return newSet
-			})
-			if (errors.length === 0 && deleted.length === handles.length) {
-				toast.success(`Moved ${handles.length} items to trash`)
-			} else if (errors.length === handles.length) {
-				toast.error("Failed to move to trash")
-			} else {
-				toast.info(
-					`Moved ${deleted.length} items to trash; failed to move ${errors.length} items`,
-				)
-			}
-		},
-	})
 
-	const handleRename = () => {
-		const selectedItems = store.get(contextMenuTargeItemsAtom)
-		if (selectedItems.length === 1) {
-			// biome-ignore lint/style/noNonNullAssertion: length is checked
-			const selectedItem = selectedItems[0]!
-			setItemBeingRenamed({
-				originalItem: selectedItem,
-				name: selectedItem.doc.name,
-			})
-		}
-	}
-
-	const handleDelete = () => {
-		const selectedItems = store.get(contextMenuTargeItemsAtom)
-		if (selectedItems.length > 0) {
-			moveToTrash({
-				handles: selectedItems.map(newFileSystemHandle),
-			})
-		}
-	}
-
-	return (
-		<ContextMenu
-			onOpenChange={(open) => {
-				if (!open) {
-					setTarget([])
-				}
-			}}
-		>
-			<ContextMenuTrigger asChild>{children}</ContextMenuTrigger>
-			{target && (
-				<ContextMenuContent>
-					<ContextMenuItem onClick={handleRename}>
-						<TextCursorInputIcon />
-						Rename
-					</ContextMenuItem>
-					<ContextMenuItem onClick={handleDelete}>
-						<TrashIcon />
-						Move to trash
-					</ContextMenuItem>
-				</ContextMenuContent>
-			)}
-		</ContextMenu>
-	)
-}
 
 export function DirectoryContentTableContent() {
 	const { directoryContent } = useContext(DirectoryPageContext)
