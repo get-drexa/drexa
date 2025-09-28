@@ -51,7 +51,7 @@ import { dragInfoAtom, newFileTypeAtom, openedFileAtom } from "./state"
 
 export function DirectoryPage() {
 	const { directory } = useContext(DirectoryPageContext)
-	const [newFileType, setNewFileType] = useAtom(newFileTypeAtom)
+	const setNewFileType = useSetAtom(newFileTypeAtom)
 	const keyboardModifiers = useAtomValue(keyboardModifierAtom)
 
 	// Keyboard shortcut handler for Cmd/Ctrl+Shift+N to create new directory
@@ -76,7 +76,7 @@ export function DirectoryPage() {
 			<header className="flex py-1 shrink-0 items-center gap-2 border-b px-4 w-full">
 				<FilePathBreadcrumb />
 				<div className="ml-auto flex flex-row gap-2">
-					<NewDirectoryItemDropdown onNewDirectory={() => setNewFileType(FileType.Directory)} />
+					<NewDirectoryItemDropdown />
 					<UploadFileButton />
 				</div>
 			</header>
@@ -85,15 +85,19 @@ export function DirectoryPage() {
 			</div>
 			<RenameFileDialog />
 			<PreviewDialog />
-			<NewDirectoryDialog
-				open={newFileType === FileType.Directory}
-				directoryId={directory._id}
-				onOpenChange={(open) => {
-					if (!open) {
-						setNewFileType(null)
-					}
-				}}
-			/>
+			<WithAtom atom={newFileTypeAtom}>
+				{(newFileType, setNewFileType) => (
+					<NewDirectoryDialog
+						open={newFileType === FileType.Directory}
+						directoryId={directory._id}
+						onOpenChange={(open) => {
+							if (!open) {
+								setNewFileType(null)
+							}
+						}}
+					/>
+				)}
+			</WithAtom>
 		</>
 	)
 }
@@ -227,11 +231,11 @@ function UploadFileButton() {
 	)
 }
 
-function NewDirectoryItemDropdown({ onNewDirectory }: { onNewDirectory: () => void }) {
-	const [newFileType] = useAtom(newFileTypeAtom)
+function NewDirectoryItemDropdown() {
+	const [newFileType, setNewFileType] = useAtom(newFileTypeAtom)
 
 	const addNewDirectory = () => {
-		onNewDirectory()
+		setNewFileType(FileType.Directory)
 	}
 
 	const handleCloseAutoFocus = (event: Event) => {
