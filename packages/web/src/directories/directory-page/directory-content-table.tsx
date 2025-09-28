@@ -1,11 +1,15 @@
 import { api } from "@fileone/convex/_generated/api"
 import type { Doc } from "@fileone/convex/_generated/dataModel"
-import type { DirectoryItem } from "@fileone/convex/model/directories"
 import {
+	type DirectoryHandle,
+	type FileHandle,
 	type FileSystemHandle,
+	type FileSystemItem,
+	FileType,
 	isSameHandle,
 	newDirectoryHandle,
 	newFileHandle,
+	newFileSystemHandle,
 } from "@fileone/convex/model/filesystem"
 import { useMutation } from "@tanstack/react-query"
 import { Link, useNavigate } from "@tanstack/react-router"
@@ -19,8 +23,8 @@ import {
 } from "@tanstack/react-table"
 import { useMutation as useContextMutation } from "convex/react"
 import { useAtom, useAtomValue, useSetAtom, useStore } from "jotai"
-import { CheckIcon, TextCursorInputIcon, TrashIcon, XIcon } from "lucide-react"
-import { useContext, useEffect, useId, useRef } from "react"
+import { TextCursorInputIcon, TrashIcon } from "lucide-react"
+import { useContext, useEffect, useRef } from "react"
 import { toast } from "sonner"
 import { DirectoryIcon } from "@/components/icons/directory-icon"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -43,17 +47,13 @@ import {
 	keyboardModifierAtom,
 } from "@/lib/keyboard"
 import { TextFileIcon } from "../../components/icons/text-file-icon"
-import { Button } from "../../components/ui/button"
-import { LoadingSpinner } from "../../components/ui/loading-spinner"
 import { useFileDrop } from "../../files/use-file-drop"
-import { withDefaultOnError } from "../../lib/error"
 import { cn } from "../../lib/utils"
 import { DirectoryPageContext } from "./context"
 import {
-	contextMenuTargeItemAtom,
+	contextMenuTargeItemsAtom,
 	dragInfoAtom,
 	itemBeingRenamedAtom,
-	newFileTypeAtom,
 	openedFileAtom,
 	optimisticDeletedItemsAtom,
 } from "./state"
@@ -68,7 +68,7 @@ function formatFileSize(bytes: number): string {
 	return `${parseFloat((bytes / k ** i).toFixed(2))} ${sizes[i]}`
 }
 
-const columns: ColumnDef<DirectoryItem>[] = [
+const columns: ColumnDef<FileSystemItem>[] = [
 	{
 		id: "select",
 		header: ({ table }) => (
@@ -99,9 +99,9 @@ const columns: ColumnDef<DirectoryItem>[] = [
 		accessorKey: "doc.name",
 		cell: ({ row }) => {
 			switch (row.original.kind) {
-				case "file":
+				case FileType.File:
 					return <FileNameCell file={row.original.doc} />
-				case "directory":
+				case FileType.Directory:
 					return <DirectoryNameCell directory={row.original.doc} />
 			}
 		},
@@ -112,9 +112,9 @@ const columns: ColumnDef<DirectoryItem>[] = [
 		accessorKey: "size",
 		cell: ({ row }) => {
 			switch (row.original.kind) {
-				case "file":
+				case FileType.File:
 					return <div>{formatFileSize(row.original.doc.size)}</div>
-				case "directory":
+				case FileType.Directory:
 					return <div className="font-mono">-</div>
 			}
 		},
@@ -148,31 +148,44 @@ export function DirectoryContentTableContextMenu({
 	children: React.ReactNode
 }) {
 	const store = useStore()
-	const target = useAtomValue(contextMenuTargeItemAtom)
+	const [target, setTarget] = useAtom(contextMenuTargeItemsAtom)
 	const setOptimisticDeletedItems = useSetAtom(optimisticDeletedItemsAtom)
-	const moveToTrashMutation = useContextMutation(api.files.moveToTrash)
+	const moveToTrashMutation = useContextMutation(api.filesystem.moveToTrash)
 	const setItemBeingRenamed = useSetAtom(itemBeingRenamedAtom)
-	const setContextMenuTargetItem = useSetAtom(contextMenuTargeItemAtom)
 	const { mutate: moveToTrash } = useMutation({
 		mutationFn: moveToTrashMutation,
-		onMutate: ({ itemId }) => {
-			setOptimisticDeletedItems((prev) => new Set([...prev, itemId]))
+		onMutate: ({ handles }) => {
+			setOptimisticDeletedItems(
+				(prev) =>
+					new Set([...prev, ...handles.map((handle) => handle.id)]),
+			)
 		},
-		onSuccess: (itemId) => {
+		onSuccess: ({ deleted, errors }, { handles }) => {
 			setOptimisticDeletedItems((prev) => {
 				const newSet = new Set(prev)
-				newSet.delete(itemId)
+				for (const handle of handles) {
+					newSet.delete(handle.id)
+				}
 				return newSet
 			})
-			toast.success("Moved to trash")
+			if (errors.length === 0 && deleted.length === handles.length) {
+				toast.success(`Moved ${handles.length} items to trash`)
+			} else if (errors.length === handles.length) {
+				toast.error("Failed to move to trash")
+			} else {
+				toast.info(
+					`Moved ${deleted.length} items to trash; failed to move ${errors.length} items`,
+				)
+			}
 		},
 	})
 
 	const handleRename = () => {
-		const selectedItem = store.get(contextMenuTargeItemAtom)
-		if (selectedItem) {
+		const selectedItems = store.get(contextMenuTargeItemsAtom)
+		if (selectedItems.length === 1) {
+			// biome-ignore lint/style/noNonNullAssertion: length is checked
+			const selectedItem = selectedItems[0]!
 			setItemBeingRenamed({
-				kind: selectedItem.kind,
 				originalItem: selectedItem,
 				name: selectedItem.doc.name,
 			})
@@ -180,11 +193,10 @@ export function DirectoryContentTableContextMenu({
 	}
 
 	const handleDelete = () => {
-		const selectedItem = store.get(contextMenuTargeItemAtom)
-		if (selectedItem) {
+		const selectedItems = store.get(contextMenuTargeItemsAtom)
+		if (selectedItems.length > 0) {
 			moveToTrash({
-				kind: selectedItem.kind,
-				itemId: selectedItem.doc._id,
+				handles: selectedItems.map(newFileSystemHandle),
 			})
 		}
 	}
@@ -193,7 +205,7 @@ export function DirectoryContentTableContextMenu({
 		<ContextMenu
 			onOpenChange={(open) => {
 				if (!open) {
-					setContextMenuTargetItem(null)
+					setTarget([])
 				}
 			}}
 		>
@@ -217,7 +229,7 @@ export function DirectoryContentTableContextMenu({
 export function DirectoryContentTableContent() {
 	const { directoryContent } = useContext(DirectoryPageContext)
 	const optimisticDeletedItems = useAtomValue(optimisticDeletedItemsAtom)
-	const setContextMenuTargetItem = useSetAtom(contextMenuTargeItemAtom)
+	const setContextMenuTargetItem = useSetAtom(contextMenuTargeItemsAtom)
 	const store = useStore()
 	const navigate = useNavigate()
 
@@ -247,23 +259,26 @@ export function DirectoryContentTableContent() {
 	)
 
 	const handleRowContextMenu = (
-		row: Row<DirectoryItem>,
+		row: Row<FileSystemItem>,
 		_event: React.MouseEvent,
 	) => {
-		const target = store.get(contextMenuTargeItemAtom)
-		if (target === row.original) {
-			setContextMenuTargetItem(null)
+		const target = store.get(contextMenuTargeItemsAtom)
+		if (target.length > 0) {
+			setContextMenuTargetItem([])
+		} else if (row.getIsSelected()) {
+			setContextMenuTargetItem(
+				table.getSelectedRowModel().rows.map((row) => row.original),
+			)
 		} else {
 			selectRow(row)
-			setContextMenuTargetItem(row.original)
+			setContextMenuTargetItem([row.original])
 		}
 	}
 
-	const selectRow = (row: Row<DirectoryItem>) => {
+	const selectRow = (row: Row<FileSystemItem>) => {
 		const keyboardModifiers = store.get(keyboardModifierAtom)
 		const isMultiSelectMode = isControlOrCommandKeyActive(keyboardModifiers)
 		const isRowSelected = row.getIsSelected()
-		console.log({ isMultiSelectMode, isRowSelected })
 		if (isRowSelected && isMultiSelectMode) {
 			row.toggleSelected(false)
 		} else if (isRowSelected && !isMultiSelectMode) {
@@ -282,8 +297,8 @@ export function DirectoryContentTableContent() {
 		}
 	}
 
-	const handleRowDoubleClick = (row: Row<DirectoryItem>) => {
-		if (row.original.kind === "directory") {
+	const handleRowDoubleClick = (row: Row<FileSystemItem>) => {
+		if (row.original.kind === FileType.Directory) {
 			navigate({
 				to: `/directories/${row.original.doc._id}`,
 			})
@@ -355,8 +370,8 @@ function FileItemRow({
 	onContextMenu,
 	onDoubleClick,
 }: {
-	table: TableType<DirectoryItem>
-	row: Row<DirectoryItem>
+	table: TableType<FileSystemItem>
+	row: Row<FileSystemItem>
 	onClick: () => void
 	onContextMenu: (e: React.MouseEvent) => void
 	onDoubleClick: () => void
@@ -366,19 +381,19 @@ function FileItemRow({
 
 	const { isDraggedOver, dropHandlers } = useFileDrop({
 		destItem:
-			row.original.kind === "directory"
+			row.original.kind === FileType.Directory
 				? newDirectoryHandle(row.original.doc._id)
 				: null,
 		dragInfoAtom,
 	})
 
-	const handleDragStart = (e: React.DragEvent) => {
-		let source: FileSystemHandle
+	const handleDragStart = (_e: React.DragEvent) => {
+		let source: DirectoryHandle | FileHandle
 		switch (row.original.kind) {
-			case "file":
+			case FileType.File:
 				source = newFileHandle(row.original.doc._id)
 				break
-			case "directory":
+			case FileType.Directory:
 				source = newDirectoryHandle(row.original.doc._id)
 				break
 		}
@@ -386,15 +401,9 @@ function FileItemRow({
 		let draggedItems: FileSystemHandle[]
 		// drag all selections, but only if the currently dragged row is also selected
 		if (row.getIsSelected()) {
-			// biome-ignore lint/suspicious/useIterableCallbackReturn: the switch statement is exhaustive
-			draggedItems = table.getSelectedRowModel().rows.map((row) => {
-				switch (row.original.kind) {
-					case "file":
-						return newFileHandle(row.original.doc._id)
-					case "directory":
-						return newDirectoryHandle(row.original.doc._id)
-				}
-			})
+			draggedItems = table
+				.getSelectedRowModel()
+				.rows.map((row) => newFileSystemHandle(row.original))
 			if (!draggedItems.some((item) => isSameHandle(item, source))) {
 				draggedItems.push(source)
 			}

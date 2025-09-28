@@ -1,10 +1,9 @@
-import type { Id } from "@fileone/convex/_generated/dataModel"
 import { v } from "convex/values"
+import type { Id } from "./_generated/dataModel"
 import { authenticatedMutation, authenticatedQuery } from "./functions"
-import type { DirectoryItem } from "./model/directories"
 import * as Directories from "./model/directories"
-import * as Err from "./model/error"
 import * as Files from "./model/files"
+import type { FileSystemItem } from "./model/filesystem"
 
 export const generateUploadUrl = authenticatedMutation({
 	handler: async (ctx) => {
@@ -55,7 +54,7 @@ export const fetchDirectoryContent = authenticatedQuery({
 	args: {
 		directoryId: v.optional(v.id("directories")),
 	},
-	handler: async (ctx, { directoryId }): Promise<DirectoryItem[]> => {
+	handler: async (ctx, { directoryId }): Promise<FileSystemItem[]> => {
 		return await Directories.fetchContent(ctx, { directoryId })
 	},
 })
@@ -105,39 +104,5 @@ export const renameFile = authenticatedMutation({
 	},
 	handler: async (ctx, { directoryId, itemId, newName }) => {
 		await Files.renameFile(ctx, { directoryId, itemId, newName })
-	},
-})
-
-export const moveToTrash = authenticatedMutation({
-	args: {
-		kind: v.union(v.literal("file"), v.literal("directory")),
-		itemId: v.union(v.id("files"), v.id("directories")),
-	},
-	handler: async (ctx, { itemId, kind }) => {
-		switch (kind) {
-			case "file": {
-				const file = await ctx.db.get(itemId as Id<"files">)
-				if (!file || file.userId !== ctx.user._id) {
-					throw new Error("File not found or access denied")
-				}
-				await ctx.db.patch(itemId, {
-					deletedAt: new Date().toISOString(),
-				})
-				break
-			}
-			case "directory": {
-				const directory = await ctx.db.get(itemId as Id<"directories">)
-				if (!directory || directory.userId !== ctx.user._id) {
-					throw new Error("Directory not found or access denied")
-				}
-				await Directories.moveToTrashRecursive(
-					ctx,
-					itemId as Id<"directories">,
-				)
-				break
-			}
-		}
-
-		return itemId
 	},
 })

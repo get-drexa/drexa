@@ -4,18 +4,12 @@ import * as Directories from "./model/directories"
 import * as Err from "./model/error"
 import * as Files from "./model/files"
 import type { DirectoryHandle, FileHandle } from "./model/filesystem"
-
-const VDirectoryHandle = v.object({
-	kind: v.literal("directory"),
-	id: v.id("directories"),
-})
-
-const VFileHandle = v.object({
-	kind: v.literal("file"),
-	id: v.id("files"),
-})
-
-const VFileSystemHandle = v.union(VFileHandle, VDirectoryHandle)
+import {
+	type FileSystemHandle,
+	FileType,
+	VDirectoryHandle,
+	VFileSystemHandle,
+} from "./model/filesystem"
 
 export const moveItems = authenticatedMutation({
 	args: {
@@ -38,10 +32,10 @@ export const moveItems = authenticatedMutation({
 		const fileHandles: FileHandle[] = []
 		for (const item of items) {
 			switch (item.kind) {
-				case "directory":
+				case FileType.Directory:
 					directoryHandles.push(item)
 					break
-				case "file":
+				case FileType.File:
 					fileHandles.push(item)
 					break
 			}
@@ -61,6 +55,48 @@ export const moveItems = authenticatedMutation({
 		return {
 			moved: [...directoryMoveResult.moved, ...fileMoveResult.moved],
 			errors: [...fileMoveResult.errors, ...directoryMoveResult.errors],
+		}
+	},
+})
+
+export const moveToTrash = authenticatedMutation({
+	args: {
+		handles: v.array(VFileSystemHandle),
+	},
+	handler: async (ctx, { handles }) => {
+		// biome-ignore lint/suspicious/useIterableCallbackReturn: switch statement is exhaustive
+		const promises = handles.map((handle) => {
+			switch (handle.kind) {
+				case FileType.File:
+					return ctx.db
+						.patch(handle.id, {
+							deletedAt: new Date().toISOString(),
+						})
+						.then(() => handle)
+				case FileType.Directory:
+					return Directories.moveToTrashRecursive(ctx, handle).then(
+						() => handle,
+					)
+			}
+		})
+
+		const results = await Promise.allSettled(promises)
+		const errors: Err.ApplicationErrorData[] = []
+		const okHandles: FileSystemHandle[] = []
+		for (const result of results) {
+			switch (result.status) {
+				case "fulfilled":
+					okHandles.push(result.value)
+					break
+				case "rejected":
+					errors.push(Err.createJson(Err.Code.Internal))
+					break
+			}
+		}
+
+		return {
+			deleted: okHandles,
+			errors,
 		}
 	},
 })

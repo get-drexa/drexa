@@ -4,21 +4,14 @@ import type {
 	AuthenticatedQueryCtx,
 } from "../functions"
 import * as Err from "./error"
-import type { DirectoryHandle, FilePath, ReverseFilePath } from "./filesystem"
-import { newDirectoryHandle } from "./filesystem"
-
-type Directory = {
-	kind: "directory"
-	doc: Doc<"directories">
-}
-
-type File = {
-	kind: "file"
-	doc: Doc<"files">
-}
-
-export type DirectoryItem = Directory | File
-export type DirectoryItemKind = DirectoryItem["kind"]
+import {
+	type DirectoryHandle,
+	type FilePath,
+	type FileSystemItem,
+	FileType,
+	newDirectoryHandle,
+	type ReverseFilePath,
+} from "./filesystem"
 
 export type DirectoryInfo = Doc<"directories"> & { path: FilePath }
 
@@ -83,7 +76,7 @@ export async function fetch(
 export async function fetchContent(
 	ctx: AuthenticatedQueryCtx,
 	{ directoryId }: { directoryId?: Id<"directories"> } = {},
-): Promise<DirectoryItem[]> {
+): Promise<FileSystemItem[]> {
 	let dirId: Id<"directories"> | undefined
 	if (directoryId) {
 		dirId = directoryId
@@ -110,12 +103,12 @@ export async function fetchContent(
 			.collect(),
 	])
 
-	const items: DirectoryItem[] = []
+	const items: FileSystemItem[] = []
 	for (const directory of directories) {
-		items.push({ kind: "directory", doc: directory })
+		items.push({ kind: FileType.Directory, doc: directory })
 	}
 	for (const file of files) {
-		items.push({ kind: "file", doc: file })
+		items.push({ kind: FileType.File, doc: file })
 	}
 
 	return items
@@ -206,7 +199,7 @@ export async function move(
 					),
 				)
 			} else {
-				okDirectories.push(sourceDirectories[i])
+				okDirectories.push(sourceDirectories[i]!)
 			}
 		} else if (result.status === "rejected") {
 			errors.push(Err.createJson(Err.Code.Internal))
@@ -244,14 +237,14 @@ export async function move(
 
 export async function moveToTrashRecursive(
 	ctx: AuthenticatedMutationCtx,
-	directoryId: Id<"directories">,
+	handle: DirectoryHandle,
 ): Promise<void> {
 	const now = new Date().toISOString()
 
 	const filesToDelete: Id<"files">[] = []
 	const directoriesToDelete: Id<"directories">[] = []
 
-	const directoryQueue: Id<"directories">[] = [directoryId]
+	const directoryQueue: Id<"directories">[] = [handle.id]
 
 	while (directoryQueue.length > 0) {
 		const currentDirectoryId = directoryQueue.shift()!
