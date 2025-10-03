@@ -7,7 +7,7 @@ import {
 import { useMutation } from "@tanstack/react-query"
 import { Link } from "@tanstack/react-router"
 import { useMutation as useConvexMutation } from "convex/react"
-import { useAtom, useAtomValue, useSetAtom } from "jotai"
+import { useAtom } from "jotai"
 import {
 	ChevronDownIcon,
 	Loader2Icon,
@@ -87,7 +87,7 @@ function FilePathBreadcrumb() {
 	const breadcrumbItems: React.ReactNode[] = []
 	for (let i = 1; i < directory.path.length - 1; i++) {
 		breadcrumbItems.push(
-			<Fragment key={directory.path[i]!.handle.id}>
+			<Fragment key={directory.path[i]?.handle.id}>
 				<BreadcrumbSeparator />
 				<FilePathBreadcrumbItem component={directory.path[i]!} />
 			</Fragment>,

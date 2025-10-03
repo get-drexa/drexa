@@ -1,5 +1,4 @@
 import { createFileRoute, Outlet } from "@tanstack/react-router"
-import { useQuery as useConvexQuery } from "convex/react"
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
 import { Toaster } from "@/components/ui/sonner"
 import { DashboardSidebar } from "@/dashboard/dashboard-sidebar"
