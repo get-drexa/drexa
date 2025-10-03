@@ -70,7 +70,7 @@ export const moveToTrash = authenticatedMutation({
 				case FileType.File:
 					return ctx.db
 						.patch(handle.id, {
-							deletedAt: new Date().toISOString(),
+							deletedAt: Date.now(),
 						})
 						.then(() => handle)
 				case FileType.Directory:

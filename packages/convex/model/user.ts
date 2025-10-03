@@ -39,7 +39,7 @@ export async function userOrThrow(ctx: QueryCtx | MutationCtx) {
 }
 
 export async function register(ctx: AuthenticatedMutationCtx) {
-	const now = new Date().toISOString()
+	const now = Date.now()
 	await Promise.all([
 		ctx.db.insert("users", {
 			jwtSubject: ctx.identity.subject,

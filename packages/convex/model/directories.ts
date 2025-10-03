@@ -144,7 +144,7 @@ export async function create(
 		)
 	}
 
-	const now = new Date().toISOString()
+	const now = Date.now()
 	return await ctx.db.insert("directories", {
 		name,
 		parentId,
@@ -216,7 +216,7 @@ export async function move(
 			ignoredHandles.add(handle)
 		} else {
 			promises.push(
-				ctx.db.patch(handle.id, { parentId: targetDirectory.id }),
+				ctx.db.patch(handle.id, { parentId: targetDirectory.id, updatedAt: Date.now() }),
 			)
 		}
 	}
@@ -239,7 +239,7 @@ export async function moveToTrashRecursive(
 	ctx: AuthenticatedMutationCtx,
 	handle: DirectoryHandle,
 ): Promise<void> {
-	const now = new Date().toISOString()
+	const now = Date.now()
 
 	const filesToDelete: Id<"files">[] = []
 	const directoriesToDelete: Id<"directories">[] = []

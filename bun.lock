@@ -13,6 +13,7 @@
       "name": "@fileone/convex",
       "dependencies": {
         "@fileone/path": "workspace:*",
+        "convex-helpers": "^0.1.104",
       },
       "peerDependencies": {
         "convex": "^1.27.0",

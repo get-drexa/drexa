@@ -33,7 +33,7 @@ export async function renameFile(
 		)
 	}
 
-	await ctx.db.patch(itemId, { name: newName })
+	await ctx.db.patch(itemId, { name: newName, updatedAt: Date.now() })
 }
 
 export async function move(
@@ -90,7 +90,7 @@ export async function move(
 
 	const results = await Promise.allSettled(
 		okFiles.map((handle) =>
-			ctx.db.patch(handle.id, { directoryId: targetDirectoryHandle.id }),
+			ctx.db.patch(handle.id, { directoryId: targetDirectoryHandle.id, updatedAt: Date.now() }),
 		),
 	)
 

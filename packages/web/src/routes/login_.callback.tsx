@@ -19,7 +19,6 @@ function RouteComponent() {
 
 	useEffect(() => {
 		if (!isLoadingConvexAuth && isAuthenticated && !isSyncingUser) {
-			console.log({ isLoadingConvexAuth, isAuthenticated, isSyncingUser })
 			syncUser(undefined, {
 				onSuccess: () => {
 					navigate({

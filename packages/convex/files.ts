@@ -81,7 +81,7 @@ export const saveFile = authenticatedMutation({
 		mimeType: v.optional(v.string()),
 	},
 	handler: async (ctx, { name, storageId, directoryId, size, mimeType }) => {
-		const now = new Date().toISOString()
+		const now = Date.now()
 
 		await ctx.db.insert("files", {
 			name,

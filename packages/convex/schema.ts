@@ -12,9 +12,9 @@ const schema = defineSchema({
 		name: v.string(),
 		size: v.number(),
 		mimeType: v.optional(v.string()),
-		createdAt: v.string(),
-		updatedAt: v.string(),
-		deletedAt: v.optional(v.string()),
+		createdAt: v.number(),
+		updatedAt: v.number(),
+		deletedAt: v.optional(v.number()),
 	})
 		.index("byDirectoryId", ["userId", "directoryId", "deletedAt"])
 		.index("byUserId", ["userId", "deletedAt"])
@@ -29,9 +29,9 @@ const schema = defineSchema({
 		name: v.string(),
 		userId: v.id("users"),
 		parentId: v.optional(v.id("directories")),
-		createdAt: v.string(),
-		updatedAt: v.string(),
-		deletedAt: v.optional(v.string()),
+		createdAt: v.number(),
+		updatedAt: v.number(),
+		deletedAt: v.optional(v.number()),
 	})
 		.index("byUserId", ["userId", "deletedAt"])
 		.index("byParentId", ["userId", "parentId", "deletedAt"])
