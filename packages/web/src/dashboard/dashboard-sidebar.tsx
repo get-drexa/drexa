@@ -8,6 +8,7 @@ import {
 	HomeIcon,
 	LogOutIcon,
 	SettingsIcon,
+	TrashIcon,
 	User2Icon,
 } from "lucide-react"
 import {
@@ -62,6 +63,7 @@ function MainSidebarMenu() {
 				</SidebarMenuButton>
 			</SidebarMenuItem>
 			<AllFilesItem />
+			<TrashItem />
 		</SidebarMenu>
 	)
 }
@@ -83,6 +85,29 @@ function AllFilesItem() {
 				<Link to={`/directories/${rootDirectory._id}`}>
 					<FilesIcon />
 					<span>All Files</span>
+				</Link>
+			</SidebarMenuButton>
+		</SidebarMenuItem>
+	)
+}
+
+function TrashItem() {
+	const location = useLocation()
+	const rootDirectory = useConvexQuery(api.files.fetchRootDirectory)
+
+	if (!rootDirectory) return null
+
+	return (
+		<SidebarMenuItem>
+			<SidebarMenuButton
+				asChild
+				isActive={location.pathname.startsWith(
+					`/trash/directories/${rootDirectory._id}`,
+				)}
+			>
+				<Link to={`/trash/directories/${rootDirectory._id}`}>
+					<TrashIcon />
+					<span>Trash</span>
 				</Link>
 			</SidebarMenuButton>
 		</SidebarMenuItem>

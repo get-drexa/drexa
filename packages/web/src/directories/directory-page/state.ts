@@ -11,8 +11,6 @@ export const optimisticDeletedItemsAtom = atom(
 
 export const selectedFileRowsAtom = atom<RowSelectionState>({})
 
-export const newFileTypeAtom = atom<FileType | null>(null)
-
 export const itemBeingRenamedAtom = atom<{
 	originalItem: FileSystemItem
 	name: string

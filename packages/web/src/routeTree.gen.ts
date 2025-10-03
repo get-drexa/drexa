@@ -16,6 +16,7 @@ import { Route as LoginCallbackRouteImport } from './routes/login_.callback'
 import { Route as AuthenticatedSidebarLayoutRouteImport } from './routes/_authenticated/_sidebar-layout'
 import { Route as AuthenticatedSidebarLayoutHomeRouteImport } from './routes/_authenticated/_sidebar-layout/home'
 import { Route as AuthenticatedSidebarLayoutDirectoriesDirectoryIdRouteImport } from './routes/_authenticated/_sidebar-layout/directories.$directoryId'
+import { Route as AuthenticatedSidebarLayoutTrashDirectoriesDirectoryIdRouteImport } from './routes/_authenticated/_sidebar-layout/trash.directories.$directoryId'
 
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
@@ -53,6 +54,12 @@ const AuthenticatedSidebarLayoutDirectoriesDirectoryIdRoute =
     path: '/directories/$directoryId',
     getParentRoute: () => AuthenticatedSidebarLayoutRoute,
   } as any)
+const AuthenticatedSidebarLayoutTrashDirectoriesDirectoryIdRoute =
+  AuthenticatedSidebarLayoutTrashDirectoriesDirectoryIdRouteImport.update({
+    id: '/trash/directories/$directoryId',
+    path: '/trash/directories/$directoryId',
+    getParentRoute: () => AuthenticatedSidebarLayoutRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
@@ -60,6 +67,7 @@ export interface FileRoutesByFullPath {
   '/': typeof AuthenticatedIndexRoute
   '/home': typeof AuthenticatedSidebarLayoutHomeRoute
   '/directories/$directoryId': typeof AuthenticatedSidebarLayoutDirectoriesDirectoryIdRoute
+  '/trash/directories/$directoryId': typeof AuthenticatedSidebarLayoutTrashDirectoriesDirectoryIdRoute
 }
 export interface FileRoutesByTo {
   '/login': typeof LoginRoute
@@ -67,6 +75,7 @@ export interface FileRoutesByTo {
   '/': typeof AuthenticatedIndexRoute
   '/home': typeof AuthenticatedSidebarLayoutHomeRoute
   '/directories/$directoryId': typeof AuthenticatedSidebarLayoutDirectoriesDirectoryIdRoute
+  '/trash/directories/$directoryId': typeof AuthenticatedSidebarLayoutTrashDirectoriesDirectoryIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -77,6 +86,7 @@ export interface FileRoutesById {
   '/_authenticated/': typeof AuthenticatedIndexRoute
   '/_authenticated/_sidebar-layout/home': typeof AuthenticatedSidebarLayoutHomeRoute
   '/_authenticated/_sidebar-layout/directories/$directoryId': typeof AuthenticatedSidebarLayoutDirectoriesDirectoryIdRoute
+  '/_authenticated/_sidebar-layout/trash/directories/$directoryId': typeof AuthenticatedSidebarLayoutTrashDirectoriesDirectoryIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -86,8 +96,15 @@ export interface FileRouteTypes {
     | '/'
     | '/home'
     | '/directories/$directoryId'
+    | '/trash/directories/$directoryId'
   fileRoutesByTo: FileRoutesByTo
-  to: '/login' | '/login/callback' | '/' | '/home' | '/directories/$directoryId'
+  to:
+    | '/login'
+    | '/login/callback'
+    | '/'
+    | '/home'
+    | '/directories/$directoryId'
+    | '/trash/directories/$directoryId'
   id:
     | '__root__'
     | '/_authenticated'
@@ -97,6 +114,7 @@ export interface FileRouteTypes {
     | '/_authenticated/'
     | '/_authenticated/_sidebar-layout/home'
     | '/_authenticated/_sidebar-layout/directories/$directoryId'
+    | '/_authenticated/_sidebar-layout/trash/directories/$directoryId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -156,12 +174,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedSidebarLayoutDirectoriesDirectoryIdRouteImport
       parentRoute: typeof AuthenticatedSidebarLayoutRoute
     }
+    '/_authenticated/_sidebar-layout/trash/directories/$directoryId': {
+      id: '/_authenticated/_sidebar-layout/trash/directories/$directoryId'
+      path: '/trash/directories/$directoryId'
+      fullPath: '/trash/directories/$directoryId'
+      preLoaderRoute: typeof AuthenticatedSidebarLayoutTrashDirectoriesDirectoryIdRouteImport
+      parentRoute: typeof AuthenticatedSidebarLayoutRoute
+    }
   }
 }
 
 interface AuthenticatedSidebarLayoutRouteChildren {
   AuthenticatedSidebarLayoutHomeRoute: typeof AuthenticatedSidebarLayoutHomeRoute
   AuthenticatedSidebarLayoutDirectoriesDirectoryIdRoute: typeof AuthenticatedSidebarLayoutDirectoriesDirectoryIdRoute
+  AuthenticatedSidebarLayoutTrashDirectoriesDirectoryIdRoute: typeof AuthenticatedSidebarLayoutTrashDirectoriesDirectoryIdRoute
 }
 
 const AuthenticatedSidebarLayoutRouteChildren: AuthenticatedSidebarLayoutRouteChildren =
@@ -169,6 +195,8 @@ const AuthenticatedSidebarLayoutRouteChildren: AuthenticatedSidebarLayoutRouteCh
     AuthenticatedSidebarLayoutHomeRoute: AuthenticatedSidebarLayoutHomeRoute,
     AuthenticatedSidebarLayoutDirectoriesDirectoryIdRoute:
       AuthenticatedSidebarLayoutDirectoriesDirectoryIdRoute,
+    AuthenticatedSidebarLayoutTrashDirectoriesDirectoryIdRoute:
+      AuthenticatedSidebarLayoutTrashDirectoriesDirectoryIdRoute,
   }
 
 const AuthenticatedSidebarLayoutRouteWithChildren =

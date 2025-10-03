@@ -1,16 +1,19 @@
 import { v } from "convex/values"
-import { authenticatedMutation } from "./functions"
+import { authenticatedMutation, authenticatedQuery } from "./functions"
 import * as Directories from "./model/directories"
 import * as Err from "./model/error"
 import * as Files from "./model/files"
-import type { DirectoryHandle, FileHandle } from "./model/filesystem"
+import type {
+	DirectoryHandle,
+	FileHandle,
+	FileSystemItem,
+} from "./model/filesystem"
 import {
 	type FileSystemHandle,
 	FileType,
 	VDirectoryHandle,
 	VFileSystemHandle,
 } from "./model/filesystem"
-
 export const moveItems = authenticatedMutation({
 	args: {
 		targetDirectory: VDirectoryHandle,
@@ -98,5 +101,18 @@ export const moveToTrash = authenticatedMutation({
 			deleted: okHandles,
 			errors,
 		}
+	},
+})
+
+export const fetchDirectoryContent = authenticatedQuery({
+	args: {
+		directoryId: v.optional(v.id("directories")),
+		trashed: v.boolean(),
+	},
+	handler: async (
+		ctx,
+		{ directoryId, trashed },
+	): Promise<FileSystemItem[]> => {
+		return await Directories.fetchContent(ctx, { directoryId, trashed })
 	},
 })

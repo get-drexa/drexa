@@ -50,15 +50,6 @@ export const fetchDirectory = authenticatedQuery({
 	},
 })
 
-export const fetchDirectoryContent = authenticatedQuery({
-	args: {
-		directoryId: v.optional(v.id("directories")),
-	},
-	handler: async (ctx, { directoryId }): Promise<FileSystemItem[]> => {
-		return await Directories.fetchContent(ctx, { directoryId })
-	},
-})
-
 export const createDirectory = authenticatedMutation({
 	args: {
 		name: v.string(),

@@ -131,8 +131,6 @@ export function DirectoryContentTable() {
 	)
 }
 
-
-
 export function DirectoryContentTableContent() {
 	const { directoryContent } = useContext(DirectoryPageContext)
 	const optimisticDeletedItems = useAtomValue(optimisticDeletedItemsAtom)

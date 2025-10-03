@@ -75,7 +75,10 @@ export async function fetch(
 
 export async function fetchContent(
 	ctx: AuthenticatedQueryCtx,
-	{ directoryId }: { directoryId?: Id<"directories"> } = {},
+	{
+		directoryId,
+		trashed,
+	}: { directoryId?: Id<"directories">; trashed: boolean },
 ): Promise<FileSystemItem[]> {
 	let dirId: Id<"directories"> | undefined
 	if (directoryId) {
@@ -85,21 +88,33 @@ export async function fetchContent(
 	const [files, directories] = await Promise.all([
 		ctx.db
 			.query("files")
-			.withIndex("byDirectoryId", (q) =>
-				q
+			.withIndex("byDirectoryId", (q) => {
+				if (trashed) {
+					return q
+						.eq("userId", ctx.user._id)
+						.eq("directoryId", dirId)
+						.gte("deletedAt", 0)
+				}
+				return q
 					.eq("userId", ctx.user._id)
 					.eq("directoryId", dirId)
-					.eq("deletedAt", undefined),
-			)
+					.eq("deletedAt", undefined)
+			})
 			.collect(),
 		ctx.db
 			.query("directories")
-			.withIndex("byParentId", (q) =>
-				q
+			.withIndex("byParentId", (q) => {
+				if (trashed) {
+					return q
+						.eq("userId", ctx.user._id)
+						.eq("parentId", dirId)
+						.gte("deletedAt", 0)
+				}
+				return q
 					.eq("userId", ctx.user._id)
 					.eq("parentId", dirId)
-					.eq("deletedAt", undefined),
-			)
+					.eq("deletedAt", undefined)
+			})
 			.collect(),
 	])
 
@@ -216,7 +231,10 @@ export async function move(
 			ignoredHandles.add(handle)
 		} else {
 			promises.push(
-				ctx.db.patch(handle.id, { parentId: targetDirectory.id, updatedAt: Date.now() }),
+				ctx.db.patch(handle.id, {
+					parentId: targetDirectory.id,
+					updatedAt: Date.now(),
+				}),
 			)
 		}
 	}
