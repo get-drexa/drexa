@@ -1,9 +1,8 @@
 import { api } from "@fileone/convex/_generated/api"
+import { type FileSystemItem, FileType } from "@fileone/convex/model/filesystem"
 import { useMutation } from "@tanstack/react-query"
 import { useMutation as useContextMutation } from "convex/react"
-import { atom, useAtom, useStore } from "jotai"
 import { useId } from "react"
-import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import {
 	Dialog,
@@ -14,66 +13,56 @@ import {
 	DialogTitle,
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
-import { itemBeingRenamedAtom } from "./state"
 
-const fielNameAtom = atom(
-	(get) => get(itemBeingRenamedAtom)?.name,
-	(get, set, newName: string) => {
-		const current = get(itemBeingRenamedAtom)
-		if (current) {
-			set(itemBeingRenamedAtom, {
-				...current,
-				name: newName,
-			})
-		}
-	},
-)
+type RenameFileDialogProps = {
+	item: FileSystemItem
+	onRenameSuccess: () => void
+	onClose: () => void
+}
 
-export function RenameFileDialog() {
-	const [itemBeingRenamed, setItemBeingRenamed] =
-		useAtom(itemBeingRenamedAtom)
-	const store = useStore()
+export function RenameFileDialog({
+	item,
+	onRenameSuccess,
+	onClose,
+}: RenameFileDialogProps) {
 	const formId = useId()
 
 	const { mutate: renameFile, isPending: isRenaming } = useMutation({
 		mutationFn: useContextMutation(api.files.renameFile),
 		onSuccess: () => {
-			setItemBeingRenamed(null)
-			toast.success("File renamed successfully")
+			onRenameSuccess()
 		},
 	})
 
 	const onSubmit = (event: React.FormEvent<HTMLFormElement>) => {
 		event.preventDefault()
 
-		const itemBeingRenamed = store.get(itemBeingRenamedAtom)
-		if (itemBeingRenamed) {
-			const formData = new FormData(event.currentTarget)
-			const newName = formData.get("itemName") as string
+		const formData = new FormData(event.currentTarget)
+		const newName = formData.get("itemName") as string
 
-			if (newName) {
-				switch (itemBeingRenamed.originalItem.kind) {
-					case "file":
-						renameFile({
-							directoryId:
-								itemBeingRenamed.originalItem.doc.directoryId,
-							itemId: itemBeingRenamed.originalItem.doc._id,
-							newName,
-						})
-						break
-					default:
-						break
-				}
+		if (newName) {
+			switch (item.kind) {
+				case FileType.File:
+					renameFile({
+						directoryId: item.doc.directoryId,
+						itemId: item.doc._id,
+						newName,
+					})
+					break
+				default:
+					break
 			}
 		}
 	}
 
 	return (
 		<Dialog
-			open={itemBeingRenamed !== null}
-			onOpenChange={(open) =>
-				setItemBeingRenamed(open ? itemBeingRenamed : null)
-			}
+			open
+			onOpenChange={(open) => {
+				if (!open) {
+					onClose()
+				}
+			}}
 		>
 			<DialogContent className="sm:max-w-md">
 				<DialogHeader>
@@ -81,7 +70,7 @@ export function RenameFileDialog() {
 				</DialogHeader>
 
 				<form id={formId} onSubmit={onSubmit}>
-					<RenameFileInput />
+					<RenameFileInput initialValue={item.doc.name} />
 				</form>
 
 				<DialogFooter>
@@ -99,13 +88,6 @@ export function RenameFileDialog() {
 	)
 }
 
-function RenameFileInput() {
-	const [fileName, setFileName] = useAtom(fielNameAtom)
-	return (
-		<Input
-			value={fileName}
-			name="itemName"
-			onChange={(e) => setFileName(e.target.value)}
-		/>
-	)
+function RenameFileInput({ initialValue }: { initialValue: string }) {
+	return <Input defaultValue={initialValue} name="itemName" />
 }

@@ -23,7 +23,7 @@ import {
 	UploadCloudIcon,
 } from "lucide-react"
 import { type ChangeEvent, useCallback, useContext, useRef } from "react"
-import { toast } from "sonner"
+import { toast, toast } from "sonner"
 import { DirectoryIcon } from "@/components/icons/directory-icon"
 import { TextFileIcon } from "@/components/icons/text-file-icon"
 import { Button } from "@/components/ui/button"
@@ -154,7 +154,21 @@ function RouteComponent() {
 				)}
 			</WithAtom>
 
-			<RenameFileDialog />
+			<WithAtom atom={itemBeingRenamedAtom}>
+				{(itemBeingRenamed, setItemBeingRenamed) => {
+					if (!itemBeingRenamed) return null
+					return (
+						<RenameFileDialog
+							item={itemBeingRenamed.originalItem}
+							onRenameSuccess={() => {
+								toast.success("File renamed successfully")
+								setItemBeingRenamed(null)
+							}}
+							onClose={() => setItemBeingRenamed(null)}
+						/>
+					)
+				}}
+			</WithAtom>
 
 			<WithAtom atom={openedFileAtom}>
 				{(openedFile, setOpenedFile) => {
