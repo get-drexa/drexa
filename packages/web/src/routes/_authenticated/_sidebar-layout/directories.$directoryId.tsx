@@ -23,7 +23,7 @@ import {
 	UploadCloudIcon,
 } from "lucide-react"
 import { type ChangeEvent, useCallback, useContext, useRef } from "react"
-import { toast, toast } from "sonner"
+import { toast } from "sonner"
 import { DirectoryIcon } from "@/components/icons/directory-icon"
 import { TextFileIcon } from "@/components/icons/text-file-icon"
 import { Button } from "@/components/ui/button"
