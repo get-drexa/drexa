@@ -7,6 +7,7 @@ import {
 } from "@fileone/convex/model/filesystem"
 import { useMutation } from "@tanstack/react-query"
 import { createFileRoute } from "@tanstack/react-router"
+import type { Row, Table } from "@tanstack/react-table"
 import {
 	useMutation as useContextMutation,
 	useMutation as useConvexMutation,
@@ -98,6 +99,19 @@ function RouteComponent() {
 		[setOpenedFile],
 	)
 
+	const handleContextMenuRequest = (
+		row: Row<FileSystemItem>,
+		table: Table<FileSystemItem>,
+	) => {
+		if (row.getIsSelected()) {
+			setContextMenuTargetItems(
+				table.getSelectedRowModel().rows.map((row) => row.original),
+			)
+		} else {
+			setContextMenuTargetItems([row.original])
+		}
+	}
+
 	if (!directory || !directoryContent || !rootDirectory) {
 		return <DirectoryPageSkeleton />
 	}
@@ -114,16 +128,17 @@ function RouteComponent() {
 				</div>
 			</header>
 
-			<div className="w-full">
-				<DirectoryContentContextMenu>
+			{/* DirectoryContentContextMenu must wrap div instead of DirectoryContentTable, otherwise radix will throw "event.preventDefault is not a function" error, idk why */}
+			<DirectoryContentContextMenu>
+				<div className="w-full">
 					<DirectoryContentTable
 						filterFn={tableFilter}
 						fileDragInfoAtom={fileDragInfoAtom}
-						onContextMenu={setContextMenuTargetItems}
+						onContextMenu={handleContextMenuRequest}
 						onOpenFile={openFile}
 					/>
-				</DirectoryContentContextMenu>
-			</div>
+				</div>
+			</DirectoryContentContextMenu>
 
 			<WithAtom atom={newFileTypeAtom}>
 				{(newFileType, setNewFileType) => (
@@ -168,6 +183,7 @@ function DirectoryContentContextMenu({
 	const [target, setTarget] = useAtom(contextMenuTargetItemsAtom)
 	const setOptimisticDeletedItems = useSetAtom(optimisticDeletedItemsAtom)
 	const moveToTrashMutation = useContextMutation(api.filesystem.moveToTrash)
+
 	const { mutate: moveToTrash } = useMutation({
 		mutationFn: moveToTrashMutation,
 		onMutate: ({ handles }) => {
@@ -205,6 +221,8 @@ function DirectoryContentContextMenu({
 		}
 	}
 
+	console.log("target", target)
+
 	return (
 		<ContextMenu
 			onOpenChange={(open) => {
@@ -214,7 +232,7 @@ function DirectoryContentContextMenu({
 			}}
 		>
 			<ContextMenuTrigger asChild>{children}</ContextMenuTrigger>
-			{target && (
+			{target.length > 0 && (
 				<ContextMenuContent>
 					<RenameMenuItem />
 					<ContextMenuItem onClick={handleDelete}>

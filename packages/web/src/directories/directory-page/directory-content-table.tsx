@@ -39,12 +39,14 @@ import { TextFileIcon } from "../../components/icons/text-file-icon"
 import { type FileDragInfo, useFileDrop } from "../../files/use-file-drop"
 import { cn } from "../../lib/utils"
 import { DirectoryPageContext } from "./context"
-import { contextMenuTargeItemsAtom } from "./state"
 
 type DirectoryContentTableProps = {
 	filterFn: (item: FileSystemItem) => boolean
 	fileDragInfoAtom: PrimitiveAtom<FileDragInfo | null>
-	onContextMenu: (items: FileSystemItem[]) => void
+	onContextMenu: (
+		row: Row<FileSystemItem>,
+		table: TableType<FileSystemItem>,
+	) => void
 	onOpenFile: (file: Doc<"files">) => void
 }
 
@@ -144,15 +146,7 @@ function useTableColumns(
 	)
 }
 
-export function DirectoryContentTable(props: DirectoryContentTableProps) {
-	return (
-		<div className="w-full">
-			<DirectoryContentTableContent {...props} />
-		</div>
-	)
-}
-
-export function DirectoryContentTableContent({
+export function DirectoryContentTable({
 	filterFn,
 	onContextMenu,
 	fileDragInfoAtom,
@@ -190,17 +184,10 @@ export function DirectoryContentTableContent({
 		row: Row<FileSystemItem>,
 		_event: React.MouseEvent,
 	) => {
-		const target = store.get(contextMenuTargeItemsAtom)
-		if (target.length > 0) {
-			onContextMenu(target)
-		} else if (row.getIsSelected()) {
-			onContextMenu(
-				table.getSelectedRowModel().rows.map((row) => row.original),
-			)
-		} else {
+		if (!row.getIsSelected()) {
 			selectRow(row)
-			onContextMenu([row.original])
 		}
+		onContextMenu(row, table)
 	}
 
 	const selectRow = (row: Row<FileSystemItem>) => {
