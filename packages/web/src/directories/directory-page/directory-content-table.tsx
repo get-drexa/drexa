@@ -19,8 +19,8 @@ import {
 	type Table as TableType,
 	useReactTable,
 } from "@tanstack/react-table"
-import { useAtomValue, useSetAtom, useStore } from "jotai"
-import { useContext, useEffect, useRef } from "react"
+import { type PrimitiveAtom, useSetAtom, useStore } from "jotai"
+import { useContext, useEffect, useMemo, useRef } from "react"
 import { DirectoryIcon } from "@/components/icons/directory-icon"
 import { Checkbox } from "@/components/ui/checkbox"
 import {
@@ -36,16 +36,17 @@ import {
 	keyboardModifierAtom,
 } from "@/lib/keyboard"
 import { TextFileIcon } from "../../components/icons/text-file-icon"
-import { useFileDrop } from "../../files/use-file-drop"
+import { type FileDragInfo, useFileDrop } from "../../files/use-file-drop"
 import { cn } from "../../lib/utils"
 import { DirectoryPageContext } from "./context"
-import { DirectoryContentContextMenu } from "./directory-content-context-menu"
-import {
-	contextMenuTargeItemsAtom,
-	dragInfoAtom,
-	openedFileAtom,
-	optimisticDeletedItemsAtom,
-} from "./state"
+import { contextMenuTargeItemsAtom } from "./state"
+
+type DirectoryContentTableProps = {
+	filterFn: (item: FileSystemItem) => boolean
+	fileDragInfoAtom: PrimitiveAtom<FileDragInfo | null>
+	onContextMenu: (items: FileSystemItem[]) => void
+	onOpenFile: (file: Doc<"files">) => void
+}
 
 function formatFileSize(bytes: number): string {
 	if (bytes === 0) return "0 B"
@@ -57,96 +58,118 @@ function formatFileSize(bytes: number): string {
 	return `${parseFloat((bytes / k ** i).toFixed(2))} ${sizes[i]}`
 }
 
-const columns: ColumnDef<FileSystemItem>[] = [
-	{
-		id: "select",
-		header: ({ table }) => (
-			<Checkbox
-				checked={table.getIsAllPageRowsSelected()}
-				onCheckedChange={(value) => {
-					table.toggleAllPageRowsSelected(!!value)
-				}}
-				aria-label="Select all"
-			/>
-		),
-		cell: ({ row }) => (
-			<Checkbox
-				checked={row.getIsSelected()}
-				onClick={(e) => {
-					e.stopPropagation()
-				}}
-				onCheckedChange={row.getToggleSelectedHandler()}
-				aria-label="Select row"
-			/>
-		),
-		enableSorting: false,
-		enableHiding: false,
-		size: 24,
-	},
-	{
-		header: "Name",
-		accessorKey: "doc.name",
-		cell: ({ row }) => {
-			switch (row.original.kind) {
-				case FileType.File:
-					return <FileNameCell file={row.original.doc} />
-				case FileType.Directory:
-					return <DirectoryNameCell directory={row.original.doc} />
-			}
-		},
-		size: 1000,
-	},
-	{
-		header: "Size",
-		accessorKey: "size",
-		cell: ({ row }) => {
-			switch (row.original.kind) {
-				case FileType.File:
-					return <div>{formatFileSize(row.original.doc.size)}</div>
-				case FileType.Directory:
-					return <div className="font-mono">-</div>
-			}
-		},
-	},
-	{
-		header: "Created At",
-		accessorKey: "createdAt",
-		cell: ({ row }) => {
-			return (
-				<div>
-					{new Date(row.original.doc.createdAt).toLocaleString()}
-				</div>
-			)
-		},
-	},
-]
-
-export function DirectoryContentTable() {
-	return (
-		<DirectoryContentContextMenu>
-			<div className="w-full">
-				<DirectoryContentTableContent />
-			</div>
-		</DirectoryContentContextMenu>
+function useTableColumns(
+	onOpenFile: (file: Doc<"files">) => void,
+): ColumnDef<FileSystemItem>[] {
+	return useMemo(
+		() => [
+			{
+				id: "select",
+				header: ({ table }) => (
+					<Checkbox
+						checked={table.getIsAllPageRowsSelected()}
+						onCheckedChange={(value) => {
+							table.toggleAllPageRowsSelected(!!value)
+						}}
+						aria-label="Select all"
+					/>
+				),
+				cell: ({ row }) => (
+					<Checkbox
+						checked={row.getIsSelected()}
+						onClick={(e) => {
+							e.stopPropagation()
+						}}
+						onCheckedChange={row.getToggleSelectedHandler()}
+						aria-label="Select row"
+					/>
+				),
+				enableSorting: false,
+				enableHiding: false,
+				size: 24,
+			},
+			{
+				header: "Name",
+				accessorKey: "doc.name",
+				cell: ({ row }) => {
+					switch (row.original.kind) {
+						case FileType.File:
+							return (
+								<FileNameCell
+									file={row.original.doc}
+									onOpenFile={onOpenFile}
+								/>
+							)
+						case FileType.Directory:
+							return (
+								<DirectoryNameCell
+									directory={row.original.doc}
+								/>
+							)
+					}
+				},
+				size: 1000,
+			},
+			{
+				header: "Size",
+				accessorKey: "size",
+				cell: ({ row }) => {
+					switch (row.original.kind) {
+						case FileType.File:
+							return (
+								<div>
+									{formatFileSize(row.original.doc.size)}
+								</div>
+							)
+						case FileType.Directory:
+							return <div className="font-mono">-</div>
+					}
+				},
+			},
+			{
+				header: "Created At",
+				accessorKey: "createdAt",
+				cell: ({ row }) => {
+					return (
+						<div>
+							{new Date(
+								row.original.doc.createdAt,
+							).toLocaleString()}
+						</div>
+					)
+				},
+			},
+		],
+		[onOpenFile],
 	)
 }
 
-export function DirectoryContentTableContent() {
+export function DirectoryContentTable(props: DirectoryContentTableProps) {
+	return (
+		<div className="w-full">
+			<DirectoryContentTableContent {...props} />
+		</div>
+	)
+}
+
+export function DirectoryContentTableContent({
+	filterFn,
+	onContextMenu,
+	fileDragInfoAtom,
+	onOpenFile,
+}: DirectoryContentTableProps) {
 	const { directoryContent } = useContext(DirectoryPageContext)
-	const optimisticDeletedItems = useAtomValue(optimisticDeletedItemsAtom)
-	const setContextMenuTargetItem = useSetAtom(contextMenuTargeItemsAtom)
 	const store = useStore()
 	const navigate = useNavigate()
 
 	const table = useReactTable({
 		data: directoryContent || [],
-		columns,
+		columns: useTableColumns(onOpenFile),
 		getCoreRowModel: getCoreRowModel(),
 		enableRowSelection: true,
 		enableGlobalFilter: true,
-		globalFilterFn: (row, _columnId, _filterValue, _addMeta) => {
-			return !optimisticDeletedItems.has(row.original.doc._id)
-		},
+		globalFilterFn: (row, _columnId, _filterValue, _addMeta) =>
+			filterFn(row.original),
 		getRowId: (row) => row.doc._id,
 	})
 
@@ -169,14 +192,14 @@ export function DirectoryContentTableContent() {
 	) => {
 		const target = store.get(contextMenuTargeItemsAtom)
 		if (target.length > 0) {
-			setContextMenuTargetItem([])
+			onContextMenu(target)
 		} else if (row.getIsSelected()) {
-			setContextMenuTargetItem(
+			onContextMenu(
 				table.getSelectedRowModel().rows.map((row) => row.original),
 			)
 		} else {
 			selectRow(row)
-			setContextMenuTargetItem([row.original])
+			onContextMenu([row.original])
 		}
 	}
 
@@ -241,6 +264,7 @@ export function DirectoryContentTableContent() {
 								table={table}
 								row={row}
 								onClick={() => selectRow(row)}
+								fileDragInfoAtom={fileDragInfoAtom}
 								onContextMenu={(e) =>
 									handleRowContextMenu(row, e)
 								}
@@ -261,7 +285,7 @@ export function DirectoryContentTableContent() {
 function NoResultsRow() {
 	return (
 		<TableRow>
-			<TableCell colSpan={columns.length} className="text-center">
+			<TableCell colSpan={4} className="text-center">
 				No results.
 			</TableCell>
 		</TableRow>
@@ -274,22 +298,24 @@ function FileItemRow({
 	onClick,
 	onContextMenu,
 	onDoubleClick,
+	fileDragInfoAtom,
 }: {
 	table: TableType<FileSystemItem>
 	row: Row<FileSystemItem>
 	onClick: () => void
 	onContextMenu: (e: React.MouseEvent) => void
 	onDoubleClick: () => void
+	fileDragInfoAtom: PrimitiveAtom<FileDragInfo | null>
 }) {
 	const ref = useRef<HTMLTableRowElement>(null)
-	const setDragInfo = useSetAtom(dragInfoAtom)
+	const setFileDragInfo = useSetAtom(fileDragInfoAtom)
 
 	const { isDraggedOver, dropHandlers } = useFileDrop({
 		destItem:
 			row.original.kind === FileType.Directory
 				? newDirectoryHandle(row.original.doc._id)
 				: null,
-		dragInfoAtom,
+		dragInfoAtom: fileDragInfoAtom,
 	})
 
 	const handleDragStart = (_e: React.DragEvent) => {
@@ -316,14 +342,14 @@ function FileItemRow({
 			draggedItems = [source]
 		}
 
-		setDragInfo({
+		setFileDragInfo({
 			source,
 			items: draggedItems,
 		})
 	}
 
 	const handleDragEnd = () => {
-		setDragInfo(null)
+		setFileDragInfo(null)
 	}
 
 	return (
@@ -367,9 +393,13 @@ function DirectoryNameCell({ directory }: { directory: Doc<"directories"> }) {
 	)
 }
 
-function FileNameCell({ file }: { file: Doc<"files"> }) {
-	const setOpenedFile = useSetAtom(openedFileAtom)
-
+function FileNameCell({
+	file,
+	onOpenFile,
+}: {
+	file: Doc<"files">
+	onOpenFile: (file: Doc<"files">) => void
+}) {
 	return (
 		<div className="flex w-full items-center gap-2">
 			<TextFileIcon className="size-4" />
@@ -377,7 +407,7 @@ function FileNameCell({ file }: { file: Doc<"files"> }) {
 				type="button"
 				className="hover:underline cursor-pointer"
 				onClick={() => {
-					setOpenedFile(file)
+					onOpenFile(file)
 				}}
 			>
 				{file.name}

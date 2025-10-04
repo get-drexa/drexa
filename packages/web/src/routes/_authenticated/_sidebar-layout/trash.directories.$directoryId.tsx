@@ -4,7 +4,6 @@ import { useQuery as useConvexQuery } from "convex/react"
 import { TrashIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { DirectoryPageContext } from "@/directories/directory-page/context"
-import { DirectoryPage } from "@/directories/directory-page/directory-page"
 import { DirectoryPageSkeleton } from "@/directories/directory-page/directory-page-skeleton"
 import { FilePathBreadcrumb } from "@/directories/directory-page/file-path-breadcrumb"
 
@@ -43,7 +42,7 @@ function RouteComponent() {
 				</div>
 			</header>
 
-			<DirectoryPage />
+			{/* <DirectoryPage /> */}
 		</DirectoryPageContext>
 	)
 }

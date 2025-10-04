@@ -12,15 +12,15 @@ import {
 	ZoomOutIcon,
 } from "lucide-react"
 import { useEffect, useRef } from "react"
-import { Button } from "./ui/button"
+import { Button } from "@/components/ui/button"
 import {
 	Dialog,
 	DialogClose,
 	DialogContent,
 	DialogHeader,
 	DialogOverlay,
-} from "./ui/dialog"
-import { LoadingSpinner } from "./ui/loading-spinner"
+} from "@/components/ui/dialog"
+import { LoadingSpinner } from "@/components/ui/loading-spinner"
 
 const zoomLevelAtom = atom(
 	1,

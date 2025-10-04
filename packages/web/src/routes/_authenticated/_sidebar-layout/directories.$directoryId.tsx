@@ -1,23 +1,37 @@
 import { api } from "@fileone/convex/_generated/api"
-import { FileType } from "@fileone/convex/model/filesystem"
+import type { Doc, Id } from "@fileone/convex/_generated/dataModel"
+import {
+	type FileSystemItem,
+	FileType,
+	newFileSystemHandle,
+} from "@fileone/convex/model/filesystem"
 import { useMutation } from "@tanstack/react-query"
 import { createFileRoute } from "@tanstack/react-router"
 import {
+	useMutation as useContextMutation,
 	useMutation as useConvexMutation,
 	useQuery as useConvexQuery,
 } from "convex/react"
-import { atom, useAtom } from "jotai"
+import { atom, useAtom, useAtomValue, useSetAtom, useStore } from "jotai"
 import {
 	ChevronDownIcon,
 	Loader2Icon,
 	PlusIcon,
+	TextCursorInputIcon,
+	TrashIcon,
 	UploadCloudIcon,
 } from "lucide-react"
-import { type ChangeEvent, useContext, useRef } from "react"
+import { type ChangeEvent, useCallback, useContext, useRef } from "react"
 import { toast } from "sonner"
 import { DirectoryIcon } from "@/components/icons/directory-icon"
 import { TextFileIcon } from "@/components/icons/text-file-icon"
 import { Button } from "@/components/ui/button"
+import {
+	ContextMenu,
+	ContextMenuContent,
+	ContextMenuItem,
+	ContextMenuTrigger,
+} from "@/components/ui/context-menu"
 import {
 	DropdownMenu,
 	DropdownMenuContent,
@@ -26,11 +40,13 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { WithAtom } from "@/components/with-atom"
 import { DirectoryPageContext } from "@/directories/directory-page/context"
-import { DirectoryPage } from "@/directories/directory-page/directory-page"
+import { DirectoryContentTable } from "@/directories/directory-page/directory-content-table"
 import { DirectoryPageSkeleton } from "@/directories/directory-page/directory-page-skeleton"
 import { FilePathBreadcrumb } from "@/directories/directory-page/file-path-breadcrumb"
 import { NewDirectoryDialog } from "@/directories/directory-page/new-directory-dialog"
 import { RenameFileDialog } from "@/directories/directory-page/rename-file-dialog"
+import { FilePreviewDialog } from "@/files/file-preview-dialog"
+import type { FileDragInfo } from "@/files/use-file-drop"
 
 export const Route = createFileRoute(
 	"/_authenticated/_sidebar-layout/directories/$directoryId",
@@ -38,20 +54,48 @@ export const Route = createFileRoute(
 	component: RouteComponent,
 })
 
+// MARK: atoms
+const contextMenuTargetItemsAtom = atom<FileSystemItem[]>([])
 const newFileTypeAtom = atom<FileType | null>(null)
+const fileDragInfoAtom = atom<FileDragInfo | null>(null)
+const optimisticDeletedItemsAtom = atom(
+	new Set<Id<"files"> | Id<"directories">>(),
+)
+const openedFileAtom = atom<Doc<"files"> | null>(null)
+const itemBeingRenamedAtom = atom<{
+	originalItem: FileSystemItem
+	name: string
+} | null>(null)
 
+// MARK: page entry
 function RouteComponent() {
 	const { directoryId } = Route.useParams()
 	const rootDirectory = useConvexQuery(api.files.fetchRootDirectory)
 	const directory = useConvexQuery(api.files.fetchDirectory, {
 		directoryId,
 	})
+	const store = useStore()
 	const directoryContent = useConvexQuery(
 		api.filesystem.fetchDirectoryContent,
 		{
 			directoryId,
 			trashed: false,
 		},
+	)
+	const setOpenedFile = useSetAtom(openedFileAtom)
+	const setContextMenuTargetItems = useSetAtom(contextMenuTargetItemsAtom)
+
+	const tableFilter = useCallback(
+		(item: FileSystemItem) =>
+			store.get(optimisticDeletedItemsAtom).has(item.doc._id),
+		[store],
+	)
+
+	const openFile = useCallback(
+		(file: Doc<"files">) => {
+			setOpenedFile(file)
+		},
+		[setOpenedFile],
 	)
 
 	if (!directory || !directoryContent || !rootDirectory) {
@@ -70,7 +114,16 @@ function RouteComponent() {
 				</div>
 			</header>
 
-			<DirectoryPage />
+			<div className="w-full">
+				<DirectoryContentContextMenu>
+					<DirectoryContentTable
+						filterFn={tableFilter}
+						fileDragInfoAtom={fileDragInfoAtom}
+						onContextMenu={setContextMenuTargetItems}
+						onOpenFile={openFile}
+					/>
+				</DirectoryContentContextMenu>
+			</div>
 
 			<WithAtom atom={newFileTypeAtom}>
 				{(newFileType, setNewFileType) => (
@@ -87,9 +140,124 @@ function RouteComponent() {
 			</WithAtom>
 
 			<RenameFileDialog />
+
+			<WithAtom atom={openedFileAtom}>
+				{(openedFile, setOpenedFile) => {
+					if (!openedFile) return null
+					return (
+						<FilePreviewDialog
+							file={openedFile}
+							onClose={() => setOpenedFile(null)}
+						/>
+					)
+				}}
+			</WithAtom>
 		</DirectoryPageContext>
 	)
 }
+
+// ==================================
+// MARK: DirectoryContentContextMenu
+
+function DirectoryContentContextMenu({
+	children,
+}: {
+	children: React.ReactNode
+}) {
+	const store = useStore()
+	const [target, setTarget] = useAtom(contextMenuTargetItemsAtom)
+	const setOptimisticDeletedItems = useSetAtom(optimisticDeletedItemsAtom)
+	const moveToTrashMutation = useContextMutation(api.filesystem.moveToTrash)
+	const { mutate: moveToTrash } = useMutation({
+		mutationFn: moveToTrashMutation,
+		onMutate: ({ handles }) => {
+			setOptimisticDeletedItems(
+				(prev) =>
+					new Set([...prev, ...handles.map((handle) => handle.id)]),
+			)
+		},
+		onSuccess: ({ deleted, errors }, { handles }) => {
+			setOptimisticDeletedItems((prev) => {
+				const newSet = new Set(prev)
+				for (const handle of handles) {
+					newSet.delete(handle.id)
+				}
+				return newSet
+			})
+			if (errors.length === 0 && deleted.length === handles.length) {
+				toast.success(`Moved ${handles.length} items to trash`)
+			} else if (errors.length === handles.length) {
+				toast.error("Failed to move to trash")
+			} else {
+				toast.info(
+					`Moved ${deleted.length} items to trash; failed to move ${errors.length} items`,
+				)
+			}
+		},
+	})
+
+	const handleDelete = () => {
+		const selectedItems = store.get(contextMenuTargetItemsAtom)
+		if (selectedItems.length > 0) {
+			moveToTrash({
+				handles: selectedItems.map(newFileSystemHandle),
+			})
+		}
+	}
+
+	return (
+		<ContextMenu
+			onOpenChange={(open) => {
+				if (!open) {
+					setTarget([])
+				}
+			}}
+		>
+			<ContextMenuTrigger asChild>{children}</ContextMenuTrigger>
+			{target && (
+				<ContextMenuContent>
+					<RenameMenuItem />
+					<ContextMenuItem onClick={handleDelete}>
+						<TrashIcon />
+						Move to trash
+					</ContextMenuItem>
+				</ContextMenuContent>
+			)}
+		</ContextMenu>
+	)
+}
+
+function RenameMenuItem() {
+	const store = useStore()
+	const target = useAtomValue(contextMenuTargetItemsAtom)
+	const setItemBeingRenamed = useSetAtom(itemBeingRenamedAtom)
+
+	const handleRename = () => {
+		const selectedItems = store.get(contextMenuTargetItemsAtom)
+		if (selectedItems.length === 1) {
+			// biome-ignore lint/style/noNonNullAssertion: length is checked
+			const selectedItem = selectedItems[0]!
+			setItemBeingRenamed({
+				originalItem: selectedItem,
+				name: selectedItem.doc.name,
+			})
+		}
+	}
+
+	// Only render if exactly one item is selected
+	if (target.length !== 1) {
+		return null
+	}
+
+	return (
+		<ContextMenuItem onClick={handleRename}>
+			<TextCursorInputIcon />
+			Rename
+		</ContextMenuItem>
+	)
+}
+
+// ==================================
 
 // tags: upload, uploadfile, uploadfilebutton, fileupload, fileuploadbutton
 function UploadFileButton() {
