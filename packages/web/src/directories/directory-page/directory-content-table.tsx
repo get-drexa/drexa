@@ -275,7 +275,7 @@ export function DirectoryContentTable({
 
 function NoResultsRow() {
 	return (
-		<TableRow>
+		<TableRow className="hover:bg-transparent">
 			<TableCell colSpan={4} className="text-center">
 				No results.
 			</TableCell>
