@@ -151,7 +151,7 @@ function EmptyTrashButton() {
 		<Button
 			size="sm"
 			type="button"
-			variant="outline"
+			variant="destructive"
 			onClick={() => {
 				setIsDeleteConfirmationDialogOpen(true)
 			}}
