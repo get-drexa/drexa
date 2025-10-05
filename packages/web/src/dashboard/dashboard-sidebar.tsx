@@ -1,6 +1,5 @@
 import { api } from "@fileone/convex/_generated/api"
 import { Link, useLocation } from "@tanstack/react-router"
-import { useAuth } from "@workos-inc/authkit-react"
 import { useQuery as useConvexQuery } from "convex/react"
 import { useAtomValue } from "jotai"
 import {
@@ -138,11 +137,7 @@ function BackgroundTaskProgressItem() {
 }
 
 function UserMenu() {
-	const { signOut } = useAuth()
-
-	function handleSignOut() {
-		signOut()
-	}
+	function handleSignOut() {}
 
 	return (
 		<DropdownMenu>

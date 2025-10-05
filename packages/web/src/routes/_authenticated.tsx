@@ -4,7 +4,6 @@ import {
 	Outlet,
 	useLocation,
 } from "@tanstack/react-router"
-import { useAuth } from "@workos-inc/authkit-react"
 import {
 	Authenticated,
 	AuthLoading,
@@ -12,6 +11,7 @@ import {
 	useConvexAuth,
 } from "convex/react"
 import { useEffect, useState } from "react"
+import { authClient } from "@/auth-client"
 import { LoadingSpinner } from "@/components/ui/loading-spinner"
 
 export const Route = createFileRoute("/_authenticated")({
@@ -21,7 +21,7 @@ export const Route = createFileRoute("/_authenticated")({
 function AuthenticatedLayout() {
 	const { search } = useLocation()
 	const { isLoading } = useConvexAuth()
-	const { isLoading: authKitLoading } = useAuth()
+	const { isPending: sessionLoading } = authClient.useSession()
 	const [hasProcessedAuth, setHasProcessedAuth] = useState(false)
 
 	// Check if we're in the middle of processing an auth code
@@ -29,17 +29,17 @@ function AuthenticatedLayout() {
 
 	// Track when auth processing is complete
 	useEffect(() => {
-		if (!authKitLoading && !isLoading) {
+		if (!sessionLoading && !isLoading) {
 			// Delay to ensure auth state is fully synchronized
 			const timer = setTimeout(() => {
 				setHasProcessedAuth(true)
 			}, 500)
 			return () => clearTimeout(timer)
 		}
-	}, [authKitLoading, isLoading])
+	}, [sessionLoading, isLoading])
 
 	// Show loading during auth code processing or while auth state is syncing
-	if (hasAuthCode || authKitLoading || isLoading || !hasProcessedAuth) {
+	if (hasAuthCode || sessionLoading || isLoading || !hasProcessedAuth) {
 		return (
 			<div className="flex h-screen w-full items-center justify-center">
 				<LoadingSpinner className="size-10" />

@@ -1,12 +1,12 @@
 import "@/styles/globals.css"
-import { ConvexProviderWithAuthKit } from "@convex-dev/workos"
+import { ConvexBetterAuthProvider } from "@convex-dev/better-auth/react"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { createRootRoute, Outlet } from "@tanstack/react-router"
-import { AuthKitProvider, useAuth } from "@workos-inc/authkit-react"
 import { ConvexReactClient } from "convex/react"
 import { toast } from "sonner"
 import { formatError } from "@/lib/error"
 import { useKeyboardModifierListener } from "@/lib/keyboard"
+import { authClient } from "../auth-client"
 
 export const Route = createRootRoute({
 	component: RootLayout,
@@ -30,17 +30,12 @@ function RootLayout() {
 
 	return (
 		<QueryClientProvider client={queryClient}>
-			<AuthKitProvider
-				clientId={process.env.BUN_PUBLIC_WORKOS_CLIENT_ID!}
-				redirectUri={process.env.BUN_PUBLIC_WORKOS_REDIRECT_URI!}
+			<ConvexBetterAuthProvider
+				client={convexClient}
+				authClient={authClient}
 			>
-				<ConvexProviderWithAuthKit
-					client={convexClient}
-					useAuth={useAuth}
-				>
-					<Outlet />
-				</ConvexProviderWithAuthKit>
-			</AuthKitProvider>
+				<Outlet />
+			</ConvexBetterAuthProvider>
 		</QueryClientProvider>
 	)
 }
