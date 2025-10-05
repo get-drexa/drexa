@@ -1,4 +1,4 @@
-import type { Id } from "../_generated/dataModel"
+import type { Doc, Id } from "../_generated/dataModel"
 import type { AuthenticatedMutationCtx } from "../functions"
 import * as Err from "./error"
 import type { DirectoryHandle, FileHandle } from "./filesystem"
@@ -90,7 +90,10 @@ export async function move(
 
 	const results = await Promise.allSettled(
 		okFiles.map((handle) =>
-			ctx.db.patch(handle.id, { directoryId: targetDirectoryHandle.id, updatedAt: Date.now() }),
+			ctx.db.patch(handle.id, {
+				directoryId: targetDirectoryHandle.id,
+				updatedAt: Date.now(),
+			}),
 		),
 	)
 
@@ -101,4 +104,47 @@ export async function move(
 	}
 
 	return { moved: okFiles, errors }
+}
+
+export async function deletePermanently(
+	ctx: AuthenticatedMutationCtx,
+	{
+		items,
+	}: {
+		items: FileHandle[]
+	},
+) {
+	if (items.length === 0) {
+		return null
+	}
+
+	const itemsToBeDeleted = await Promise.allSettled(
+		items.map((item) => ctx.db.get(item.id)),
+	).then((results) =>
+		results.filter(
+			(result): result is PromiseFulfilledResult<Doc<"files">> =>
+				result.status === "fulfilled" && result.value !== null,
+		),
+	)
+
+	const deleteFilePromises = itemsToBeDeleted.map((item) =>
+		Promise.all([
+			ctx.db.delete(item.value._id),
+			ctx.storage.delete(item.value.storageId),
+		]),
+	)
+
+	const deleteResults = await Promise.allSettled(deleteFilePromises)
+
+	const errors: Err.ApplicationErrorData[] = []
+	let successfulDeletions = 0
+	for (const result of deleteResults) {
+		if (result.status === "rejected") {
+			errors.push(Err.createJson(Err.Code.Internal))
+		} else {
+			successfulDeletions += 1
+		}
+	}
+
+	return { deleted: successfulDeletions, errors }
 }

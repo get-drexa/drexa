@@ -1,5 +1,8 @@
 import { v } from "convex/values"
 import type { Doc, Id } from "../_generated/dataModel"
+import type { AuthenticatedMutationCtx } from "../functions"
+import * as Directories from "./directories"
+import * as Files from "./files"
 
 export enum FileType {
 	File = "File",
@@ -73,3 +76,84 @@ export const VFileHandle = v.object({
 	id: v.id("files"),
 })
 export const VFileSystemHandle = v.union(VFileHandle, VDirectoryHandle)
+
+export async function deleteItemsPermanently(
+	ctx: AuthenticatedMutationCtx,
+	{ handles }: { handles: FileSystemHandle[] },
+) {
+	// Collect all items to delete (including nested items)
+	const fileHandlesToDelete: FileHandle[] = []
+	const directoryHandlesToDelete: DirectoryHandle[] = []
+
+	// Process each handle to collect files and directories
+	for (const handle of handles) {
+		// Use a queue to process items iteratively instead of recursively
+		const queue: FileSystemHandle[] = [handle]
+
+		while (queue.length > 0) {
+			const currentHandle = queue.shift()!
+
+			// Add current item to appropriate deletion collection
+			if (currentHandle.kind === FileType.File) {
+				fileHandlesToDelete.push(currentHandle)
+			} else {
+				directoryHandlesToDelete.push(currentHandle)
+			}
+
+			// If it's a directory, collect all children and add them to the queue
+			if (currentHandle.kind === FileType.Directory) {
+				// Get all child directories that are in trash (deletedAt > 0)
+				const childDirectories = await ctx.db
+					.query("directories")
+					.withIndex("byParentId", (q) =>
+						q
+							.eq("userId", ctx.user._id)
+							.eq("parentId", currentHandle.id)
+							.gte("deletedAt", 0),
+					)
+					.collect()
+
+				// Get all child files that are in trash (deletedAt > 0)
+				const childFiles = await ctx.db
+					.query("files")
+					.withIndex("byDirectoryId", (q) =>
+						q
+							.eq("userId", ctx.user._id)
+							.eq("directoryId", currentHandle.id)
+							.gte("deletedAt", 0),
+					)
+					.collect()
+
+				// Add child directories to queue for processing
+				for (const childDir of childDirectories) {
+					const childHandle = newDirectoryHandle(childDir._id)
+					queue.push(childHandle)
+				}
+
+				// Add child files to file handles collection
+				for (const childFile of childFiles) {
+					const childFileHandle = newFileHandle(childFile._id)
+					fileHandlesToDelete.push(childFileHandle)
+				}
+			}
+		}
+	}
+
+	// Delete files and directories using their respective models
+	const [filesResult, directoriesResult] = await Promise.all([
+		Files.deletePermanently(ctx, { items: fileHandlesToDelete }),
+		Directories.deletePermanently(ctx, { items: directoryHandlesToDelete }),
+	])
+
+	// Combine results, handling null responses
+	return {
+		deleted: {
+			files: filesResult?.deleted || 0,
+			directories: directoriesResult?.deleted || 0,
+		},
+		errors: [
+			...(filesResult?.errors || []),
+			...(directoriesResult?.errors || []),
+		],
+	}
+}

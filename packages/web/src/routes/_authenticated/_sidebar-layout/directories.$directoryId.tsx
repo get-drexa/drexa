@@ -99,6 +99,11 @@ function RouteComponent() {
 		[setOpenedFile],
 	)
 
+	const directoryUrlFn = useCallback(
+		(directory: Doc<"directories">) => `/directories/${directory._id}`,
+		[],
+	)
+
 	const handleContextMenuRequest = (
 		row: Row<FileSystemItem>,
 		table: Table<FileSystemItem>,
@@ -133,6 +138,7 @@ function RouteComponent() {
 				<div className="w-full">
 					<DirectoryContentTable
 						filterFn={tableFilter}
+						directoryUrlFn={directoryUrlFn}
 						fileDragInfoAtom={fileDragInfoAtom}
 						onContextMenu={handleContextMenuRequest}
 						onOpenFile={openFile}

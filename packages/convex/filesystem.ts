@@ -8,12 +8,14 @@ import type {
 	FileHandle,
 	FileSystemItem,
 } from "./model/filesystem"
+import * as FileSystem from "./model/filesystem"
 import {
 	type FileSystemHandle,
 	FileType,
 	VDirectoryHandle,
 	VFileSystemHandle,
 } from "./model/filesystem"
+
 export const moveItems = authenticatedMutation({
 	args: {
 		targetDirectory: VDirectoryHandle,
@@ -114,5 +116,14 @@ export const fetchDirectoryContent = authenticatedQuery({
 		{ directoryId, trashed },
 	): Promise<FileSystemItem[]> => {
 		return await Directories.fetchContent(ctx, { directoryId, trashed })
+	},
+})
+
+export const permanentlyDeleteItems = authenticatedMutation({
+	args: {
+		handles: v.array(VFileSystemHandle),
+	},
+	handler: async (ctx, { handles }) => {
+		return await FileSystem.deleteItemsPermanently(ctx, { handles })
 	},
 })

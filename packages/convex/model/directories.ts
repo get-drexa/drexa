@@ -307,3 +307,43 @@ export async function moveToTrashRecursive(
 
 	await Promise.all([...filePatches, ...directoryPatches])
 }
+
+export async function deletePermanently(
+	ctx: AuthenticatedMutationCtx,
+	{
+		items,
+	}: {
+		items: DirectoryHandle[]
+	},
+) {
+	if (items.length === 0) {
+		return null
+	}
+
+	const itemsToBeDeleted = await Promise.allSettled(
+		items.map((item) => ctx.db.get(item.id)),
+	).then((results) =>
+		results.filter(
+			(result): result is PromiseFulfilledResult<Doc<"directories">> =>
+				result.status === "fulfilled" && result.value !== null,
+		),
+	)
+
+	const deleteDirectoryPromises = itemsToBeDeleted.map((item) =>
+		ctx.db.delete(item.value._id),
+	)
+
+	const deleteResults = await Promise.allSettled(deleteDirectoryPromises)
+
+	const errors: Err.ApplicationErrorData[] = []
+	let successfulDeletions = 0
+	for (const result of deleteResults) {
+		if (result.status === "rejected") {
+			errors.push(Err.createJson(Err.Code.Internal))
+		} else {
+			successfulDeletions += 1
+		}
+	}
+
+	return { deleted: successfulDeletions, errors }
+}

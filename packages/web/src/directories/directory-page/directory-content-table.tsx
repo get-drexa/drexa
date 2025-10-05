@@ -42,6 +42,7 @@ import { DirectoryPageContext } from "./context"
 
 type DirectoryContentTableProps = {
 	filterFn: (item: FileSystemItem) => boolean
+	directoryUrlFn: (directory: Doc<"directories">) => string
 	fileDragInfoAtom: PrimitiveAtom<FileDragInfo | null>
 	onContextMenu: (
 		row: Row<FileSystemItem>,
@@ -62,6 +63,7 @@ function formatFileSize(bytes: number): string {
 
 function useTableColumns(
 	onOpenFile: (file: Doc<"files">) => void,
+	directoryUrlFn: (directory: Doc<"directories">) => string,
 ): ColumnDef<FileSystemItem>[] {
 	return useMemo(
 		() => [
@@ -106,6 +108,7 @@ function useTableColumns(
 							return (
 								<DirectoryNameCell
 									directory={row.original.doc}
+									directoryUrlFn={directoryUrlFn}
 								/>
 							)
 					}
@@ -142,12 +145,13 @@ function useTableColumns(
 				},
 			},
 		],
-		[onOpenFile],
+		[onOpenFile, directoryUrlFn],
 	)
 }
 
 export function DirectoryContentTable({
 	filterFn,
+	directoryUrlFn,
 	onContextMenu,
 	fileDragInfoAtom,
 	onOpenFile,
@@ -158,7 +162,7 @@ export function DirectoryContentTable({
 
 	const table = useReactTable({
 		data: directoryContent || [],
-		columns: useTableColumns(onOpenFile),
+		columns: useTableColumns(onOpenFile, directoryUrlFn),
 		getCoreRowModel: getCoreRowModel(),
 		enableRowSelection: true,
 		enableGlobalFilter: true,
@@ -366,14 +370,17 @@ function FileItemRow({
 	)
 }
 
-function DirectoryNameCell({ directory }: { directory: Doc<"directories"> }) {
+function DirectoryNameCell({
+	directory,
+	directoryUrlFn,
+}: {
+	directory: Doc<"directories">
+	directoryUrlFn: (directory: Doc<"directories">) => string
+}) {
 	return (
 		<div className="flex w-full items-center gap-2">
 			<DirectoryIcon className="size-4" />
-			<Link
-				className="hover:underline"
-				to={`/directories/${directory._id}`}
-			>
+			<Link className="hover:underline" to={directoryUrlFn(directory)}>
 				{directory.name}
 			</Link>
 		</div>
