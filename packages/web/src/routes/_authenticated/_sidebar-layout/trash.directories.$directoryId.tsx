@@ -11,9 +11,9 @@ import {
 	useMutation as useConvexMutation,
 	useQuery as useConvexQuery,
 } from "convex/react"
-import { atom, useAtom, useAtomValue, useSetAtom } from "jotai"
+import { atom, useAtom, useAtomValue, useSetAtom, useStore } from "jotai"
 import { ShredderIcon, TrashIcon, UndoIcon } from "lucide-react"
-import { useCallback } from "react"
+import { useCallback, useEffect } from "react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import {
@@ -37,6 +37,7 @@ import { DirectoryPageSkeleton } from "@/directories/directory-page/directory-pa
 import { FilePathBreadcrumb } from "@/directories/directory-page/file-path-breadcrumb"
 import { FilePreviewDialog } from "@/files/file-preview-dialog"
 import type { FileDragInfo } from "@/files/use-file-drop"
+import { backgroundTaskProgressAtom } from "../../../dashboard/state"
 
 export const Route = createFileRoute(
 	"/_authenticated/_sidebar-layout/trash/directories/$directoryId",
@@ -140,10 +141,7 @@ function TableContextMenu({ children }: React.PropsWithChildren) {
 		<ContextMenu>
 			<ContextMenuTrigger asChild>{children}</ContextMenuTrigger>
 			<ContextMenuContent>
-				<ContextMenuItem>
-					<UndoIcon />
-					Restore
-				</ContextMenuItem>
+				<RestoreContextMenuItem />
 				<ContextMenuItem
 					variant="destructive"
 					onClick={() => {
@@ -155,6 +153,64 @@ function TableContextMenu({ children }: React.PropsWithChildren) {
 				</ContextMenuItem>
 			</ContextMenuContent>
 		</ContextMenu>
+	)
+}
+
+function RestoreContextMenuItem() {
+	const store = useStore()
+	const setOptimisticRemovedItems = useSetAtom(optimisticRemovedItemsAtom)
+	const restoreItemsMutation = useConvexMutation(api.filesystem.restoreItems)
+	const { mutate: restoreItems, isPending: isRestoring } = useMutation({
+		mutationFn: restoreItemsMutation,
+		onMutate: ({ handles }) => {
+			setOptimisticRemovedItems(
+				new Set(handles.map((handle) => handle.id)),
+			)
+		},
+		onSuccess: ({ restored, errors }) => {
+			if (errors.length === 0) {
+				if (restored.files > 0 && restored.directories > 0) {
+					toast.success(
+						`Restored ${restored.files} files and ${restored.directories} directories`,
+					)
+				} else if (restored.files > 0) {
+					toast.success(`Restored ${restored.files} files`)
+				} else if (restored.directories > 0) {
+					toast.success(
+						`Restored ${restored.directories} directories`,
+					)
+				}
+			} else {
+				toast.warning(
+					`Restored ${restored.files} files and ${restored.directories} directories; failed to restore ${errors.length} items`,
+				)
+			}
+		},
+	})
+	const setBackgroundTaskProgress = useSetAtom(backgroundTaskProgressAtom)
+
+	useEffect(() => {
+		if (isRestoring) {
+			setBackgroundTaskProgress({
+				label: "Restoring items…",
+			})
+		} else {
+			setBackgroundTaskProgress(null)
+		}
+	}, [isRestoring, setBackgroundTaskProgress])
+
+	const onClick = () => {
+		const targetItems = store.get(contextMenuTargetItemsAtom)
+		restoreItems({
+			handles: targetItems.map(newFileSystemHandle),
+		})
+	}
+
+	return (
+		<ContextMenuItem onClick={onClick}>
+			<UndoIcon />
+			Restore
+		</ContextMenuItem>
 	)
 }
 

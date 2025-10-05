@@ -347,3 +347,46 @@ export async function deletePermanently(
 
 	return { deleted: successfulDeletions, errors }
 }
+
+export async function restore(
+	ctx: AuthenticatedMutationCtx,
+	{
+		items,
+	}: {
+		items: DirectoryHandle[]
+	},
+) {
+	if (items.length === 0) {
+		return null
+	}
+
+	const itemsToBeRestored = await Promise.allSettled(
+		items.map((item) => ctx.db.get(item.id)),
+	).then((results) =>
+		results.filter(
+			(result): result is PromiseFulfilledResult<Doc<"directories">> =>
+				result.status === "fulfilled" && result.value !== null,
+		),
+	)
+
+	const restoreDirectoryPromises = itemsToBeRestored.map((item) =>
+		ctx.db.patch(item.value._id, {
+			deletedAt: undefined,
+			updatedAt: Date.now(),
+		}),
+	)
+
+	const restoreResults = await Promise.allSettled(restoreDirectoryPromises)
+
+	const errors: Err.ApplicationErrorData[] = []
+	let successfulRestorations = 0
+	for (const result of restoreResults) {
+		if (result.status === "rejected") {
+			errors.push(Err.createJson(Err.Code.Internal))
+		} else {
+			successfulRestorations += 1
+		}
+	}
+
+	return { restored: successfulRestorations, errors }
+}

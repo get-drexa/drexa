@@ -77,13 +77,16 @@ export const VFileHandle = v.object({
 })
 export const VFileSystemHandle = v.union(VFileHandle, VDirectoryHandle)
 
-export async function deleteItemsPermanently(
+/**
+ * Recursively collects all file and directory handles from the given handles,
+ * including all nested items. Only includes items that are in trash (deletedAt >= 0).
+ */
+async function collectAllHandlesRecursively(
 	ctx: AuthenticatedMutationCtx,
 	{ handles }: { handles: FileSystemHandle[] },
-) {
-	// Collect all items to delete (including nested items)
-	const fileHandlesToDelete: FileHandle[] = []
-	const directoryHandlesToDelete: DirectoryHandle[] = []
+): Promise<{ fileHandles: FileHandle[]; directoryHandles: DirectoryHandle[] }> {
+	const fileHandles: FileHandle[] = []
+	const directoryHandles: DirectoryHandle[] = []
 
 	// Process each handle to collect files and directories
 	for (const handle of handles) {
@@ -93,16 +96,16 @@ export async function deleteItemsPermanently(
 		while (queue.length > 0) {
 			const currentHandle = queue.shift()!
 
-			// Add current item to appropriate deletion collection
+			// Add current item to appropriate collection
 			if (currentHandle.kind === FileType.File) {
-				fileHandlesToDelete.push(currentHandle)
+				fileHandles.push(currentHandle)
 			} else {
-				directoryHandlesToDelete.push(currentHandle)
+				directoryHandles.push(currentHandle)
 			}
 
 			// If it's a directory, collect all children and add them to the queue
 			if (currentHandle.kind === FileType.Directory) {
-				// Get all child directories that are in trash (deletedAt > 0)
+				// Get all child directories that are in trash (deletedAt >= 0)
 				const childDirectories = await ctx.db
 					.query("directories")
 					.withIndex("byParentId", (q) =>
@@ -113,7 +116,7 @@ export async function deleteItemsPermanently(
 					)
 					.collect()
 
-				// Get all child files that are in trash (deletedAt > 0)
+				// Get all child files that are in trash (deletedAt >= 0)
 				const childFiles = await ctx.db
 					.query("files")
 					.withIndex("byDirectoryId", (q) =>
@@ -133,11 +136,55 @@ export async function deleteItemsPermanently(
 				// Add child files to file handles collection
 				for (const childFile of childFiles) {
 					const childFileHandle = newFileHandle(childFile._id)
-					fileHandlesToDelete.push(childFileHandle)
+					fileHandles.push(childFileHandle)
 				}
 			}
 		}
 	}
+
+	return { fileHandles, directoryHandles }
+}
+
+/**
+ * Restores deleted items by unsetting the deletedAt field recursively.
+ * This includes all nested files and directories within the given handles.
+ */
+export async function restoreItems(
+	ctx: AuthenticatedMutationCtx,
+	{ handles }: { handles: FileSystemHandle[] },
+) {
+	// Collect all items to restore (including nested items)
+	const { fileHandles, directoryHandles } = await collectAllHandlesRecursively(
+		ctx,
+		{ handles },
+	)
+
+	// Restore files and directories by unsetting deletedAt
+	const [filesResult, directoriesResult] = await Promise.all([
+		Files.restore(ctx, { items: fileHandles }),
+		Directories.restore(ctx, { items: directoryHandles }),
+	])
+
+	// Combine results, handling null responses
+	return {
+		restored: {
+			files: filesResult?.restored || 0,
+			directories: directoriesResult?.restored || 0,
+		},
+		errors: [
+			...(filesResult?.errors || []),
+			...(directoriesResult?.errors || []),
+		],
+	}
+}
+
+export async function deleteItemsPermanently(
+	ctx: AuthenticatedMutationCtx,
+	{ handles }: { handles: FileSystemHandle[] },
+) {
+	// Collect all items to delete (including nested items)
+	const { fileHandles: fileHandlesToDelete, directoryHandles: directoryHandlesToDelete } = 
+		await collectAllHandlesRecursively(ctx, { handles })
 
 	// Delete files and directories using their respective models
 	const [filesResult, directoriesResult] = await Promise.all([
