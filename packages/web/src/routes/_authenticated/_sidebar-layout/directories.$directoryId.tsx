@@ -126,7 +126,7 @@ function RouteComponent() {
 			value={{ rootDirectory, directory, directoryContent }}
 		>
 			<header className="flex py-2 shrink-0 items-center gap-2 border-b px-4 w-full">
-				<FilePathBreadcrumb />
+				<FilePathBreadcrumb rootLabel="All Files" />
 				<div className="ml-auto flex flex-row gap-2">
 					<NewDirectoryItemDropdown />
 					<UploadFileButton />

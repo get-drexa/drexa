@@ -22,7 +22,7 @@ import { cn } from "../../lib/utils"
 import { DirectoryPageContext } from "./context"
 import { dragInfoAtom } from "./state"
 
-export function FilePathBreadcrumb() {
+export function FilePathBreadcrumb({ rootLabel }: { rootLabel: string }) {
 	const { rootDirectory, directory } = useContext(DirectoryPageContext)
 
 	const breadcrumbItems: React.ReactNode[] = []
@@ -40,7 +40,7 @@ export function FilePathBreadcrumb() {
 			<BreadcrumbList>
 				{rootDirectory._id === directory._id ? (
 					<BreadcrumbItem>
-						<BreadcrumbPage>All Files</BreadcrumbPage>
+						<BreadcrumbPage>{rootLabel}</BreadcrumbPage>
 					</BreadcrumbItem>
 				) : (
 					<FilePathBreadcrumbItem component={directory.path[0]!} />
