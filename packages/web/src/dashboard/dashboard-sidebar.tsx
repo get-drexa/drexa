@@ -78,9 +78,7 @@ function AllFilesItem() {
 		<SidebarMenuItem>
 			<SidebarMenuButton
 				asChild
-				isActive={location.pathname.startsWith(
-					`/directories/${rootDirectory._id}`,
-				)}
+				isActive={location.pathname.startsWith("/directories")}
 			>
 				<Link to={`/directories/${rootDirectory._id}`}>
 					<FilesIcon />
@@ -101,9 +99,7 @@ function TrashItem() {
 		<SidebarMenuItem>
 			<SidebarMenuButton
 				asChild
-				isActive={location.pathname.startsWith(
-					`/trash/directories/${rootDirectory._id}`,
-				)}
+				isActive={location.pathname.startsWith("/trash/directories")}
 			>
 				<Link to={`/trash/directories/${rootDirectory._id}`}>
 					<TrashIcon />
