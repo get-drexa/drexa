@@ -6,14 +6,13 @@ import type {
 import * as Err from "./error"
 import {
 	type DirectoryHandle,
-	type FilePath,
+	type DirectoryPath,
 	type FileSystemItem,
 	FileType,
 	newDirectoryHandle,
-	type ReverseFilePath,
 } from "./filesystem"
 
-export type DirectoryInfo = Doc<"directories"> & { path: FilePath }
+export type DirectoryInfo = Doc<"directories"> & { path: DirectoryPath }
 
 export async function fetchRoot(ctx: AuthenticatedQueryCtx) {
 	return await ctx.db
@@ -50,7 +49,7 @@ export async function fetch(
 		)
 	}
 
-	const path: ReverseFilePath = [
+	const path: DirectoryPath = [
 		{
 			handle: newDirectoryHandle(directoryId),
 			name: directory.name,
@@ -70,7 +69,7 @@ export async function fetch(
 		}
 	}
 
-	return { ...directory, path: path.reverse() as FilePath }
+	return { ...directory, path: path.reverse() as DirectoryPath }
 }
 
 export async function fetchContent(

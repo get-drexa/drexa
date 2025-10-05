@@ -11,7 +11,7 @@ import {
 	useMutation as useConvexMutation,
 	useQuery as useConvexQuery,
 } from "convex/react"
-import { atom, useAtom, useAtomValue, useSetAtom, useStore } from "jotai"
+import { atom, useAtom, useSetAtom, useStore } from "jotai"
 import { ShredderIcon, TrashIcon, UndoIcon } from "lucide-react"
 import { useCallback, useEffect } from "react"
 import { toast } from "sonner"
@@ -75,6 +75,11 @@ function RouteComponent() {
 		[],
 	)
 
+	const directoryUrlById = useCallback(
+		(directoryId: Id<"directories">) => `/trash/directories/${directoryId}`,
+		[],
+	)
+
 	if (!directory || !directoryContent || !rootDirectory) {
 		return <DirectoryPageSkeleton />
 	}
@@ -97,7 +102,10 @@ function RouteComponent() {
 			value={{ rootDirectory, directory, directoryContent }}
 		>
 			<header className="flex py-2 shrink-0 items-center gap-2 border-b px-4 w-full">
-				<FilePathBreadcrumb rootLabel="Trash" />
+				<FilePathBreadcrumb
+					rootLabel="Trash"
+					directoryUrlFn={directoryUrlById}
+				/>
 				<div className="ml-auto flex flex-row gap-2">
 					<EmptyTrashButton />
 				</div>

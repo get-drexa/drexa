@@ -29,6 +29,10 @@ export type FilePathComponent = {
 	name: string
 }
 export type PathComponent = FilePathComponent | DirectoryPathComponent
+export type DirectoryPath = [
+	DirectoryPathComponent,
+	...DirectoryPathComponent[],
+]
 export type FilePath = [...DirectoryPathComponent[], PathComponent]
 export type ReverseFilePath = [PathComponent, ...DirectoryPathComponent[]]
 
@@ -154,10 +158,8 @@ export async function restoreItems(
 	{ handles }: { handles: FileSystemHandle[] },
 ) {
 	// Collect all items to restore (including nested items)
-	const { fileHandles, directoryHandles } = await collectAllHandlesRecursively(
-		ctx,
-		{ handles },
-	)
+	const { fileHandles, directoryHandles } =
+		await collectAllHandlesRecursively(ctx, { handles })
 
 	// Restore files and directories by unsetting deletedAt
 	const [filesResult, directoriesResult] = await Promise.all([
@@ -183,8 +185,10 @@ export async function deleteItemsPermanently(
 	{ handles }: { handles: FileSystemHandle[] },
 ) {
 	// Collect all items to delete (including nested items)
-	const { fileHandles: fileHandlesToDelete, directoryHandles: directoryHandlesToDelete } = 
-		await collectAllHandlesRecursively(ctx, { handles })
+	const {
+		fileHandles: fileHandlesToDelete,
+		directoryHandles: directoryHandlesToDelete,
+	} = await collectAllHandlesRecursively(ctx, { handles })
 
 	// Delete files and directories using their respective models
 	const [filesResult, directoriesResult] = await Promise.all([

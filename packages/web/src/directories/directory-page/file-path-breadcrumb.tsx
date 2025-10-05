@@ -1,6 +1,7 @@
+import type { Id } from "@fileone/convex/_generated/dataModel"
 import type {
 	DirectoryHandle,
-	PathComponent,
+	DirectoryPathComponent,
 } from "@fileone/convex/model/filesystem"
 import { Link } from "@tanstack/react-router"
 import { Fragment, useContext } from "react"
@@ -22,7 +23,13 @@ import { cn } from "../../lib/utils"
 import { DirectoryPageContext } from "./context"
 import { dragInfoAtom } from "./state"
 
-export function FilePathBreadcrumb({ rootLabel }: { rootLabel: string }) {
+export function FilePathBreadcrumb({
+	rootLabel,
+	directoryUrlFn,
+}: {
+	rootLabel: string
+	directoryUrlFn: (directory: Id<"directories">) => string
+}) {
 	const { rootDirectory, directory } = useContext(DirectoryPageContext)
 
 	const breadcrumbItems: React.ReactNode[] = []
@@ -33,6 +40,7 @@ export function FilePathBreadcrumb({ rootLabel }: { rootLabel: string }) {
 				<FilePathBreadcrumbItem
 					component={directory.path[i]!}
 					rootLabel={rootLabel}
+					directoryUrlFn={directoryUrlFn}
 				/>
 			</Fragment>,
 		)
@@ -49,6 +57,7 @@ export function FilePathBreadcrumb({ rootLabel }: { rootLabel: string }) {
 					<FilePathBreadcrumbItem
 						component={directory.path[0]!}
 						rootLabel={rootLabel}
+						directoryUrlFn={directoryUrlFn}
 					/>
 				)}
 				{breadcrumbItems}
@@ -64,9 +73,11 @@ export function FilePathBreadcrumb({ rootLabel }: { rootLabel: string }) {
 function FilePathBreadcrumbItem({
 	component,
 	rootLabel,
+	directoryUrlFn,
 }: {
-	component: PathComponent
+	component: DirectoryPathComponent
 	rootLabel: string
+	directoryUrlFn: (directory: Id<"directories">) => string
 }) {
 	const { isDraggedOver, dropHandlers } = useFileDrop({
 		destItem: component.handle as DirectoryHandle,
@@ -83,7 +94,7 @@ function FilePathBreadcrumbItem({
 					{...dropHandlers}
 				>
 					<BreadcrumbLink asChild>
-						<Link to={`/directories/${component.handle.id}`}>
+						<Link to={directoryUrlFn(component.handle.id)}>
 							{dirName}
 						</Link>
 					</BreadcrumbLink>

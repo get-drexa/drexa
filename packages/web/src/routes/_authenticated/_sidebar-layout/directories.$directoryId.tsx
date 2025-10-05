@@ -104,6 +104,11 @@ function RouteComponent() {
 		[],
 	)
 
+	const directoryUrlById = useCallback(
+		(directoryId: Id<"directories">) => `/directories/${directoryId}`,
+		[],
+	)
+
 	const handleContextMenuRequest = (
 		row: Row<FileSystemItem>,
 		table: Table<FileSystemItem>,
@@ -126,7 +131,10 @@ function RouteComponent() {
 			value={{ rootDirectory, directory, directoryContent }}
 		>
 			<header className="flex py-2 shrink-0 items-center gap-2 border-b px-4 w-full">
-				<FilePathBreadcrumb rootLabel="All Files" />
+				<FilePathBreadcrumb
+					rootLabel="All Files"
+					directoryUrlFn={directoryUrlById}
+				/>
 				<div className="ml-auto flex flex-row gap-2">
 					<NewDirectoryItemDropdown />
 					<UploadFileButton />
