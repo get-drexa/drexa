@@ -2,8 +2,8 @@ import { api } from "@fileone/convex/_generated/api"
 import { Link, useLocation } from "@tanstack/react-router"
 import { useAuth } from "@workos-inc/authkit-react"
 import { useQuery as useConvexQuery } from "convex/react"
+import { useAtomValue } from "jotai"
 import {
-	ChevronDownIcon,
 	FilesIcon,
 	HomeIcon,
 	LogOutIcon,
@@ -19,12 +19,17 @@ import {
 } from "@/components/ui/dropdown-menu"
 import {
 	Sidebar,
+	SidebarContent,
+	SidebarFooter,
+	SidebarGroup,
 	SidebarHeader,
 	SidebarMenu,
 	SidebarMenuButton,
 	SidebarMenuItem,
 	SidebarRail,
 } from "@/components/ui/sidebar"
+import { LoadingSpinner } from "../components/ui/loading-spinner"
+import { backgroundTaskProgressAtom } from "./state"
 
 export function DashboardSidebar() {
 	return (
@@ -35,8 +40,17 @@ export function DashboardSidebar() {
 						<UserMenu />
 					</SidebarMenuItem>
 				</SidebarMenu>
-				<MainSidebarMenu />
 			</SidebarHeader>
+			<SidebarContent>
+				<SidebarGroup>
+					<MainSidebarMenu />
+				</SidebarGroup>
+			</SidebarContent>
+			<SidebarFooter>
+				<SidebarMenu>
+					<BackgroundTaskProgressItem />
+				</SidebarMenu>
+			</SidebarFooter>
 			<SidebarRail />
 		</Sidebar>
 	)
@@ -110,6 +124,19 @@ function TrashItem() {
 	)
 }
 
+function BackgroundTaskProgressItem() {
+	const backgroundTaskProgress = useAtomValue(backgroundTaskProgressAtom)
+
+	if (!backgroundTaskProgress) return null
+
+	return (
+		<SidebarMenuItem className="flex items-center gap-2 opacity-80 text-sm">
+			<LoadingSpinner />
+			{backgroundTaskProgress.label}
+		</SidebarMenuItem>
+	)
+}
+
 function UserMenu() {
 	const { signOut } = useAuth()
 
@@ -120,12 +147,18 @@ function UserMenu() {
 	return (
 		<DropdownMenu>
 			<DropdownMenuTrigger asChild>
-				<SidebarMenuButton className="w-fit px-1.5 group-data-[collapsible=icon]:px-1.5! data-[state=open]:bg-sidebar-accent">
-					<div className="bg-sidebar-primary text-sidebar-primary-foreground flex aspect-square size-5 items-center justify-center rounded-md">
-						<User2Icon className="size-3" />
-					</div>
-					<span className="truncate font-medium">Kenneth</span>
-					<ChevronDownIcon className="opacity-50" />
+				<SidebarMenuButton size="lg" asChild>
+					<a href="/">
+						<div className="bg-sidebar-primary text-sidebar-primary-foreground flex aspect-square size-8 items-center justify-center rounded-lg">
+							<User2Icon className="size-4" />
+						</div>
+						<div className="grid flex-1 text-left text-sm leading-tight">
+							<span className="truncate font-medium">
+								Acme Inc
+							</span>
+							<span className="truncate text-xs">Enterprise</span>
+						</div>
+					</a>
 				</SidebarMenuButton>
 			</DropdownMenuTrigger>
 			<DropdownMenuContent className="w-64" align="start" side="bottom">
