@@ -30,7 +30,10 @@ export function FilePathBreadcrumb({ rootLabel }: { rootLabel: string }) {
 		breadcrumbItems.push(
 			<Fragment key={directory.path[i]?.handle.id}>
 				<BreadcrumbSeparator />
-				<FilePathBreadcrumbItem component={directory.path[i]!} />
+				<FilePathBreadcrumbItem
+					component={directory.path[i]!}
+					rootLabel={rootLabel}
+				/>
 			</Fragment>,
 		)
 	}
@@ -43,7 +46,10 @@ export function FilePathBreadcrumb({ rootLabel }: { rootLabel: string }) {
 						<BreadcrumbPage>{rootLabel}</BreadcrumbPage>
 					</BreadcrumbItem>
 				) : (
-					<FilePathBreadcrumbItem component={directory.path[0]!} />
+					<FilePathBreadcrumbItem
+						component={directory.path[0]!}
+						rootLabel={rootLabel}
+					/>
 				)}
 				{breadcrumbItems}
 				<BreadcrumbSeparator />
@@ -55,13 +61,19 @@ export function FilePathBreadcrumb({ rootLabel }: { rootLabel: string }) {
 	)
 }
 
-function FilePathBreadcrumbItem({ component }: { component: PathComponent }) {
+function FilePathBreadcrumbItem({
+	component,
+	rootLabel,
+}: {
+	component: PathComponent
+	rootLabel: string
+}) {
 	const { isDraggedOver, dropHandlers } = useFileDrop({
 		destItem: component.handle as DirectoryHandle,
 		dragInfoAtom,
 	})
 
-	const dirName = component.name || "All Files"
+	const dirName = component.name || rootLabel
 
 	return (
 		<Tooltip open={isDraggedOver}>
