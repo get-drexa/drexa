@@ -255,7 +255,10 @@ function DirectoryContentContextMenu({
 			{target.length > 0 && (
 				<ContextMenuContent>
 					<RenameMenuItem />
-					<ContextMenuItem onClick={handleDelete}>
+					<ContextMenuItem
+						variant="destructive"
+						onClick={handleDelete}
+					>
 						<TrashIcon />
 						Move to trash
 					</ContextMenuItem>
