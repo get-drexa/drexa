@@ -2,6 +2,7 @@ import { useMutation } from "@tanstack/react-query"
 import { createFileRoute, useNavigate } from "@tanstack/react-router"
 import { GalleryVerticalEnd } from "lucide-react"
 import type React from "react"
+import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import {
 	Card,
@@ -109,6 +110,10 @@ function SignupForm() {
 				replace: true,
 			})
 		},
+		onError: (error) => {
+			console.error(error)
+			toast.error("Unable to create your account")
+		},
 	})
 
 	const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
@@ -122,12 +127,33 @@ function SignupForm() {
 		})
 	}
 
+	let passwordFieldError = null
+	let emailFieldError = null
+	if (signUpError instanceof BetterAuthError) {
+		switch (signUpError.errorCode) {
+			case "PASSWORD_TOO_SHORT":
+				passwordFieldError =
+					"Password must be at least 8 characters long"
+				break
+			case "INVALID_EMAIL":
+				emailFieldError = "Invalid email address"
+				break
+			default:
+				passwordFieldError = null
+		}
+	} else if (signUpError instanceof PasswordMismatchError) {
+		passwordFieldError = "Passwords do not match"
+	}
+
+	console.log({ passwordFieldError })
+
 	return (
 		<form onSubmit={handleSubmit}>
 			<FieldGroup>
 				<Field>
 					<FieldLabel htmlFor="name">Your Name</FieldLabel>
 					<Input
+						disabled={isPending}
 						name="displayName"
 						type="text"
 						placeholder="John Doe"
@@ -141,36 +167,41 @@ function SignupForm() {
 				<Field>
 					<FieldLabel htmlFor="email">Email</FieldLabel>
 					<Input
+						disabled={isPending}
 						name="email"
 						type="email"
 						placeholder="m@example.com"
 						required
 					/>
-					{signUpError instanceof BetterAuthError &&
-					signUpError.errorCode ===
-						authClient.$ERROR_CODES.INVALID_EMAIL ? (
-						<FieldError>Invalid email address</FieldError>
+					{emailFieldError ? (
+						<FieldError>{emailFieldError}</FieldError>
 					) : null}
 				</Field>
 				<Field>
 					<Field className="grid grid-rows-2 md:grid-rows-1 md:grid-cols-2 gap-4">
 						<Field>
 							<FieldLabel htmlFor="password">Password</FieldLabel>
-							<Input name="password" type="password" required />
+							<Input
+								disabled={isPending}
+								name="password"
+								type="password"
+								required
+							/>
 						</Field>
 						<Field>
 							<FieldLabel htmlFor="confirm-password">
 								Confirm Password
 							</FieldLabel>
 							<Input
+								disabled={isPending}
 								name="confirmPassword"
 								type="password"
 								required
 							/>
 						</Field>
 					</Field>
-					{signUpError instanceof PasswordMismatchError ? (
-						<FieldError>Passwords do not match</FieldError>
+					{passwordFieldError ? (
+						<FieldError>{passwordFieldError}</FieldError>
 					) : (
 						<FieldDescription>
 							Must be at least 8 characters long.
@@ -186,7 +217,7 @@ function SignupForm() {
 						{isPending ? "Creating account…" : "Create Account"}
 					</Button>
 					<FieldDescription className="text-center">
-						Already have an account? <a href="#">Sign in</a>
+						Already have an account? <a href="/sign-in">Sign in</a>
 					</FieldDescription>
 				</Field>
 			</FieldGroup>
