@@ -20,7 +20,7 @@ export const Route = createFileRoute("/_authenticated")({
 
 function AuthenticatedLayout() {
 	const { search } = useLocation()
-	const { isLoading } = useConvexAuth()
+	const { isLoading, isAuthenticated } = useConvexAuth()
 	const { data: session, isPending: sessionLoading } = authClient.useSession()
 	const [hasProcessedAuth, setHasProcessedAuth] = useState(false)
 
@@ -33,7 +33,7 @@ function AuthenticatedLayout() {
 			// Delay to ensure auth state is fully synchronized
 			const timer = setTimeout(() => {
 				setHasProcessedAuth(true)
-			}, 500)
+			}, 0)
 			return () => clearTimeout(timer)
 		}
 	}, [sessionLoading, isLoading])
@@ -58,7 +58,7 @@ function AuthenticatedLayout() {
 				<Outlet />
 			</Authenticated>
 			<Unauthenticated>
-				<Navigate replace to="/login" />
+				{/* <Navigate replace to="/login" /> */}
 			</Unauthenticated>
 			<AuthLoading>
 				<div className="flex h-screen w-full items-center justify-center">

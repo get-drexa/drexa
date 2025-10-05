@@ -3,26 +3,33 @@ import { convex, crossDomain } from "@convex-dev/better-auth/plugins"
 import { betterAuth } from "better-auth"
 import { components } from "./_generated/api"
 import type { DataModel } from "./_generated/dataModel"
+import authSchema from "./betterauth/schema"
 
 const siteUrl = process.env.SITE_URL!
 
 // The component client has methods needed for integrating Convex with Better Auth,
 // as well as helper methods for general use.
-export const authComponent = createClient<DataModel>(components.betterAuth, {
-	triggers: {
-		user: {
-			onCreate: async (ctx, user) => {
-				const now = Date.now()
-				await ctx.db.insert("directories", {
-					name: "",
-					userId: user._id,
-					createdAt: now,
-					updatedAt: now,
-				})
+export const authComponent = createClient<DataModel, typeof authSchema>(
+	components.betterAuth,
+	{
+		local: {
+			schema: authSchema,
+		},
+		triggers: {
+			user: {
+				onCreate: async (ctx, user) => {
+					const now = Date.now()
+					await ctx.db.insert("directories", {
+						name: "",
+						userId: user._id,
+						createdAt: now,
+						updatedAt: now,
+					})
+				},
 			},
 		},
 	},
-})
+)
 
 export const createAuth = (
 	ctx: GenericCtx<DataModel>,

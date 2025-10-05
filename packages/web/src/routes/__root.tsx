@@ -13,7 +13,9 @@ export const Route = createRootRoute({
 	component: RootLayout,
 })
 
-const convexClient = new ConvexReactClient(process.env.BUN_PUBLIC_CONVEX_URL!)
+const convexClient = new ConvexReactClient(process.env.BUN_PUBLIC_CONVEX_URL!, {
+	verbose: true,
+})
 const queryClient = new QueryClient({
 	defaultOptions: {
 		mutations: {

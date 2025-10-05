@@ -7,6 +7,12 @@ import { createContext, useContext } from "react"
 
 export type AuthErrorCode = keyof typeof authClient.$ERROR_CODES
 
+export class BetterAuthError extends Error {
+	constructor(public readonly errorCode: AuthErrorCode) {
+		super(`better-auth error: ${errorCode}`)
+	}
+}
+
 export const authClient = createAuthClient({
 	baseURL: process.env.BUN_PUBLIC_CONVEX_SITE_URL,
 	plugins: [convexClient(), crossDomainClient()],

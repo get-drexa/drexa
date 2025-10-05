@@ -19,7 +19,7 @@ import {
 	FieldLabel,
 } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
-import { type AuthErrorCode, authClient } from "../auth"
+import { type AuthErrorCode, authClient, BetterAuthError } from "../auth"
 
 export const Route = createFileRoute("/sign-up")({
 	component: SignupPage,
@@ -35,12 +35,6 @@ type SignUpParams = {
 class PasswordMismatchError extends Error {
 	constructor() {
 		super("Passwords do not match")
-	}
-}
-
-class BetterAuthError extends Error {
-	constructor(public readonly errorCode: AuthErrorCode) {
-		super(`better-auth error: ${errorCode}`)
 	}
 }
 
