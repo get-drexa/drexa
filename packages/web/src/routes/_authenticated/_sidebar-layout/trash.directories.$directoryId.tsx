@@ -30,10 +30,12 @@ import {
 	DialogHeader,
 	DialogTitle,
 } from "@/components/ui/dialog"
+import { WithAtom } from "@/components/with-atom"
 import { DirectoryPageContext } from "@/directories/directory-page/context"
 import { DirectoryContentTable } from "@/directories/directory-page/directory-content-table"
 import { DirectoryPageSkeleton } from "@/directories/directory-page/directory-page-skeleton"
 import { FilePathBreadcrumb } from "@/directories/directory-page/file-path-breadcrumb"
+import { FilePreviewDialog } from "@/files/file-preview-dialog"
 import type { FileDragInfo } from "@/files/use-file-drop"
 
 export const Route = createFileRoute(
@@ -45,6 +47,7 @@ export const Route = createFileRoute(
 const contextMenuTargetItemsAtom = atom<FileSystemItem[]>([])
 const fileDragInfoAtom = atom<FileDragInfo | null>(null)
 const isDeleteConfirmationDialogOpenAtom = atom(false)
+const openedFileAtom = atom<Doc<"files"> | null>(null)
 const optimisticRemovedItemsAtom = atom(
 	new Set<Id<"files"> | Id<"directories">>(),
 )
@@ -63,6 +66,7 @@ function RouteComponent() {
 		},
 	)
 	const setContextMenuTargetItems = useSetAtom(contextMenuTargetItemsAtom)
+	const setOpenedFile = useSetAtom(openedFileAtom)
 
 	const directoryUrlFn = useCallback(
 		(directory: Doc<"directories">) =>
@@ -105,12 +109,24 @@ function RouteComponent() {
 						directoryUrlFn={directoryUrlFn}
 						fileDragInfoAtom={fileDragInfoAtom}
 						onContextMenu={handleContextMenuRequest}
-						onOpenFile={() => {}}
+						onOpenFile={setOpenedFile}
 					/>
 				</div>
 			</TableContextMenu>
 
 			<DeleteConfirmationDialog />
+
+			<WithAtom atom={openedFileAtom}>
+				{(openedFile, setOpenedFile) => {
+					if (!openedFile) return null
+					return (
+						<FilePreviewDialog
+							file={openedFile}
+							onClose={() => setOpenedFile(null)}
+						/>
+					)
+				}}
+			</WithAtom>
 		</DirectoryPageContext>
 	)
 }
