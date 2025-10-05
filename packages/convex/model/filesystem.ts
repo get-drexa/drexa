@@ -2,6 +2,7 @@ import { v } from "convex/values"
 import type { Doc, Id } from "../_generated/dataModel"
 import type { AuthenticatedMutationCtx } from "../functions"
 import * as Directories from "./directories"
+import * as Err from "./error"
 import * as Files from "./files"
 
 export enum FileType {
@@ -80,6 +81,29 @@ export const VFileHandle = v.object({
 	id: v.id("files"),
 })
 export const VFileSystemHandle = v.union(VFileHandle, VDirectoryHandle)
+
+export async function ensureRootDirectory(
+	ctx: AuthenticatedMutationCtx,
+): Promise<Id<"directories">> {
+	const existing = await ctx.db
+		.query("directories")
+		.withIndex("byParentId", (q) =>
+			q.eq("userId", ctx.user._id).eq("parentId", undefined),
+		)
+		.first()
+
+	if (existing) {
+		return existing._id
+	}
+
+	const now = Date.now()
+	return await ctx.db.insert("directories", {
+		name: "",
+		createdAt: now,
+		updatedAt: now,
+		userId: ctx.user._id,
+	})
+}
 
 /**
  * Recursively collects all file and directory handles from the given handles,

@@ -16,7 +16,6 @@ function RouteComponent() {
 					<Outlet />
 				</SidebarInset>
 			</div>
-			<Toaster />
 		</SidebarProvider>
 	)
 }

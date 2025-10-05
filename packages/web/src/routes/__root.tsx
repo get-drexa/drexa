@@ -7,7 +7,7 @@ import { toast } from "sonner"
 import { Toaster } from "@/components/ui/sonner"
 import { formatError } from "@/lib/error"
 import { useKeyboardModifierListener } from "@/lib/keyboard"
-import { authClient } from "../auth-client"
+import { authClient } from "../auth"
 
 export const Route = createRootRoute({
 	component: RootLayout,

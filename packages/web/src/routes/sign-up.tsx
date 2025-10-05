@@ -19,7 +19,7 @@ import {
 	FieldLabel,
 } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
-import { type AuthErrorCode, authClient } from "../auth-client"
+import { type AuthErrorCode, authClient } from "../auth"
 
 export const Route = createFileRoute("/sign-up")({
 	component: SignupPage,
@@ -144,8 +144,6 @@ function SignupForm() {
 	} else if (signUpError instanceof PasswordMismatchError) {
 		passwordFieldError = "Passwords do not match"
 	}
-
-	console.log({ passwordFieldError })
 
 	return (
 		<form onSubmit={handleSubmit}>

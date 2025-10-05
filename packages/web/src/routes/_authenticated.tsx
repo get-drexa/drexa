@@ -11,7 +11,7 @@ import {
 	useConvexAuth,
 } from "convex/react"
 import { useEffect, useState } from "react"
-import { authClient } from "@/auth-client"
+import { authClient, SessionContext } from "@/auth"
 import { LoadingSpinner } from "@/components/ui/loading-spinner"
 
 export const Route = createFileRoute("/_authenticated")({
@@ -21,7 +21,7 @@ export const Route = createFileRoute("/_authenticated")({
 function AuthenticatedLayout() {
 	const { search } = useLocation()
 	const { isLoading } = useConvexAuth()
-	const { isPending: sessionLoading } = authClient.useSession()
+	const { data: session, isPending: sessionLoading } = authClient.useSession()
 	const [hasProcessedAuth, setHasProcessedAuth] = useState(false)
 
 	// Check if we're in the middle of processing an auth code
@@ -50,6 +50,11 @@ function AuthenticatedLayout() {
 	return (
 		<>
 			<Authenticated>
+				{session ? (
+					<SessionContext value={session}>
+						<Outlet />
+					</SessionContext>
+				) : null}
 				<Outlet />
 			</Authenticated>
 			<Unauthenticated>

@@ -18,7 +18,7 @@ import type * as model_error from "../model/error.js";
 import type * as model_files from "../model/files.js";
 import type * as model_filesystem from "../model/filesystem.js";
 import type * as model_user from "../model/user.js";
-import type * as users from "../users.js";
+import type * as user from "../user.js";
 
 import type {
   ApiFromModules,
@@ -45,7 +45,7 @@ declare const fullApi: ApiFromModules<{
   "model/files": typeof model_files;
   "model/filesystem": typeof model_filesystem;
   "model/user": typeof model_user;
-  users: typeof users;
+  user: typeof user;
 }>;
 declare const fullApiWithMounts: typeof fullApi;
 

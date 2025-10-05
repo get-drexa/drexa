@@ -4,18 +4,17 @@ import {
 	customMutation,
 	customQuery,
 } from "convex-helpers/server/customFunctions"
-import type { Doc } from "./_generated/dataModel"
 import type { MutationCtx, QueryCtx } from "./_generated/server"
 import { mutation, query } from "./_generated/server"
-import { userIdentityOrThrow, userOrThrow } from "./model/user"
+import { type AuthUser, userIdentityOrThrow, userOrThrow } from "./model/user"
 
 export type AuthenticatedQueryCtx = QueryCtx & {
-	user: Doc<"users">
+	user: AuthUser
 	identity: UserIdentity
 }
 
 export type AuthenticatedMutationCtx = MutationCtx & {
-	user: Doc<"users">
+	user: AuthUser
 	identity: UserIdentity
 }
 
