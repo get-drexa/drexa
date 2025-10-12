@@ -7,7 +7,7 @@ export function WithAtom<Value>({
 	atom: PrimitiveAtom<Value>
 	children: (
 		value: Value,
-		setValue: (value: Value) => void,
+		setValue: (value: Value | ((current: Value) => Value)) => void,
 	) => React.ReactNode
 }) {
 	const [value, setValue] = useAtom(atom)

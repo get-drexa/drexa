@@ -47,6 +47,7 @@ import { FilePathBreadcrumb } from "@/directories/directory-page/file-path-bread
 import { NewDirectoryDialog } from "@/directories/directory-page/new-directory-dialog"
 import { RenameFileDialog } from "@/directories/directory-page/rename-file-dialog"
 import { FilePreviewDialog } from "@/files/file-preview-dialog"
+import { UploadFileDialog } from "@/files/upload-file-dialog"
 import type { FileDragInfo } from "@/files/use-file-drop"
 
 export const Route = createFileRoute(
@@ -55,9 +56,25 @@ export const Route = createFileRoute(
 	component: RouteComponent,
 })
 
+enum DialogKind {
+	NewDirectory = "NewDirectory",
+	UploadFile = "UploadFile",
+}
+
+type NewDirectoryDialogData = {
+	kind: DialogKind.NewDirectory
+}
+
+type UploadFileDialogData = {
+	kind: DialogKind.UploadFile
+	directory: Doc<"directories">
+}
+
+type ActiveDialogData = NewDirectoryDialogData | UploadFileDialogData
+
 // MARK: atoms
 const contextMenuTargetItemsAtom = atom<FileSystemItem[]>([])
-const newFileTypeAtom = atom<FileType | null>(null)
+const activeDialogDataAtom = atom<ActiveDialogData | null>(null)
 const fileDragInfoAtom = atom<FileDragInfo | null>(null)
 const optimisticDeletedItemsAtom = atom(
 	new Set<Id<"files"> | Id<"directories">>(),
@@ -154,17 +171,25 @@ function RouteComponent() {
 				</div>
 			</DirectoryContentContextMenu>
 
-			<WithAtom atom={newFileTypeAtom}>
-				{(newFileType, setNewFileType) => (
-					<NewDirectoryDialog
-						open={newFileType === FileType.Directory}
-						directoryId={directory._id}
-						onOpenChange={(open) => {
-							if (!open) {
-								setNewFileType(null)
-							}
-						}}
-					/>
+			<WithAtom atom={activeDialogDataAtom}>
+				{(data, setData) => (
+					<>
+						<NewDirectoryDialog
+							open={data?.kind === DialogKind.NewDirectory}
+							directoryId={directory._id}
+							onOpenChange={(open) => {
+								if (!open) {
+									setData(null)
+								}
+							}}
+						/>
+						{data?.kind === DialogKind.UploadFile && (
+							<UploadFileDialog
+								targetDirectory={data.directory}
+								onClose={() => setData(null)}
+							/>
+						)}
+					</>
 				)}
 			</WithAtom>
 
@@ -249,8 +274,6 @@ function DirectoryContentContextMenu({
 		}
 	}
 
-	console.log("target", target)
-
 	return (
 		<ContextMenu
 			onOpenChange={(open) => {
@@ -311,82 +334,62 @@ function RenameMenuItem() {
 // tags: upload, uploadfile, uploadfilebutton, fileupload, fileuploadbutton
 function UploadFileButton() {
 	const { directory } = useContext(DirectoryPageContext)
-	const generateUploadUrl = useConvexMutation(api.files.generateUploadUrl)
-	const saveFile = useConvexMutation(api.files.saveFile)
-	const { mutate: uploadFile, isPending: isUploading } = useMutation({
-		mutationFn: async (file: File) => {
-			const uploadUrl = await generateUploadUrl()
-			const uploadResult = await fetch(uploadUrl, {
-				method: "POST",
-				body: file,
-				headers: {
-					"Content-Type": file.type,
-				},
-			})
-			const { storageId } = await uploadResult.json()
+	// const uploadFile = useUploadFile({
+	// 	targetDirectory: directory,
+	// })
+	// const { mutate: uploadFile, isPending: isUploading } = useMutation({
+	// 	mutationFn: async (file: File) => {
+	// 		const uploadUrl = await generateUploadUrl()
+	// 		const uploadResult = await fetch(uploadUrl, {
+	// 			method: "POST",
+	// 			body: file,
+	// 			headers: {
+	// 				"Content-Type": file.type,
+	// 			},
+	// 		})
+	// 		const { storageId } = await uploadResult.json()
 
-			await saveFile({
-				storageId,
-				name: file.name,
-				size: file.size,
-				mimeType: file.type,
-				directoryId: directory._id,
-			})
-		},
-		onSuccess: () => {
-			toast.success("File uploaded successfully.")
-		},
-	})
-
-	const fileInputRef = useRef<HTMLInputElement>(null)
+	// 		await saveFile({
+	// 			storageId,
+	// 			name: file.name,
+	// 			size: file.size,
+	// 			mimeType: file.type,
+	// 			directoryId: directory._id,
+	// 		})
+	// 	},
+	// 	onSuccess: () => {
+	// 		toast.success("File uploaded successfully.")
+	// 	},
+	// })
+	const setActiveDialogData = useSetAtom(activeDialogDataAtom)
 
 	const handleClick = () => {
-		fileInputRef.current?.click()
-	}
-
-	const onFileUpload = async (e: ChangeEvent<HTMLInputElement>) => {
-		const file = e.target.files?.[0]
-		if (file) {
-			uploadFile(file)
-		}
+		setActiveDialogData({
+			kind: DialogKind.UploadFile,
+			directory: directory,
+		})
 	}
 
 	return (
-		<>
-			<input
-				hidden
-				onChange={onFileUpload}
-				ref={fileInputRef}
-				type="file"
-				name="files"
-			/>
-			<Button
-				size="sm"
-				type="button"
-				onClick={handleClick}
-				disabled={isUploading}
-			>
-				{isUploading ? (
-					<Loader2Icon className="animate-spin size-4" />
-				) : (
-					<UploadCloudIcon className="size-4" />
-				)}
-				{isUploading ? "Uploading" : "Upload File"}
-			</Button>
-		</>
+		<Button size="sm" type="button" onClick={handleClick}>
+			Upload files
+		</Button>
 	)
 }
 
 function NewDirectoryItemDropdown() {
-	const [newFileType, setNewFileType] = useAtom(newFileTypeAtom)
+	const [activeDialogData, setActiveDialogData] =
+		useAtom(activeDialogDataAtom)
 
 	const addNewDirectory = () => {
-		setNewFileType(FileType.Directory)
+		setActiveDialogData({
+			kind: DialogKind.NewDirectory,
+		})
 	}
 
 	const handleCloseAutoFocus = (event: Event) => {
 		// If we just created a new item, prevent the dropdown from restoring focus to the trigger
-		if (newFileType) {
+		if (activeDialogData) {
 			event.preventDefault()
 		}
 	}

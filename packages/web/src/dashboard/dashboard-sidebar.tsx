@@ -25,7 +25,6 @@ import {
 	SidebarMenu,
 	SidebarMenuButton,
 	SidebarMenuItem,
-	SidebarRail,
 } from "@/components/ui/sidebar"
 import { LoadingSpinner } from "../components/ui/loading-spinner"
 import { backgroundTaskProgressAtom } from "./state"
@@ -50,7 +49,6 @@ export function DashboardSidebar() {
 					<BackgroundTaskProgressItem />
 				</SidebarMenu>
 			</SidebarFooter>
-			<SidebarRail />
 		</Sidebar>
 	)
 }
