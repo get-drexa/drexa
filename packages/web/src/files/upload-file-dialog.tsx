@@ -2,7 +2,6 @@ import type { Doc } from "@fileone/convex/_generated/dataModel"
 import { useMutation } from "@tanstack/react-query"
 import {
 	atom,
-	type PrimitiveAtom,
 	useAtom,
 	useAtomValue,
 	useSetAtom,
@@ -126,7 +125,7 @@ export function UploadFileDialog({
 			<DialogContent className="sm:max-w-2xl">
 				<DialogHeader>
 					<DialogTitle>
-						Upload file to "{targetDirectory.name}"
+						{targetDirectory.name ? `Upload file to "${targetDirectory.name}"` : "Upload file"}
 					</DialogTitle>
 					<DialogDescription>
 						Drag and drop files here or click to select files
