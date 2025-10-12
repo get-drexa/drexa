@@ -54,8 +54,9 @@ function AuthenticatedLayout() {
 					<SessionContext value={session}>
 						<Outlet />
 					</SessionContext>
-				) : null}
-				<Outlet />
+				) : (
+					<Outlet />
+				)}
 			</Authenticated>
 			<Unauthenticated>
 				{/* <Navigate replace to="/login" /> */}
