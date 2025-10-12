@@ -1,12 +1,6 @@
 import type { Doc } from "@fileone/convex/_generated/dataModel"
 import { useMutation } from "@tanstack/react-query"
-import {
-	atom,
-	useAtom,
-	useAtomValue,
-	useSetAtom,
-	useStore,
-} from "jotai"
+import { atom, useAtom, useAtomValue, useSetAtom, useStore } from "jotai"
 import { atomEffect } from "jotai-effect"
 import { FilePlus2Icon, UploadCloudIcon, XIcon } from "lucide-react"
 import { nanoid } from "nanoid"
@@ -88,6 +82,7 @@ export function UploadFileDialog({
 		},
 		onSuccess: () => {
 			toast.success("All files uploaded successfully")
+			setPickedFiles([])
 			onClose()
 		},
 	})
@@ -115,6 +110,20 @@ export function UploadFileDialog({
 		uploadFiles(pickedFiles)
 	}
 
+	let dialogTitle: string
+	let dialogDescription: string
+	if (isUploading) {
+		dialogTitle = "Uploading files"
+		dialogDescription =
+			"You can close the dialog while they are being uploaded in the background."
+	} else if (targetDirectory.name) {
+		dialogTitle = `Upload file to "${targetDirectory.name}"`
+		dialogDescription = "Drag and drop files here or click to select files"
+	} else {
+		dialogTitle = "Upload file"
+		dialogDescription = "Drag and drop files here or click to select files"
+	}
+
 	return (
 		<Dialog
 			open
@@ -124,12 +133,8 @@ export function UploadFileDialog({
 		>
 			<DialogContent className="sm:max-w-2xl">
 				<DialogHeader>
-					<DialogTitle>
-						{targetDirectory.name ? `Upload file to "${targetDirectory.name}"` : "Upload file"}
-					</DialogTitle>
-					<DialogDescription>
-						Drag and drop files here or click to select files
-					</DialogDescription>
+					<DialogTitle>{dialogTitle}</DialogTitle>
+					<DialogDescription>{dialogDescription}</DialogDescription>
 				</DialogHeader>
 
 				<form id={formId} onSubmit={handleSubmit}>

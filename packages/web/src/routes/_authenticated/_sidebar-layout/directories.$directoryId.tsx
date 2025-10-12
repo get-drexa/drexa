@@ -10,19 +10,16 @@ import { createFileRoute } from "@tanstack/react-router"
 import type { Row, Table } from "@tanstack/react-table"
 import {
 	useMutation as useContextMutation,
-	useMutation as useConvexMutation,
 	useQuery as useConvexQuery,
 } from "convex/react"
 import { atom, useAtom, useAtomValue, useSetAtom, useStore } from "jotai"
 import {
 	ChevronDownIcon,
-	Loader2Icon,
 	PlusIcon,
 	TextCursorInputIcon,
 	TrashIcon,
-	UploadCloudIcon,
 } from "lucide-react"
-import { type ChangeEvent, useCallback, useContext, useRef } from "react"
+import { useCallback, useContext } from "react"
 import { toast } from "sonner"
 import { DirectoryIcon } from "@/components/icons/directory-icon"
 import { TextFileIcon } from "@/components/icons/text-file-icon"
@@ -47,6 +44,7 @@ import { FilePathBreadcrumb } from "@/directories/directory-page/file-path-bread
 import { NewDirectoryDialog } from "@/directories/directory-page/new-directory-dialog"
 import { RenameFileDialog } from "@/directories/directory-page/rename-file-dialog"
 import { FilePreviewDialog } from "@/files/file-preview-dialog"
+import { fileUploadCountAtom } from "@/files/store"
 import { UploadFileDialog } from "@/files/upload-file-dialog"
 import type { FileDragInfo } from "@/files/use-file-drop"
 
@@ -334,40 +332,22 @@ function RenameMenuItem() {
 // tags: upload, uploadfile, uploadfilebutton, fileupload, fileuploadbutton
 function UploadFileButton() {
 	const { directory } = useContext(DirectoryPageContext)
-	// const uploadFile = useUploadFile({
-	// 	targetDirectory: directory,
-	// })
-	// const { mutate: uploadFile, isPending: isUploading } = useMutation({
-	// 	mutationFn: async (file: File) => {
-	// 		const uploadUrl = await generateUploadUrl()
-	// 		const uploadResult = await fetch(uploadUrl, {
-	// 			method: "POST",
-	// 			body: file,
-	// 			headers: {
-	// 				"Content-Type": file.type,
-	// 			},
-	// 		})
-	// 		const { storageId } = await uploadResult.json()
-
-	// 		await saveFile({
-	// 			storageId,
-	// 			name: file.name,
-	// 			size: file.size,
-	// 			mimeType: file.type,
-	// 			directoryId: directory._id,
-	// 		})
-	// 	},
-	// 	onSuccess: () => {
-	// 		toast.success("File uploaded successfully.")
-	// 	},
-	// })
 	const setActiveDialogData = useSetAtom(activeDialogDataAtom)
+	const fileUploadCount = useAtomValue(fileUploadCountAtom)
 
 	const handleClick = () => {
 		setActiveDialogData({
 			kind: DialogKind.UploadFile,
 			directory: directory,
 		})
+	}
+
+	if (fileUploadCount > 0) {
+		return (
+			<Button size="sm" type="button" loading onClick={handleClick}>
+				Uploading {fileUploadCount} files
+			</Button>
+		)
 	}
 
 	return (

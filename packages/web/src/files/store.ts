@@ -26,6 +26,8 @@ export const clearFileUploadAtom = atom(null, (get, set, id: string) => {
 	set(fileUploadsAtom, fileUploads)
 })
 
-export const hasFileUploadsAtom = atom(
-	(get) => Object.keys(get(fileUploadsAtom)).length > 0,
+export const fileUploadCountAtom = atom(
+	(get) => Object.keys(get(fileUploadsAtom)).length,
 )
+
+export const hasFileUploadsAtom = atom((get) => get(fileUploadCountAtom) > 0)
