@@ -2,7 +2,13 @@ import type { Doc } from "@fileone/convex/_generated/dataModel"
 import { useMutation } from "@tanstack/react-query"
 import { atom, useAtom, useAtomValue, useSetAtom, useStore } from "jotai"
 import { atomEffect } from "jotai-effect"
-import { FilePlus2Icon, UploadCloudIcon, XIcon } from "lucide-react"
+import {
+	CircleAlertIcon,
+	CircleCheckIcon,
+	FilePlus2Icon,
+	UploadCloudIcon,
+	XIcon,
+} from "lucide-react"
 import { nanoid } from "nanoid"
 import type React from "react"
 import { useId, useMemo, useRef, useState } from "react"
@@ -17,8 +23,21 @@ import {
 	DialogTitle,
 } from "@/components/ui/dialog"
 import { Progress } from "@/components/ui/progress"
+import {
+	Tooltip,
+	TooltipContent,
+	TooltipTrigger,
+} from "@/components/ui/tooltip"
 import { WithAtom } from "@/components/with-atom"
-import { clearFileUploadAtom, fileUploadAtomFamily } from "./store"
+import { formatError } from "@/lib/error"
+import {
+	clearFileUploadStatusesAtom,
+	FileUploadStatusKind,
+	fileUploadCountAtom,
+	fileUploadStatusAtomFamily,
+	fileUploadsAtom,
+	hasFileUploadsErrorAtom,
+} from "./store"
 import useUploadFile from "./use-upload-file"
 
 type UploadFileDialogProps = {
@@ -41,7 +60,7 @@ export function UploadFileDialog({
 	const formId = useId()
 	const fileInputRef = useRef<HTMLInputElement>(null)
 	const setPickedFiles = useSetAtom(pickedFilesAtom)
-	const clearFileUpload = useSetAtom(clearFileUploadAtom)
+	const clearFileUploadStatuses = useSetAtom(clearFileUploadStatusesAtom)
 	const store = useStore()
 
 	const updateFileInputEffect = useMemo(
@@ -69,21 +88,58 @@ export function UploadFileDialog({
 				uploadFile({
 					file: pickedFile.file,
 					onStart: () => {
-						store.set(fileUploadAtomFamily(pickedFile.id), 0)
+						store.set(fileUploadStatusAtomFamily(pickedFile.id), {
+							kind: FileUploadStatusKind.InProgress,
+							progress: 0,
+						})
 					},
 					onProgress: (progress) => {
-						store.set(fileUploadAtomFamily(pickedFile.id), progress)
+						store.set(fileUploadStatusAtomFamily(pickedFile.id), {
+							kind: FileUploadStatusKind.InProgress,
+							progress,
+						})
 					},
-				}).then(() => {
-					clearFileUpload(pickedFile.id)
-				}),
+				})
+					.then(() => {
+						// clearFileUpload(pickedFile.id)
+					})
+					.catch((error) => {
+						console.log("error", error)
+						store.set(fileUploadStatusAtomFamily(pickedFile.id), {
+							kind: FileUploadStatusKind.Error,
+							error,
+						})
+						throw error
+					}),
 			)
-			await Promise.all(promises)
+			return await Promise.allSettled(promises)
 		},
-		onSuccess: () => {
-			toast.success("All files uploaded successfully")
-			setPickedFiles([])
-			onClose()
+		onSuccess: (results, files) => {
+			const remainingPickedFiles: PickedFile[] = []
+			results.forEach((result, i) => {
+				// biome-ignore lint/style/noNonNullAssertion: results lenght must match input files array length
+				const pickedFile = files[i]!
+				const statusAtom = fileUploadStatusAtomFamily(pickedFile.id)
+				switch (result.status) {
+					case "fulfilled":
+						store.set(statusAtom, {
+							kind: FileUploadStatusKind.Success,
+						})
+						break
+					case "rejected":
+						store.set(statusAtom, {
+							kind: FileUploadStatusKind.Error,
+							error: result.reason,
+						})
+						remainingPickedFiles.push(pickedFile)
+						break
+				}
+			})
+			// setPickedFiles(remainingPickedFiles)
+
+			if (remainingPickedFiles.length === 0) {
+				toast.success("All files uploaded successfully")
+			}
 		},
 	})
 
@@ -105,9 +161,50 @@ export function UploadFileDialog({
 		}
 	}
 
-	function startFileUpload() {
+	function onUploadButtonClick() {
+		const uploadStatuses = store.get(fileUploadsAtom)
+		const fileUploadCount = store.get(fileUploadCountAtom)
 		const pickedFiles = store.get(pickedFilesAtom)
-		uploadFiles(pickedFiles)
+
+		if (pickedFiles.length === 0) {
+			// no files are picked, nothing to upload
+			return
+		}
+
+		if (fileUploadCount === 0) {
+			// no files are being uploaded, upload all picked files
+			uploadFiles(pickedFiles)
+			return
+		}
+
+		const successfulUploads: PickedFile["id"][] = []
+		const nextPickedFiles: PickedFile[] = []
+		for (const file of pickedFiles) {
+			const uploadStatus = uploadStatuses[file.id]
+			if (uploadStatus) {
+				switch (uploadStatus.kind) {
+					case FileUploadStatusKind.Success:
+						successfulUploads.push(file.id)
+						continue
+					case FileUploadStatusKind.InProgress:
+						continue
+					case FileUploadStatusKind.Error:
+						nextPickedFiles.push(file)
+						break
+				}
+			}
+		}
+
+		clearFileUploadStatuses(successfulUploads)
+
+		if (successfulUploads.length === pickedFiles.length) {
+			// all files were successfully uploaded, close the dialog
+			onClose()
+		} else {
+			// some files were not successfully uploaded, set the next picked files
+			setPickedFiles(nextPickedFiles)
+			uploadFiles(nextPickedFiles)
+		}
 	}
 
 	let dialogTitle: string
@@ -165,21 +262,50 @@ export function UploadFileDialog({
 										Select more files
 									</Button>
 								) : null}
-								<Button
-									onClick={startFileUpload}
+								<UploadButton
 									disabled={isUploading}
 									loading={isUploading}
-								>
-									{pickedFiles.length === 0
-										? "Upload"
-										: `Upload ${pickedFiles.length} files`}
-								</Button>
+									onClick={onUploadButtonClick}
+								/>
 							</>
 						)}
 					</WithAtom>
 				</DialogFooter>
 			</DialogContent>
 		</Dialog>
+	)
+}
+
+function UploadButton({
+	disabled,
+	loading,
+	onClick,
+}: {
+	disabled: boolean
+	loading: boolean
+	onClick: () => void
+}) {
+	const pickedFiles = useAtomValue(pickedFilesAtom)
+	const hasUploadErrors = useAtomValue(hasFileUploadsErrorAtom)
+	const fileUploadCount = useAtomValue(fileUploadCountAtom)
+
+	let label: string
+	if (hasUploadErrors) {
+		label = "Retry failed uploads"
+	} else if (pickedFiles.length > 0) {
+		if (fileUploadCount > 0) {
+			label = "Done"
+		} else {
+			label = `Upload ${pickedFiles.length} files`
+		}
+	} else {
+		label = "Upload"
+	}
+
+	return (
+		<Button onClick={onClick} disabled={disabled} loading={loading}>
+			{label}
+		</Button>
 	)
 }
 
@@ -239,6 +365,7 @@ function UploadFileDropContainer({ children }: React.PropsWithChildren) {
 	)
 }
 
+// tag: uploadfilearea area fileuploadarea
 function UploadFileArea({ onClick }: { onClick: () => void }) {
 	const [pickedFiles, setPickedFiles] = useAtom(pickedFilesAtom)
 
@@ -294,30 +421,62 @@ function PickedFileItem({
 	file: PickedFile
 	onRemove: (file: PickedFile) => void
 }) {
-	const fileUploadAtom = fileUploadAtomFamily(pickedFile.id)
+	const fileUploadAtom = fileUploadStatusAtomFamily(pickedFile.id)
 	const fileUpload = useAtomValue(fileUploadAtom)
 	console.log("fileUpload", fileUpload)
 	const { file, id } = pickedFile
+
+	let statusIndicator: React.ReactNode
+	if (!fileUpload) {
+		statusIndicator = (
+			<Button
+				variant="ghost"
+				size="icon"
+				onClick={() => onRemove(pickedFile)}
+			>
+				<XIcon className="size-4" />
+			</Button>
+		)
+	} else {
+		switch (fileUpload.kind) {
+			case FileUploadStatusKind.InProgress:
+				statusIndicator = (
+					<Progress
+						className="max-w-20"
+						value={fileUpload.progress * 100}
+					/>
+				)
+				break
+			case FileUploadStatusKind.Error:
+				statusIndicator = (
+					<Tooltip>
+						<TooltipTrigger>
+							<CircleAlertIcon className="pr-2 text-destructive" />
+						</TooltipTrigger>
+						<TooltipContent>
+							<p>
+								Failed to upload file:{" "}
+								{formatError(fileUpload.error)}
+							</p>
+						</TooltipContent>
+					</Tooltip>
+				)
+				break
+			case FileUploadStatusKind.Success:
+				statusIndicator = (
+					<CircleCheckIcon className="pr-2 text-green-500" />
+				)
+				break
+		}
+	}
+
 	return (
 		<li
 			className="pl-3 pr-1 py-0.5 h-8 hover:bg-muted flex justify-between items-center"
 			key={id}
 		>
 			<span>{file.name}</span>
-			{fileUpload ? (
-				<Progress
-					className="max-w-20"
-					value={fileUpload.progress * 100}
-				/>
-			) : (
-				<Button
-					variant="ghost"
-					size="icon"
-					onClick={() => onRemove(pickedFile)}
-				>
-					<XIcon className="size-4" />
-				</Button>
-			)}
+			{statusIndicator}
 		</li>
 	)
 }

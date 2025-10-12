@@ -29,7 +29,6 @@ function useUploadFile({
 			})
 			xhr.upload.addEventListener("error", reject)
 			xhr.addEventListener("load", () => {
-				console.log("load", xhr.response)
 				resolve(
 					xhr.response as {
 						storageId: Id<"_storage">

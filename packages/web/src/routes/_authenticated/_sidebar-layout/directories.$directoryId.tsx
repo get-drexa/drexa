@@ -44,7 +44,7 @@ import { FilePathBreadcrumb } from "@/directories/directory-page/file-path-bread
 import { NewDirectoryDialog } from "@/directories/directory-page/new-directory-dialog"
 import { RenameFileDialog } from "@/directories/directory-page/rename-file-dialog"
 import { FilePreviewDialog } from "@/files/file-preview-dialog"
-import { fileUploadCountAtom } from "@/files/store"
+import { inProgressFileUploadCountAtom } from "@/files/store"
 import { UploadFileDialog } from "@/files/upload-file-dialog"
 import type { FileDragInfo } from "@/files/use-file-drop"
 
@@ -333,7 +333,9 @@ function RenameMenuItem() {
 function UploadFileButton() {
 	const { directory } = useContext(DirectoryPageContext)
 	const setActiveDialogData = useSetAtom(activeDialogDataAtom)
-	const fileUploadCount = useAtomValue(fileUploadCountAtom)
+	const inProgressFileUploadCount = useAtomValue(
+		inProgressFileUploadCountAtom,
+	)
 
 	const handleClick = () => {
 		setActiveDialogData({
@@ -342,10 +344,10 @@ function UploadFileButton() {
 		})
 	}
 
-	if (fileUploadCount > 0) {
+	if (inProgressFileUploadCount > 0) {
 		return (
 			<Button size="sm" type="button" loading onClick={handleClick}>
-				Uploading {fileUploadCount} files
+				Uploading {inProgressFileUploadCount} files
 			</Button>
 		)
 	}
