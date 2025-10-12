@@ -2,6 +2,7 @@ import { api } from "@fileone/convex/_generated/api"
 import type { Doc, Id } from "@fileone/convex/_generated/dataModel"
 import {
 	type FileSystemItem,
+	FileType,
 	newFileSystemHandle,
 } from "@fileone/convex/model/filesystem"
 import { useMutation } from "@tanstack/react-query"
@@ -13,7 +14,7 @@ import {
 } from "convex/react"
 import { atom, useAtom, useSetAtom, useStore } from "jotai"
 import { ShredderIcon, TrashIcon, UndoIcon } from "lucide-react"
-import { useCallback, useEffect } from "react"
+import { useCallback, useContext, useEffect } from "react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import {
@@ -45,9 +46,14 @@ export const Route = createFileRoute(
 	component: RouteComponent,
 })
 
+enum ActiveDialogKind {
+	DeleteConfirmation = "DeleteConfirmation",
+	EmptyTrashConfirmation = "EmptyTrashConfirmation",
+}
+
 const contextMenuTargetItemsAtom = atom<FileSystemItem[]>([])
 const fileDragInfoAtom = atom<FileDragInfo | null>(null)
-const isDeleteConfirmationDialogOpenAtom = atom(false)
+const activeDialogAtom = atom<ActiveDialogKind | null>(null)
 const openedFileAtom = atom<Doc<"files"> | null>(null)
 const optimisticRemovedItemsAtom = atom(
 	new Set<Id<"files"> | Id<"directories">>(),
@@ -124,6 +130,7 @@ function RouteComponent() {
 			</TableContextMenu>
 
 			<DeleteConfirmationDialog />
+			<EmptyTrashConfirmationDialog />
 
 			<WithAtom atom={openedFileAtom}>
 				{(openedFile, setOpenedFile) => {
@@ -141,9 +148,7 @@ function RouteComponent() {
 }
 
 function TableContextMenu({ children }: React.PropsWithChildren) {
-	const setIsDeleteConfirmationDialogOpen = useSetAtom(
-		isDeleteConfirmationDialogOpenAtom,
-	)
+	const setActiveDialog = useSetAtom(activeDialogAtom)
 
 	return (
 		<ContextMenu>
@@ -153,7 +158,7 @@ function TableContextMenu({ children }: React.PropsWithChildren) {
 				<ContextMenuItem
 					variant="destructive"
 					onClick={() => {
-						setIsDeleteConfirmationDialogOpen(true)
+						setActiveDialog(ActiveDialogKind.DeleteConfirmation)
 					}}
 				>
 					<ShredderIcon />
@@ -223,9 +228,7 @@ function RestoreContextMenuItem() {
 }
 
 function EmptyTrashButton() {
-	const setIsDeleteConfirmationDialogOpen = useSetAtom(
-		isDeleteConfirmationDialogOpenAtom,
-	)
+	const setActiveDialog = useSetAtom(activeDialogAtom)
 
 	return (
 		<Button
@@ -233,19 +236,19 @@ function EmptyTrashButton() {
 			type="button"
 			variant="destructive"
 			onClick={() => {
-				setIsDeleteConfirmationDialogOpen(true)
+				setActiveDialog(ActiveDialogKind.EmptyTrashConfirmation)
 			}}
 		>
 			<TrashIcon className="size-4" />
-			Empty Trash
+			Empty trash
 		</Button>
 	)
 }
 
 function DeleteConfirmationDialog() {
+	const { rootDirectory } = useContext(DirectoryPageContext)
+	const [activeDialog, setActiveDialog] = useAtom(activeDialogAtom)
 	const [targetItems, setTargetItems] = useAtom(contextMenuTargetItemsAtom)
-	const [isDeleteConfirmationDialogOpen, setIsDeleteConfirmationDialogOpen] =
-		useAtom(isDeleteConfirmationDialogOpenAtom)
 	const setOptimisticRemovedItems = useSetAtom(optimisticRemovedItemsAtom)
 
 	const deletePermanentlyMutation = useConvexMutation(
@@ -276,21 +279,37 @@ function DeleteConfirmationDialog() {
 					`Deleted ${deleted.files} files and ${deleted.directories} directories; failed to delete ${errors.length} items`,
 				)
 			}
-			setIsDeleteConfirmationDialogOpen(false)
+			setActiveDialog(null)
 			setTargetItems([])
 		},
 	})
 
+	const onOpenChange = (open: boolean) => {
+		if (open) {
+			setActiveDialog(ActiveDialogKind.DeleteConfirmation)
+		} else {
+			setActiveDialog(null)
+		}
+	}
+
 	const confirmDelete = () => {
 		deletePermanently({
-			handles: targetItems.map(newFileSystemHandle),
+			handles:
+				targetItems.length > 0
+					? targetItems.map(newFileSystemHandle)
+					: [
+							newFileSystemHandle({
+								kind: FileType.Directory,
+								doc: rootDirectory,
+							}),
+						],
 		})
 	}
 
 	return (
 		<Dialog
-			open={isDeleteConfirmationDialogOpen}
-			onOpenChange={setIsDeleteConfirmationDialogOpen}
+			open={activeDialog === ActiveDialogKind.DeleteConfirmation}
+			onOpenChange={onOpenChange}
 		>
 			<DialogContent>
 				<DialogHeader>
@@ -317,6 +336,64 @@ function DeleteConfirmationDialog() {
 						loading={isDeleting}
 					>
 						Yes, delete
+					</Button>
+				</DialogFooter>
+			</DialogContent>
+		</Dialog>
+	)
+}
+
+function EmptyTrashConfirmationDialog() {
+	const [activeDialog, setActiveDialog] = useAtom(activeDialogAtom)
+
+	const { mutate: emptyTrash, isPending: isEmptying } = useMutation({
+		mutationFn: useConvexMutation(api.filesystem.emptyTrash),
+		onSuccess: () => {
+			toast.success("Trash emptied successfully")
+			setActiveDialog(null)
+		},
+	})
+
+	function onOpenChange(open: boolean) {
+		if (open) {
+			setActiveDialog(ActiveDialogKind.EmptyTrashConfirmation)
+		} else {
+			setActiveDialog(null)
+		}
+	}
+
+	function confirmEmpty() {
+		emptyTrash(undefined)
+	}
+
+	return (
+		<Dialog
+			open={activeDialog === ActiveDialogKind.EmptyTrashConfirmation}
+			onOpenChange={onOpenChange}
+		>
+			<DialogContent>
+				<DialogHeader>
+					<DialogTitle>Empty your trash?</DialogTitle>
+				</DialogHeader>
+
+				<p>
+					All items in the trash will be permanently deleted. They
+					will be IRRECOVERABLE.
+				</p>
+
+				<DialogFooter>
+					<DialogClose asChild>
+						<Button variant="outline" disabled={isEmptying}>
+							No, go back
+						</Button>
+					</DialogClose>
+					<Button
+						variant="destructive"
+						onClick={confirmEmpty}
+						disabled={isEmptying}
+						loading={isEmptying}
+					>
+						Yes, empty trash
 					</Button>
 				</DialogFooter>
 			</DialogContent>

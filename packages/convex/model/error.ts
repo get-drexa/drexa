@@ -8,6 +8,7 @@ export enum Code {
 	FileNotFound = "FileNotFound",
 	Internal = "Internal",
 	Unauthenticated = "Unauthenticated",
+	NotFound = "NotFound",
 }
 
 export type ApplicationErrorData = { code: Code; message?: string }

@@ -128,6 +128,12 @@ export const permanentlyDeleteItems = authenticatedMutation({
 	},
 })
 
+export const emptyTrash = authenticatedMutation({
+	handler: async (ctx) => {
+		return await FileSystem.emptyTrash(ctx)
+	},
+})
+
 export const restoreItems = authenticatedMutation({
 	args: {
 		handles: v.array(VFileSystemHandle),

@@ -1,6 +1,9 @@
 import { v } from "convex/values"
 import type { Doc, Id } from "../_generated/dataModel"
-import type { AuthenticatedMutationCtx } from "../functions"
+import type {
+	AuthenticatedMutationCtx,
+	AuthenticatedQueryCtx,
+} from "../functions"
 import * as Directories from "./directories"
 import * as Err from "./error"
 import * as Files from "./files"
@@ -47,6 +50,14 @@ export type FileHandle = {
 }
 export type FileSystemHandle = DirectoryHandle | FileHandle
 
+export type DeleteResult = {
+	deleted: {
+		files: number
+		directories: number
+	}
+	errors: Err.ApplicationErrorData[]
+}
+
 export function newFileSystemHandle(item: FileSystemItem): FileSystemHandle {
 	console.log("item", item)
 	switch (item.kind) {
@@ -82,15 +93,21 @@ export const VFileHandle = v.object({
 })
 export const VFileSystemHandle = v.union(VFileHandle, VDirectoryHandle)
 
-export async function ensureRootDirectory(
-	ctx: AuthenticatedMutationCtx,
-): Promise<Id<"directories">> {
-	const existing = await ctx.db
+export async function queryRootDirectory(
+	ctx: AuthenticatedQueryCtx,
+): Promise<Doc<"directories"> | null> {
+	return await ctx.db
 		.query("directories")
 		.withIndex("byParentId", (q) =>
 			q.eq("userId", ctx.user._id).eq("parentId", undefined),
 		)
 		.first()
+}
+
+export async function ensureRootDirectory(
+	ctx: AuthenticatedMutationCtx,
+): Promise<Id<"directories">> {
+	const existing = await queryRootDirectory(ctx)
 
 	if (existing) {
 		return existing._id
@@ -207,7 +224,7 @@ export async function restoreItems(
 export async function deleteItemsPermanently(
 	ctx: AuthenticatedMutationCtx,
 	{ handles }: { handles: FileSystemHandle[] },
-) {
+): Promise<DeleteResult> {
 	// Collect all items to delete (including nested items)
 	const {
 		fileHandles: fileHandlesToDelete,
@@ -231,4 +248,50 @@ export async function deleteItemsPermanently(
 			...(directoriesResult?.errors || []),
 		],
 	}
+}
+
+export async function emptyTrash(
+	ctx: AuthenticatedMutationCtx,
+): Promise<DeleteResult> {
+	const rootDir = await queryRootDirectory(ctx)
+	if (!rootDir) {
+		throw Err.create(Err.Code.NotFound, "user root directory not found")
+	}
+
+	const dirs = await ctx.db
+		.query("directories")
+		.withIndex("byParentId", (q) =>
+			q
+				.eq("userId", ctx.user._id)
+				.eq("parentId", rootDir._id)
+				.gte("deletedAt", 0),
+		)
+		.collect()
+
+	const files = await ctx.db
+		.query("files")
+		.withIndex("byDirectoryId", (q) =>
+			q
+				.eq("userId", ctx.user._id)
+				.eq("directoryId", rootDir._id)
+				.gte("deletedAt", 0),
+		)
+		.collect()
+
+	if (dirs.length === 0 && files.length === 0) {
+		return {
+			deleted: {
+				files: 0,
+				directories: 0,
+			},
+			errors: [],
+		}
+	}
+
+	return await deleteItemsPermanently(ctx, {
+		handles: [
+			...dirs.map((it) => newDirectoryHandle(it._id)),
+			...files.map((it) => newFileHandle(it._id)),
+		],
+	})
 }
