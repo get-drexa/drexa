@@ -26,46 +26,46 @@ export type FileUploadStatus =
 	| FileUploadError
 	| FileUploadSuccess
 
-export const fileUploadsAtom = atom<Record<string, FileUploadStatus>>({})
+export const fileUploadStatusesAtom = atom<Record<string, FileUploadStatus>>({})
 
 export const fileUploadStatusAtomFamily = atomFamily((id: string) =>
 	atom(
-		(get) => get(fileUploadsAtom)[id],
+		(get) => get(fileUploadStatusesAtom)[id],
 		(get, set, status: FileUploadStatus) => {
-			const fileUploads = { ...get(fileUploadsAtom) }
+			const fileUploads = { ...get(fileUploadStatusesAtom) }
 			fileUploads[id] = status
-			set(fileUploadsAtom, fileUploads)
+			set(fileUploadStatusesAtom, fileUploads)
 		},
 	),
 )
 
-export const clearFileUploadAtom = atom(null, (get, set, id: string) => {
-	const fileUploads = { ...get(fileUploadsAtom) }
-	delete fileUploads[id]
-	fileUploadStatusAtomFamily.remove(id)
-	set(fileUploadsAtom, fileUploads)
-})
-
 export const clearFileUploadStatusesAtom = atom(
 	null,
 	(get, set, ids: string[]) => {
-		const fileUploads = { ...get(fileUploadsAtom) }
+		const fileUploads = { ...get(fileUploadStatusesAtom) }
 		for (const id of ids) {
 			if (fileUploads[id]) {
 				delete fileUploads[id]
 			}
 			fileUploadStatusAtomFamily.remove(id)
 		}
-		set(fileUploadsAtom, fileUploads)
+		set(fileUploadStatusesAtom, fileUploads)
+	},
+)
+
+export const clearAllFileUploadStatusesAtom = atom(
+	null,
+	(get, set) => {
+		set(fileUploadStatusesAtom, {})
 	},
 )
 
 export const fileUploadCountAtom = atom(
-	(get) => Object.keys(get(fileUploadsAtom)).length,
+	(get) => Object.keys(get(fileUploadStatusesAtom)).length,
 )
 
 export const inProgressFileUploadCountAtom = atom((get) => {
-	const statuses = get(fileUploadsAtom)
+	const statuses = get(fileUploadStatusesAtom)
 	let count = 0
 	for (const status in statuses) {
 		if (statuses[status]?.kind === FileUploadStatusKind.InProgress) {
@@ -76,7 +76,7 @@ export const inProgressFileUploadCountAtom = atom((get) => {
 })
 
 export const successfulFileUploadCountAtom = atom((get) => {
-	const statuses = get(fileUploadsAtom)
+	const statuses = get(fileUploadStatusesAtom)
 	let count = 0
 	for (const status in statuses) {
 		if (statuses[status]?.kind === FileUploadStatusKind.Success) {
@@ -87,7 +87,7 @@ export const successfulFileUploadCountAtom = atom((get) => {
 })
 
 export const hasFileUploadsErrorAtom = atom((get) => {
-	const statuses = get(fileUploadsAtom)
+	const statuses = get(fileUploadStatusesAtom)
 	for (const status in statuses) {
 		if (statuses[status]?.kind === FileUploadStatusKind.Error) {
 			return true
