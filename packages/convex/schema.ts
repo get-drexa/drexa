@@ -12,10 +12,12 @@ const schema = defineSchema({
 		createdAt: v.number(),
 		updatedAt: v.number(),
 		deletedAt: v.optional(v.number()),
+		lastAccessedAt: v.optional(v.number()),
 	})
 		.index("byDirectoryId", ["userId", "directoryId", "deletedAt"])
 		.index("byUserId", ["userId", "deletedAt"])
 		.index("byDeletedAt", ["deletedAt"])
+		.index("byLastAccessedAt", ["userId", "lastAccessedAt"])
 		.index("uniqueFileInDirectory", [
 			"userId",
 			"directoryId",
