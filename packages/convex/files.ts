@@ -1,23 +1,13 @@
 import { v } from "convex/values"
 import type { Id } from "./_generated/dataModel"
-import { authenticatedMutation, authenticatedQuery } from "./functions"
+import { authenticatedMutation, authenticatedQuery, authorizedGet } from "./functions"
 import * as Directories from "./model/directories"
 import * as Files from "./model/files"
 import type { FileSystemItem } from "./model/filesystem"
 
 export const generateUploadUrl = authenticatedMutation({
 	handler: async (ctx) => {
-		// ctx.user and ctx.identity are automatically available
 		return await ctx.storage.generateUploadUrl()
-	},
-})
-
-export const generateFileUrl = authenticatedQuery({
-	args: {
-		storageId: v.id("_storage"),
-	},
-	handler: async (ctx, { storageId }) => {
-		return await ctx.storage.getUrl(storageId)
 	},
 })
 
@@ -46,6 +36,10 @@ export const fetchDirectory = authenticatedQuery({
 		directoryId: v.id("directories"),
 	},
 	handler: async (ctx, { directoryId }) => {
+		const directory = await authorizedGet(ctx, directoryId)
+		if (!directory) {
+			throw new Error("Directory not found")
+		}
 		return await Directories.fetch(ctx, { directoryId })
 	},
 })
@@ -56,6 +50,11 @@ export const createDirectory = authenticatedMutation({
 		directoryId: v.id("directories"),
 	},
 	handler: async (ctx, { name, directoryId }): Promise<Id<"directories">> => {
+		const parentDirectory = await authorizedGet(ctx, directoryId)
+		if (!parentDirectory) {
+			throw new Error("Parent directory not found")
+		}
+		
 		return await Directories.create(ctx, {
 			name,
 			parentId: directoryId,
@@ -72,6 +71,11 @@ export const saveFile = authenticatedMutation({
 		mimeType: v.optional(v.string()),
 	},
 	handler: async (ctx, { name, storageId, directoryId, size, mimeType }) => {
+		const directory = await authorizedGet(ctx, directoryId)
+		if (!directory) {
+			throw new Error("Directory not found")
+		}
+		
 		const now = Date.now()
 
 		await ctx.db.insert("files", {
@@ -94,6 +98,11 @@ export const renameFile = authenticatedMutation({
 		newName: v.string(),
 	},
 	handler: async (ctx, { directoryId, itemId, newName }) => {
+		const file = await authorizedGet(ctx, itemId)
+		if (!file) {
+			throw new Error("File not found")
+		}
+		
 		await Files.renameFile(ctx, { directoryId, itemId, newName })
 	},
 })

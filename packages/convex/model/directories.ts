@@ -3,6 +3,7 @@ import type {
 	AuthenticatedMutationCtx,
 	AuthenticatedQueryCtx,
 } from "../functions"
+import { authorizedGet } from "../functions"
 import * as Err from "./error"
 import {
 	type DirectoryHandle,
@@ -27,8 +28,8 @@ export async function fetchHandle(
 	ctx: AuthenticatedQueryCtx,
 	handle: DirectoryHandle,
 ): Promise<Doc<"directories">> {
-	const directory = await ctx.db.get(handle.id)
-	if (!directory || directory.userId !== ctx.user._id) {
+	const directory = await authorizedGet(ctx, handle.id)
+	if (!directory) {
 		throw Err.create(
 			Err.Code.DirectoryNotFound,
 			`Directory ${handle.id} not found`,
@@ -41,7 +42,7 @@ export async function fetch(
 	ctx: AuthenticatedQueryCtx,
 	{ directoryId }: { directoryId: Id<"directories"> },
 ): Promise<DirectoryInfo> {
-	const directory = await ctx.db.get(directoryId)
+	const directory = await authorizedGet(ctx, directoryId)
 	if (!directory) {
 		throw Err.create(
 			Err.Code.DirectoryNotFound,
@@ -57,7 +58,7 @@ export async function fetch(
 	]
 	let parentDirId = directory.parentId
 	while (parentDirId) {
-		const parentDir = await ctx.db.get(parentDirId)
+		const parentDir = await authorizedGet(ctx, parentDirId)
 		if (parentDir) {
 			path.push({
 				handle: newDirectoryHandle(parentDir._id),
@@ -65,7 +66,7 @@ export async function fetch(
 			})
 			parentDirId = parentDir.parentId
 		} else {
-			throw Err.create(Err.Code.Internal)
+			throw Err.create(Err.Code.DirectoryNotFound, "Parent directory not found")
 		}
 	}
 
@@ -132,7 +133,7 @@ export async function create(
 	ctx: AuthenticatedMutationCtx,
 	{ name, parentId }: { name: string; parentId: Id<"directories"> },
 ): Promise<Id<"directories">> {
-	const parentDir = await ctx.db.get(parentId)
+	const parentDir = await authorizedGet(ctx, parentId)
 	if (!parentDir) {
 		throw Err.create(
 			Err.Code.DirectoryNotFound,
@@ -180,7 +181,7 @@ export async function move(
 ) {
 	const conflictCheckResults = await Promise.allSettled(
 		sourceDirectories.map((directory) =>
-			ctx.db.get(directory.id).then((d) => {
+			authorizedGet(ctx, directory.id).then((d) => {
 				if (!d) {
 					throw Err.create(
 						Err.Code.DirectoryNotFound,

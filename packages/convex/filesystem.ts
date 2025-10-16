@@ -1,5 +1,5 @@
 import { v } from "convex/values"
-import { authenticatedMutation, authenticatedQuery } from "./functions"
+import { authenticatedMutation, authenticatedQuery, authorizedGet } from "./functions"
 import * as Directories from "./model/directories"
 import * as Err from "./model/error"
 import * as Files from "./model/files"
@@ -22,10 +22,7 @@ export const moveItems = authenticatedMutation({
 		items: v.array(VFileSystemHandle),
 	},
 	handler: async (ctx, { targetDirectory: targetDirectoryHandle, items }) => {
-		const targetDirectory = await Directories.fetchHandle(
-			ctx,
-			targetDirectoryHandle,
-		)
+		const targetDirectory = await authorizedGet(ctx, targetDirectoryHandle.id)
 		if (!targetDirectory) {
 			throw Err.create(
 				Err.Code.DirectoryNotFound,
@@ -69,6 +66,16 @@ export const moveToTrash = authenticatedMutation({
 		handles: v.array(VFileSystemHandle),
 	},
 	handler: async (ctx, { handles }) => {
+		for (const handle of handles) {
+			const item = await authorizedGet(ctx, handle.id)
+			if (!item) {
+				throw Err.create(
+					Err.Code.NotFound,
+					`Item ${handle.id} not found`,
+				)
+			}
+		}
+
 		// biome-ignore lint/suspicious/useIterableCallbackReturn: switch statement is exhaustive
 		const promises = handles.map((handle) => {
 			switch (handle.kind) {
@@ -140,5 +147,19 @@ export const restoreItems = authenticatedMutation({
 	},
 	handler: async (ctx, { handles }) => {
 		return await FileSystem.restoreItems(ctx, { handles })
+	},
+})
+
+export const fetchFileUrl = authenticatedQuery({
+	args: {
+		fileId: v.id("files"),
+	},
+	handler: async (ctx, { fileId }) => {
+		const file = await authorizedGet(ctx, fileId)
+		if (!file) {
+			throw Err.create(Err.Code.NotFound, "File not found")
+		}
+		
+		return await FileSystem.fetchFileUrl(ctx, { fileId })
 	},
 })

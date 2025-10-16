@@ -41,8 +41,8 @@ export function ImagePreviewDialog({
 	file: Doc<"files">
 	onClose: () => void
 }) {
-	const fileUrl = useConvexQuery(api.files.generateFileUrl, {
-		storageId: file.storageId,
+	const fileUrl = useConvexQuery(api.filesystem.fetchFileUrl, {
+		fileId: file._id,
 	})
 	const setZoomLevel = useSetAtom(zoomLevelAtom)
 

@@ -4,6 +4,7 @@ import type {
 	AuthenticatedMutationCtx,
 	AuthenticatedQueryCtx,
 } from "../functions"
+import { authorizedGet } from "../functions"
 import * as Directories from "./directories"
 import * as Err from "./error"
 import * as Files from "./files"
@@ -294,4 +295,21 @@ export async function emptyTrash(
 			...files.map((it) => newFileHandle(it._id)),
 		],
 	})
+}
+
+export async function fetchFileUrl(
+	ctx: AuthenticatedQueryCtx,
+	{ fileId }: { fileId: Id<"files"> },
+): Promise<string> {
+	const file = await authorizedGet(ctx, fileId)
+	if (!file) {
+		throw Err.create(Err.Code.NotFound, "file not found")
+	}
+
+	const url = await ctx.storage.getUrl(file.storageId)
+	if (!url) {
+		throw Err.create(Err.Code.NotFound, "file not found")
+	}
+
+	return url
 }

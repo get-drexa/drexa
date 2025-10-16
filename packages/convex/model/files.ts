@@ -1,5 +1,5 @@
 import type { Doc, Id } from "../_generated/dataModel"
-import type { AuthenticatedMutationCtx } from "../functions"
+import { type AuthenticatedMutationCtx, authorizedGet } from "../functions"
 import * as Err from "./error"
 import type { DirectoryHandle, FileHandle } from "./filesystem"
 
@@ -48,7 +48,7 @@ export async function move(
 ) {
 	const conflictCheckResults = await Promise.allSettled(
 		items.map((fileHandle) =>
-			ctx.db.get(fileHandle.id).then((f) => {
+			authorizedGet(ctx, fileHandle.id).then((f) => {
 				if (!f) {
 					throw Err.create(
 						Err.Code.FileNotFound,
