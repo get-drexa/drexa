@@ -15,6 +15,7 @@ import {
 	type ColumnDef,
 	flexRender,
 	getCoreRowModel,
+	getFilteredRowModel,
 	type Row,
 	type Table as TableType,
 	useReactTable,
@@ -40,8 +41,10 @@ import { type FileDragInfo, useFileDrop } from "../../files/use-file-drop"
 import { cn } from "../../lib/utils"
 import { DirectoryPageContext } from "./context"
 
+type DirectoryContentTableItemIdFilter = Set<FileSystemItem["doc"]["_id"]>
+
 type DirectoryContentTableProps = {
-	filterFn: (item: FileSystemItem) => boolean
+	hiddenItems: DirectoryContentTableItemIdFilter
 	directoryUrlFn: (directory: Doc<"directories">) => string
 	fileDragInfoAtom: PrimitiveAtom<FileDragInfo | null>
 	onContextMenu: (
@@ -150,7 +153,7 @@ function useTableColumns(
 }
 
 export function DirectoryContentTable({
-	filterFn,
+	hiddenItems,
 	directoryUrlFn,
 	onContextMenu,
 	fileDragInfoAtom,
@@ -164,10 +167,18 @@ export function DirectoryContentTable({
 		data: directoryContent || [],
 		columns: useTableColumns(onOpenFile, directoryUrlFn),
 		getCoreRowModel: getCoreRowModel(),
+		getFilteredRowModel: getFilteredRowModel(),
 		enableRowSelection: true,
 		enableGlobalFilter: true,
-		globalFilterFn: (row, _columnId, _filterValue, _addMeta) =>
-			filterFn(row.original),
+		state: {
+			globalFilter: hiddenItems,
+		},
+		globalFilterFn: (
+			row,
+			_columnId,
+			filterValue: DirectoryContentTableItemIdFilter,
+			_addMeta,
+		) => !filterValue.has(row.original.doc._id),
 		getRowId: (row) => row.doc._id,
 	})
 

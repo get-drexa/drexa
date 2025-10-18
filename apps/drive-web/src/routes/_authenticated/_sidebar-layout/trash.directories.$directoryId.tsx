@@ -14,7 +14,7 @@ import {
 } from "convex/react"
 import { atom, useAtom, useSetAtom, useStore } from "jotai"
 import { ShredderIcon, TrashIcon, UndoIcon } from "lucide-react"
-import { useCallback, useContext, useEffect } from "react"
+import { useCallback, useContext } from "react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import {
@@ -120,13 +120,17 @@ function RouteComponent() {
 
 			<TableContextMenu>
 				<div className="w-full">
-					<DirectoryContentTable
-						filterFn={() => true}
-						directoryUrlFn={directoryUrlFn}
-						fileDragInfoAtom={fileDragInfoAtom}
-						onContextMenu={handleContextMenuRequest}
-						onOpenFile={setOpenedFile}
-					/>
+					<WithAtom atom={optimisticRemovedItemsAtom}>
+						{(optimisticRemovedItems) => (
+							<DirectoryContentTable
+								hiddenItems={optimisticRemovedItems}
+								directoryUrlFn={directoryUrlFn}
+								fileDragInfoAtom={fileDragInfoAtom}
+								onContextMenu={handleContextMenuRequest}
+								onOpenFile={setOpenedFile}
+							/>
+						)}
+					</WithAtom>
 				</div>
 			</TableContextMenu>
 
@@ -174,14 +178,19 @@ function RestoreContextMenuItem() {
 	const store = useStore()
 	const setOptimisticRemovedItems = useSetAtom(optimisticRemovedItemsAtom)
 	const restoreItemsMutation = useConvexMutation(api.filesystem.restoreItems)
-	const { mutate: restoreItems, isPending: isRestoring } = useMutation({
+
+	const { mutate: restoreItems } = useMutation({
 		mutationFn: restoreItemsMutation,
 		onMutate: ({ handles }) => {
+			setBackgroundTaskProgress({
+				label: "Restoring items…",
+			})
 			setOptimisticRemovedItems(
 				new Set(handles.map((handle) => handle.id)),
 			)
 		},
 		onSuccess: ({ restored, errors }) => {
+			setBackgroundTaskProgress(null)
 			if (errors.length === 0) {
 				if (restored.files > 0 && restored.directories > 0) {
 					toast.success(
@@ -200,18 +209,17 @@ function RestoreContextMenuItem() {
 				)
 			}
 		},
+		onError: (_err, { handles }) => {
+			setOptimisticRemovedItems((prev) => {
+				const newSet = new Set(prev)
+				for (const handle of handles) {
+					newSet.delete(handle.id)
+				}
+				return newSet
+			})
+		},
 	})
 	const setBackgroundTaskProgress = useSetAtom(backgroundTaskProgressAtom)
-
-	useEffect(() => {
-		if (isRestoring) {
-			setBackgroundTaskProgress({
-				label: "Restoring items…",
-			})
-		} else {
-			setBackgroundTaskProgress(null)
-		}
-	}, [isRestoring, setBackgroundTaskProgress])
 
 	const onClick = () => {
 		const targetItems = store.get(contextMenuTargetItemsAtom)

@@ -39,7 +39,7 @@ export function DirectoryPathBreadcrumb({
 	directory: DirectoryInfo
 	rootLabel: string
 	directoryUrlFn: (directory: Id<"directories">) => string
-	fileDragInfoAtom: PrimitiveAtom<FileDragInfo | null>
+	fileDragInfoAtom?: PrimitiveAtom<FileDragInfo | null>
 }) {
 	const breadcrumbItems: React.ReactNode[] = [
 		<FilePathBreadcrumbItem

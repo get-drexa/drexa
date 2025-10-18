@@ -36,6 +36,7 @@ import {
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { WithAtom } from "@/components/with-atom"
+import { backgroundTaskProgressAtom } from "@/dashboard/state"
 import { DirectoryPageContext } from "@/directories/directory-page/context"
 import { DirectoryContentTable } from "@/directories/directory-page/directory-content-table"
 import { DirectoryPageSkeleton } from "@/directories/directory-page/directory-page-skeleton"
@@ -81,6 +82,16 @@ const itemBeingRenamedAtom = atom<{
 	originalItem: FileSystemItem
 	name: string
 } | null>(null)
+
+const tableFilterAtom = atom((get) => {
+	const optimisticDeletedItems = get(optimisticDeletedItemsAtom)
+	console.log("optimisticDeletedItems", optimisticDeletedItems)
+	return (item: FileSystemItem) => {
+		const test = !optimisticDeletedItems.has(item.doc._id)
+		console.log("test", test)
+		return test
+	}
+})
 
 // MARK: page entry
 function RouteComponent() {
@@ -160,13 +171,17 @@ function RouteComponent() {
 			{/* DirectoryContentContextMenu must wrap div instead of DirectoryContentTable, otherwise radix will throw "event.preventDefault is not a function" error, idk why */}
 			<DirectoryContentContextMenu>
 				<div className="w-full">
-					<DirectoryContentTable
-						filterFn={tableFilter}
-						directoryUrlFn={directoryUrlFn}
-						fileDragInfoAtom={fileDragInfoAtom}
-						onContextMenu={handleContextMenuRequest}
-						onOpenFile={openFile}
-					/>
+					<WithAtom atom={optimisticDeletedItemsAtom}>
+						{(optimisticDeletedItems) => (
+							<DirectoryContentTable
+								hiddenItems={optimisticDeletedItems}
+								directoryUrlFn={directoryUrlFn}
+								fileDragInfoAtom={fileDragInfoAtom}
+								onContextMenu={handleContextMenuRequest}
+								onOpenFile={openFile}
+							/>
+						)}
+					</WithAtom>
 				</div>
 			</DirectoryContentContextMenu>
 
@@ -224,8 +239,9 @@ function RouteComponent() {
 }
 
 // ==================================
-// MARK: DirectoryContentContextMenu
+// MARK: ctx menu
 
+// tags: ctxmenu contextmenu directorycontextmenu
 function DirectoryContentContextMenu({
 	children,
 }: {
@@ -234,17 +250,22 @@ function DirectoryContentContextMenu({
 	const store = useStore()
 	const [target, setTarget] = useAtom(contextMenuTargetItemsAtom)
 	const setOptimisticDeletedItems = useSetAtom(optimisticDeletedItemsAtom)
+	const setBackgroundTaskProgress = useSetAtom(backgroundTaskProgressAtom)
 	const moveToTrashMutation = useContextMutation(api.filesystem.moveToTrash)
 
 	const { mutate: moveToTrash } = useMutation({
 		mutationFn: moveToTrashMutation,
 		onMutate: ({ handles }) => {
+			setBackgroundTaskProgress({
+				label: "Moving items to trash…",
+			})
 			setOptimisticDeletedItems(
 				(prev) =>
 					new Set([...prev, ...handles.map((handle) => handle.id)]),
 			)
 		},
 		onSuccess: ({ deleted, errors }, { handles }) => {
+			setBackgroundTaskProgress(null)
 			setOptimisticDeletedItems((prev) => {
 				const newSet = new Set(prev)
 				for (const handle of handles) {
@@ -261,6 +282,15 @@ function DirectoryContentContextMenu({
 					`Moved ${deleted.length} items to trash; failed to move ${errors.length} items`,
 				)
 			}
+		},
+		onError: (_err, { handles }) => {
+			setOptimisticDeletedItems((prev) => {
+				const newSet = new Set(prev)
+				for (const handle of handles) {
+					newSet.delete(handle.id)
+				}
+				return newSet
+			})
 		},
 	})
 
