@@ -5,7 +5,7 @@ backend: convex
 # Project structure
 This project uses npm workspaces.
 - `packages/convex` - convex functions and models
-- `packages/web` - frontend dashboard
+- `apps/drive-web` - frontend dashboard
 - `packages/path` - path utils
 
 # General Guidelines

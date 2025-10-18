@@ -1,17 +1,17 @@
-import type { Doc, Id } from "@fileone/convex/_generated/dataModel"
+import type { Doc, Id } from "../_generated/dataModel"
 import type {
 	AuthenticatedMutationCtx,
 	AuthenticatedQueryCtx,
 } from "../functions"
 import { authorizedGet } from "../functions"
-import * as Err from "./error"
+import * as Err from "../shared/error"
 import {
 	type DirectoryHandle,
 	type DirectoryPath,
 	type FileSystemItem,
 	FileType,
 	newDirectoryHandle,
-} from "./filesystem"
+} from "../shared/filesystem"
 
 export type DirectoryInfo = Doc<"directories"> & { path: DirectoryPath }
 

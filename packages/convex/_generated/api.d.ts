@@ -20,10 +20,12 @@ import type * as filesystem from "../filesystem.js";
 import type * as functions from "../functions.js";
 import type * as http from "../http.js";
 import type * as model_directories from "../model/directories.js";
-import type * as model_error from "../model/error.js";
 import type * as model_files from "../model/files.js";
 import type * as model_filesystem from "../model/filesystem.js";
 import type * as model_user from "../model/user.js";
+import type * as shared_error from "../shared/error.js";
+import type * as shared_filesystem from "../shared/filesystem.js";
+import type * as shared_types from "../shared/types.js";
 import type * as user from "../user.js";
 
 import type {
@@ -53,10 +55,12 @@ declare const fullApi: ApiFromModules<{
   functions: typeof functions;
   http: typeof http;
   "model/directories": typeof model_directories;
-  "model/error": typeof model_error;
   "model/files": typeof model_files;
   "model/filesystem": typeof model_filesystem;
   "model/user": typeof model_user;
+  "shared/error": typeof shared_error;
+  "shared/filesystem": typeof shared_filesystem;
+  "shared/types": typeof shared_types;
   user: typeof user;
 }>;
 declare const fullApiWithMounts: typeof fullApi;

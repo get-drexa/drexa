@@ -3,7 +3,7 @@ import type { Id } from "./_generated/dataModel"
 import { authenticatedMutation, authenticatedQuery, authorizedGet } from "./functions"
 import * as Directories from "./model/directories"
 import * as Files from "./model/files"
-import type { FileSystemItem } from "./model/filesystem"
+import type { FileSystemItem } from "./shared/filesystem"
 
 export const generateUploadUrl = authenticatedMutation({
 	handler: async (ctx) => {

@@ -4,16 +4,23 @@
 	"private": true,
 	"type": "module",
 	"workspaces": [
-		"packages/*"
+		"packages/*",
+		"apps/*"
 	],
 	"scripts": {
 		"dev": "bun run --filter=@fileone/web dev",
 		"build": "bun run --filter=@fileone/web build",
-		"start": "bun run --filter=@fileone/web start"
+		"preview": "bun run --filter=@fileone/web preview"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "2.2.4",
 		"@types/bun": "latest",
 		"convex": "^1.27.0"
+	},
+	"resolutions": {
+		"convex": "1.28.0"
+	},
+	"dependencies": {
+		"@tailwindcss/vite": "^4.1.14"
 	}
 }

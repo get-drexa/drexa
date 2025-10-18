@@ -1,7 +1,7 @@
 import type { Doc, Id } from "../_generated/dataModel"
 import { type AuthenticatedMutationCtx, authorizedGet } from "../functions"
-import * as Err from "./error"
-import type { DirectoryHandle, FileHandle } from "./filesystem"
+import * as Err from "../shared/error"
+import type { DirectoryHandle, FileHandle } from "../shared/filesystem"
 
 export async function renameFile(
 	ctx: AuthenticatedMutationCtx,

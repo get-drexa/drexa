@@ -1,20 +1,27 @@
 import { v } from "convex/values"
-import { authenticatedMutation, authenticatedQuery, authorizedGet } from "./functions"
-import * as Directories from "./model/directories"
-import * as Err from "./model/error"
-import * as Files from "./model/files"
-import type {
-	DirectoryHandle,
-	FileHandle,
-	FileSystemItem,
-} from "./model/filesystem"
-import * as FileSystem from "./model/filesystem"
 import {
-	type FileSystemHandle,
-	FileType,
+	authenticatedMutation,
+	authenticatedQuery,
+	authorizedGet,
+} from "./functions"
+import * as Directories from "./model/directories"
+import * as Files from "./model/files"
+import {
+	deleteItemsPermanently,
+	emptyTrash as emptyTrashImpl,
+	fetchFileUrl as fetchFileUrlImpl,
+	restoreItems as restoreItemsImpl,
 	VDirectoryHandle,
 	VFileSystemHandle,
 } from "./model/filesystem"
+import * as Err from "./shared/error"
+import type {
+	DirectoryHandle,
+	FileHandle,
+	FileSystemHandle,
+	FileSystemItem,
+} from "./shared/filesystem"
+import { FileType } from "./shared/filesystem"
 
 export const moveItems = authenticatedMutation({
 	args: {
@@ -22,7 +29,10 @@ export const moveItems = authenticatedMutation({
 		items: v.array(VFileSystemHandle),
 	},
 	handler: async (ctx, { targetDirectory: targetDirectoryHandle, items }) => {
-		const targetDirectory = await authorizedGet(ctx, targetDirectoryHandle.id)
+		const targetDirectory = await authorizedGet(
+			ctx,
+			targetDirectoryHandle.id,
+		)
 		if (!targetDirectory) {
 			throw Err.create(
 				Err.Code.DirectoryNotFound,
@@ -131,13 +141,13 @@ export const permanentlyDeleteItems = authenticatedMutation({
 		handles: v.array(VFileSystemHandle),
 	},
 	handler: async (ctx, { handles }) => {
-		return await FileSystem.deleteItemsPermanently(ctx, { handles })
+		return await deleteItemsPermanently(ctx, { handles })
 	},
 })
 
 export const emptyTrash = authenticatedMutation({
 	handler: async (ctx) => {
-		return await FileSystem.emptyTrash(ctx)
+		return await emptyTrashImpl(ctx)
 	},
 })
 
@@ -146,7 +156,7 @@ export const restoreItems = authenticatedMutation({
 		handles: v.array(VFileSystemHandle),
 	},
 	handler: async (ctx, { handles }) => {
-		return await FileSystem.restoreItems(ctx, { handles })
+		return await restoreItemsImpl(ctx, { handles })
 	},
 })
 
@@ -155,11 +165,6 @@ export const fetchFileUrl = authenticatedQuery({
 		fileId: v.id("files"),
 	},
 	handler: async (ctx, { fileId }) => {
-		const file = await authorizedGet(ctx, fileId)
-		if (!file) {
-			throw Err.create(Err.Code.NotFound, "File not found")
-		}
-		
-		return await FileSystem.fetchFileUrl(ctx, { fileId })
+		return await fetchFileUrlImpl(ctx, { fileId })
 	},
 })

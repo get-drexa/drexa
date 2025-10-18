@@ -1,6 +1,6 @@
 import type { MutationCtx, QueryCtx } from "../_generated/server"
 import { authComponent } from "../auth"
-import * as Err from "./error"
+import * as Err from "../shared/error"
 
 export type AuthUser = Awaited<ReturnType<typeof authComponent.getAuthUser>>
 
