@@ -35,7 +35,7 @@ import { WithAtom } from "@/components/with-atom"
 import { DirectoryPageContext } from "@/directories/directory-page/context"
 import { DirectoryContentTable } from "@/directories/directory-page/directory-content-table"
 import { DirectoryPageSkeleton } from "@/directories/directory-page/directory-page-skeleton"
-import { FilePathBreadcrumb } from "@/directories/directory-page/file-path-breadcrumb"
+import { DirectoryPathBreadcrumb } from "@/directories/directory-path-breadcrumb"
 import { FilePreviewDialog } from "@/files/file-preview-dialog"
 import type { FileDragInfo } from "@/files/use-file-drop"
 import { backgroundTaskProgressAtom } from "../../../dashboard/state"
@@ -108,7 +108,7 @@ function RouteComponent() {
 			value={{ rootDirectory, directory, directoryContent }}
 		>
 			<header className="flex py-2 shrink-0 items-center gap-2 border-b px-4 w-full">
-				<FilePathBreadcrumb
+				<DirectoryPathBreadcrumb
 					rootLabel="Trash"
 					directoryUrlFn={directoryUrlById}
 				/>

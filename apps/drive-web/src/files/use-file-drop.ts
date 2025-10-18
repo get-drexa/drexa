@@ -88,7 +88,6 @@ export function useFileDrop({
 
 	const handleDragOver = (e: React.DragEvent) => {
 		const dragInfo = store.get(dragInfoAtom)
-		console.log({ dragInfo, destItem })
 		if (dragInfo && destItem) {
 			e.preventDefault()
 			e.dataTransfer.dropEffect = "move"

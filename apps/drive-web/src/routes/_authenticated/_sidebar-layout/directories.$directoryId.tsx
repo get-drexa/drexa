@@ -40,9 +40,9 @@ import { WithAtom } from "@/components/with-atom"
 import { DirectoryPageContext } from "@/directories/directory-page/context"
 import { DirectoryContentTable } from "@/directories/directory-page/directory-content-table"
 import { DirectoryPageSkeleton } from "@/directories/directory-page/directory-page-skeleton"
-import { FilePathBreadcrumb } from "@/directories/directory-page/file-path-breadcrumb"
 import { NewDirectoryDialog } from "@/directories/directory-page/new-directory-dialog"
 import { RenameFileDialog } from "@/directories/directory-page/rename-file-dialog"
+import { DirectoryPathBreadcrumb } from "@/directories/directory-path-breadcrumb"
 import { FilePreviewDialog } from "@/files/file-preview-dialog"
 import { inProgressFileUploadCountAtom } from "@/files/store"
 import { UploadFileDialog } from "@/files/upload-file-dialog"
@@ -146,9 +146,11 @@ function RouteComponent() {
 			value={{ rootDirectory, directory, directoryContent }}
 		>
 			<header className="flex py-2 shrink-0 items-center gap-2 border-b px-4 w-full">
-				<FilePathBreadcrumb
+				<DirectoryPathBreadcrumb
+					directory={directory}
 					rootLabel="All Files"
 					directoryUrlFn={directoryUrlById}
+					fileDragInfoAtom={fileDragInfoAtom}
 				/>
 				<div className="ml-auto flex flex-row gap-2">
 					<NewDirectoryItemDropdown />

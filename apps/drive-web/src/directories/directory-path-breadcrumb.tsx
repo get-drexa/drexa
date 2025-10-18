@@ -3,8 +3,10 @@ import type {
 	DirectoryHandle,
 	DirectoryPathComponent,
 } from "@fileone/convex/filesystem"
+import type { DirectoryInfo } from "@fileone/convex/types"
 import { Link } from "@tanstack/react-router"
-import { Fragment, useContext } from "react"
+import type { PrimitiveAtom } from "jotai"
+import { Fragment } from "react"
 import {
 	Breadcrumb,
 	BreadcrumbItem,
@@ -12,27 +14,36 @@ import {
 	BreadcrumbList,
 	BreadcrumbPage,
 	BreadcrumbSeparator,
-} from "../../components/ui/breadcrumb"
+} from "@/components/ui/breadcrumb"
 import {
 	Tooltip,
 	TooltipContent,
 	TooltipTrigger,
-} from "../../components/ui/tooltip"
-import { useFileDrop } from "../../files/use-file-drop"
-import { cn } from "../../lib/utils"
-import { DirectoryPageContext } from "./context"
-import { dragInfoAtom } from "./state"
+} from "@/components/ui/tooltip"
+import type { FileDragInfo } from "@/files/use-file-drop"
+import { useFileDrop } from "@/files/use-file-drop"
+import { cn } from "@/lib/utils"
 
-export function FilePathBreadcrumb({
+export function DirectoryPathBreadcrumb({
+	directory,
 	rootLabel,
 	directoryUrlFn,
+	fileDragInfoAtom,
 }: {
+	directory: DirectoryInfo
 	rootLabel: string
 	directoryUrlFn: (directory: Id<"directories">) => string
+	fileDragInfoAtom: PrimitiveAtom<FileDragInfo | null>
 }) {
-	const { rootDirectory, directory } = useContext(DirectoryPageContext)
-
-	const breadcrumbItems: React.ReactNode[] = []
+	const breadcrumbItems: React.ReactNode[] = [
+		<FilePathBreadcrumbItem
+			key={directory.path[0].handle.id}
+			component={directory.path[0]}
+			rootLabel={rootLabel}
+			directoryUrlFn={directoryUrlFn}
+			fileDragInfoAtom={fileDragInfoAtom}
+		/>,
+	]
 	for (let i = 1; i < directory.path.length - 1; i++) {
 		breadcrumbItems.push(
 			<Fragment key={directory.path[i]?.handle.id}>
@@ -41,6 +52,7 @@ export function FilePathBreadcrumb({
 					component={directory.path[i]!}
 					rootLabel={rootLabel}
 					directoryUrlFn={directoryUrlFn}
+					fileDragInfoAtom={fileDragInfoAtom}
 				/>
 			</Fragment>,
 		)
@@ -49,17 +61,6 @@ export function FilePathBreadcrumb({
 	return (
 		<Breadcrumb>
 			<BreadcrumbList>
-				{rootDirectory._id === directory._id ? (
-					<BreadcrumbItem>
-						<BreadcrumbPage>{rootLabel}</BreadcrumbPage>
-					</BreadcrumbItem>
-				) : (
-					<FilePathBreadcrumbItem
-						component={directory.path[0]!}
-						rootLabel={rootLabel}
-						directoryUrlFn={directoryUrlFn}
-					/>
-				)}
 				{breadcrumbItems}
 				<BreadcrumbSeparator />
 				<BreadcrumbItem>
@@ -74,19 +75,19 @@ function FilePathBreadcrumbItem({
 	component,
 	rootLabel,
 	directoryUrlFn,
+	fileDragInfoAtom,
 }: {
 	component: DirectoryPathComponent
 	rootLabel: string
 	directoryUrlFn: (directory: Id<"directories">) => string
+	fileDragInfoAtom: PrimitiveAtom<FileDragInfo | null>
 }) {
 	const { isDraggedOver, dropHandlers } = useFileDrop({
 		destItem: component.handle as DirectoryHandle,
-		dragInfoAtom,
+		dragInfoAtom: fileDragInfoAtom,
 	})
 
 	const dirName = component.name || rootLabel
-
-	console.log({ dirName, isDraggedOver, dropHandlers })
 
 	return (
 		<Tooltip open={isDraggedOver}>
