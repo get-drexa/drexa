@@ -1,5 +1,5 @@
-import { api } from "@fileone/convex/_generated/api"
-import type { Doc } from "@fileone/convex/_generated/dataModel"
+import { api } from "@fileone/convex/api"
+import type { Doc } from "@fileone/convex/dataModel"
 import type { DirectoryItem } from "@fileone/convex/types"
 import { useMutation } from "@tanstack/react-query"
 import { Link } from "@tanstack/react-router"

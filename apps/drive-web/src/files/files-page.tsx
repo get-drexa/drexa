@@ -1,4 +1,4 @@
-import { api } from "@fileone/convex/_generated/api"
+import { api } from "@fileone/convex/api"
 import { baseName, splitPath } from "@fileone/path"
 import { useMutation } from "@tanstack/react-query"
 import { Link } from "@tanstack/react-router"

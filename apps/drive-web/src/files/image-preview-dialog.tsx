@@ -1,5 +1,5 @@
-import { api } from "@fileone/convex/_generated/api"
-import type { Doc } from "@fileone/convex/_generated/dataModel"
+import { api } from "@fileone/convex/api"
+import type { Doc } from "@fileone/convex/dataModel"
 import { DialogTitle } from "@radix-ui/react-dialog"
 import { useQuery as useConvexQuery } from "convex/react"
 import { atom, useAtom, useAtomValue, useSetAtom } from "jotai"

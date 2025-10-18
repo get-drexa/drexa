@@ -1,4 +1,4 @@
-import { api } from "@fileone/convex/_generated/api"
+import { api } from "@fileone/convex/api"
 import { useMutation } from "@tanstack/react-query"
 import { useMutation as useContextMutation } from "convex/react"
 import { atom, useAtom, useStore } from "jotai"

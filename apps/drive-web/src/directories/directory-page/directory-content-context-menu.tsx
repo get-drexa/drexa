@@ -1,4 +1,4 @@
-import { api } from "@fileone/convex/_generated/api"
+import { api } from "@fileone/convex/api"
 import { newFileSystemHandle } from "@fileone/convex/filesystem"
 import { useMutation } from "@tanstack/react-query"
 import { useMutation as useContextMutation } from "convex/react"

@@ -6,6 +6,9 @@
 		"./filesystem": "./shared/filesystem.ts",
 		"./error": "./shared/error.ts",
 		"./types": "./shared/types.ts",
+		"./dataModel": "./_generated/dataModel.d.ts",
+		"./api": "./_generated/api.js",
+		"./server": "./_generated/server.js",
 		"./_generated/*": "./_generated/*",
 		"./model/*": "./model/*",
 		"./shared/*": "./shared/*"

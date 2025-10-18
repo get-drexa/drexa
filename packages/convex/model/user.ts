@@ -1,4 +1,4 @@
-import type { MutationCtx, QueryCtx } from "../_generated/server"
+import type { MutationCtx, QueryCtx } from "@fileone/convex/server"
 import { authComponent } from "../auth"
 import * as Err from "../shared/error"
 

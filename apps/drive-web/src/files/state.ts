@@ -1,4 +1,4 @@
-import type { Id } from "@fileone/convex/_generated/dataModel"
+import type { Id } from "@fileone/convex/dataModel"
 import type {
 	DirectoryItem,
 	DirectoryItemKind,

@@ -1,4 +1,4 @@
-import type { Doc, Id } from "../_generated/dataModel"
+import type { Doc, Id } from "@fileone/convex/dataModel"
 import { type AuthenticatedMutationCtx, authorizedGet } from "../functions"
 import * as Err from "../shared/error"
 import type { DirectoryHandle, FileHandle } from "../shared/filesystem"

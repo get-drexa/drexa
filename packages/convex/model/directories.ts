@@ -1,4 +1,4 @@
-import type { Doc, Id } from "../_generated/dataModel"
+import type { Doc, Id } from "@fileone/convex/dataModel"
 import type {
 	AuthenticatedMutationCtx,
 	AuthenticatedQueryCtx,

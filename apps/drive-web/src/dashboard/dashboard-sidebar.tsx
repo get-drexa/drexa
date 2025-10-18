@@ -1,4 +1,4 @@
-import { api } from "@fileone/convex/_generated/api"
+import { api } from "@fileone/convex/api"
 import { Link, useLocation } from "@tanstack/react-router"
 import { useQuery as useConvexQuery } from "convex/react"
 import { useAtomValue } from "jotai"

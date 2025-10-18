@@ -1,5 +1,5 @@
-import type { Doc, Id } from "@fileone/convex/_generated/dataModel"
-import type { FileSystemItem, FileType } from "@fileone/convex/filesystem"
+import type { Doc, Id } from "@fileone/convex/dataModel"
+import type { FileSystemItem } from "@fileone/convex/filesystem"
 import type { RowSelectionState } from "@tanstack/react-table"
 import { atom } from "jotai"
 import type { FileDragInfo } from "../../files/use-file-drop"

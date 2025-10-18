@@ -1,4 +1,4 @@
-import type { Doc } from "@fileone/convex/_generated/dataModel"
+import type { Doc } from "@fileone/convex/dataModel"
 import {
 	type DirectoryHandle,
 	type FileHandle,

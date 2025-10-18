@@ -3,7 +3,7 @@
  * This file should NOT import any server-only dependencies.
  */
 
-import type { Doc } from "../_generated/dataModel"
+import type { Doc } from "@fileone/convex/dataModel"
 import type { DirectoryPath } from "./filesystem"
 
 export type DirectoryInfo = Doc<"directories"> & { path: DirectoryPath }

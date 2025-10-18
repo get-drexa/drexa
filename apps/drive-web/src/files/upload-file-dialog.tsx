@@ -1,4 +1,4 @@
-import type { Doc } from "@fileone/convex/_generated/dataModel"
+import type { Doc } from "@fileone/convex/dataModel"
 import { mutationOptions } from "@tanstack/react-query"
 import { atom, useAtom, useAtomValue, useSetAtom, useStore } from "jotai"
 import { atomEffect } from "jotai-effect"

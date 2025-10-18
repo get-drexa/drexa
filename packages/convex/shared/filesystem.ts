@@ -4,7 +4,7 @@
  * NO server-only dependencies should be imported here.
  */
 
-import type { Doc, Id } from "../_generated/dataModel"
+import type { Doc, Id } from "@fileone/convex/dataModel"
 import type * as Err from "./error"
 
 export enum FileType {

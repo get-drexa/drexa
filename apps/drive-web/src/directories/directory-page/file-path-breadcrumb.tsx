@@ -1,4 +1,4 @@
-import type { Id } from "@fileone/convex/_generated/dataModel"
+import type { Id } from "@fileone/convex/dataModel"
 import type {
 	DirectoryHandle,
 	DirectoryPathComponent,
@@ -85,6 +85,8 @@ function FilePathBreadcrumbItem({
 	})
 
 	const dirName = component.name || rootLabel
+
+	console.log({ dirName, isDraggedOver, dropHandlers })
 
 	return (
 		<Tooltip open={isDraggedOver}>

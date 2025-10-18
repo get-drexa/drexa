@@ -1,5 +1,5 @@
-import { api } from "@fileone/convex/_generated/api"
-import type { Doc, Id } from "@fileone/convex/_generated/dataModel"
+import { api } from "@fileone/convex/api"
+import type { Doc, Id } from "@fileone/convex/dataModel"
 import {
 	type FileSystemItem,
 	FileType,

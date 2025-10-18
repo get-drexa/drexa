@@ -1,5 +1,5 @@
-import { api } from "@fileone/convex/_generated/api"
-import type { Doc, Id } from "@fileone/convex/_generated/dataModel"
+import { api } from "@fileone/convex/api"
+import type { Doc, Id } from "@fileone/convex/dataModel"
 import * as Err from "@fileone/convex/error"
 import {
 	type DirectoryHandle,
@@ -71,7 +71,6 @@ export function useFileDrop({
 
 	const handleDrop = (_e: React.DragEvent) => {
 		const dragInfo = store.get(dragInfoAtom)
-		console.log("handleDrop", { dragInfo, destItem })
 		if (dragInfo && destItem) {
 			const items = dragInfo.items.filter(
 				(item) => !isSameHandle(item, destItem),
@@ -89,6 +88,7 @@ export function useFileDrop({
 
 	const handleDragOver = (e: React.DragEvent) => {
 		const dragInfo = store.get(dragInfoAtom)
+		console.log({ dragInfo, destItem })
 		if (dragInfo && destItem) {
 			e.preventDefault()
 			e.dataTransfer.dropEffect = "move"

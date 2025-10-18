@@ -1,5 +1,5 @@
-import { api } from "@fileone/convex/_generated/api"
-import type { Id } from "@fileone/convex/_generated/dataModel"
+import { api } from "@fileone/convex/api"
+import type { Id } from "@fileone/convex/dataModel"
 import { useMutation } from "@tanstack/react-query"
 import { useMutation as useContextMutation } from "convex/react"
 import { useId } from "react"
