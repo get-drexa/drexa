@@ -6,6 +6,7 @@ import type {
 import type { DirectoryInfo } from "@fileone/convex/types"
 import { Link } from "@tanstack/react-router"
 import type { PrimitiveAtom } from "jotai"
+import { atom } from "jotai"
 import { Fragment } from "react"
 import {
 	Breadcrumb,
@@ -24,11 +25,16 @@ import type { FileDragInfo } from "@/files/use-file-drop"
 import { useFileDrop } from "@/files/use-file-drop"
 import { cn } from "@/lib/utils"
 
+/**
+ * This is a placeholder file drag info atom that always stores null and is never mutated.
+ */
+const nullFileDragInfoAtom = atom<FileDragInfo | null>(null)
+
 export function DirectoryPathBreadcrumb({
 	directory,
 	rootLabel,
 	directoryUrlFn,
-	fileDragInfoAtom,
+	fileDragInfoAtom = nullFileDragInfoAtom,
 }: {
 	directory: DirectoryInfo
 	rootLabel: string

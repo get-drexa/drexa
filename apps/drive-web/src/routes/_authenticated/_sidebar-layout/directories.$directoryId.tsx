@@ -2,7 +2,6 @@ import { api } from "@fileone/convex/api"
 import type { Doc, Id } from "@fileone/convex/dataModel"
 import {
 	type FileSystemItem,
-	FileType,
 	newFileSystemHandle,
 } from "@fileone/convex/filesystem"
 import { useMutation } from "@tanstack/react-query"
