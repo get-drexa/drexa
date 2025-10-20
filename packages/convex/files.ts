@@ -1,9 +1,12 @@
-import { v } from "convex/values"
 import type { Id } from "@fileone/convex/dataModel"
-import { authenticatedMutation, authenticatedQuery, authorizedGet } from "./functions"
+import { v } from "convex/values"
+import {
+	authenticatedMutation,
+	authenticatedQuery,
+	authorizedGet,
+} from "./functions"
 import * as Directories from "./model/directories"
 import * as Files from "./model/files"
-import type { FileSystemItem } from "./shared/filesystem"
 
 export const generateUploadUrl = authenticatedMutation({
 	handler: async (ctx) => {
@@ -54,7 +57,7 @@ export const createDirectory = authenticatedMutation({
 		if (!parentDirectory) {
 			throw new Error("Parent directory not found")
 		}
-		
+
 		return await Directories.create(ctx, {
 			name,
 			parentId: directoryId,
@@ -75,7 +78,7 @@ export const saveFile = authenticatedMutation({
 		if (!directory) {
 			throw new Error("Directory not found")
 		}
-		
+
 		const now = Date.now()
 
 		await ctx.db.insert("files", {
@@ -102,7 +105,7 @@ export const renameFile = authenticatedMutation({
 		if (!file) {
 			throw new Error("File not found")
 		}
-		
+
 		await Files.renameFile(ctx, { directoryId, itemId, newName })
 	},
 })
