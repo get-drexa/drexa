@@ -1,8 +1,8 @@
 import { createClient, type GenericCtx } from "@convex-dev/better-auth"
 import { convex, crossDomain } from "@convex-dev/better-auth/plugins"
-import { betterAuth } from "better-auth"
 import { components } from "@fileone/convex/api"
 import type { DataModel } from "@fileone/convex/dataModel"
+import { betterAuth } from "better-auth"
 import authSchema from "./betterauth/schema"
 
 const siteUrl = process.env.SITE_URL!

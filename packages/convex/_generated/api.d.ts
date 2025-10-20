@@ -8,6 +8,7 @@
  * @module
  */
 
+import type * as apikey from "../apikey.js";
 import type * as auth from "../auth.js";
 import type * as betterauth__generated_api from "../betterauth/_generated/api.js";
 import type * as betterauth__generated_server from "../betterauth/_generated/server.js";
@@ -19,6 +20,7 @@ import type * as files from "../files.js";
 import type * as filesystem from "../filesystem.js";
 import type * as functions from "../functions.js";
 import type * as http from "../http.js";
+import type * as model_apikey from "../model/apikey.js";
 import type * as model_directories from "../model/directories.js";
 import type * as model_files from "../model/files.js";
 import type * as model_filesystem from "../model/filesystem.js";
@@ -43,6 +45,7 @@ import type {
  * ```
  */
 declare const fullApi: ApiFromModules<{
+  apikey: typeof apikey;
   auth: typeof auth;
   "betterauth/_generated/api": typeof betterauth__generated_api;
   "betterauth/_generated/server": typeof betterauth__generated_server;
@@ -54,6 +57,7 @@ declare const fullApi: ApiFromModules<{
   filesystem: typeof filesystem;
   functions: typeof functions;
   http: typeof http;
+  "model/apikey": typeof model_apikey;
   "model/directories": typeof model_directories;
   "model/files": typeof model_files;
   "model/filesystem": typeof model_filesystem;

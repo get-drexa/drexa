@@ -40,6 +40,13 @@ const schema = defineSchema({
 			"name",
 			"deletedAt",
 		]),
+	apiKeys: defineTable({
+		publicId: v.string(),
+		hashedKey: v.string(),
+		createdAt: v.number(),
+		updatedAt: v.number(),
+		expiresAt: v.optional(v.number()),
+	}).index("byPublicId", ["publicId"]),
 })
 
 export default schema
