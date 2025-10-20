@@ -1,3 +1,7 @@
+import { BunSha256Hasher, type PassswordHasher } from "./hasher"
+
+export { WebCryptoSha256Hasher } from "./hasher"
+
 /**
  * An unhashed api key.
  * Always starts with sk, then the prefix specified at time of generation,
@@ -6,6 +10,11 @@
 export type UnhashedApiKey = `sk-${ApiKeyPrefix}-${string}`
 
 export type ApiKeyPrefix = string & { __brand: "ApiKeyPrefix" }
+
+export type ParsedApiKey = {
+	prefix: ApiKeyPrefix
+	unhashedKey: UnhashedApiKey
+}
 
 export type GenerateApiKeyOptions = {
 	/**
@@ -21,6 +30,8 @@ export type GenerateApiKeyOptions = {
 
 	expiresAt?: Date
 	description: string
+
+	hasher?: PassswordHasher
 }
 
 export type GenerateApiKeyResult = {
@@ -30,11 +41,21 @@ export type GenerateApiKeyResult = {
 	description: string
 }
 
+export type VerifyApiKeyOptions = {
+	keyToBeVerified: UnhashedApiKey
+	hashedKey: string
+	hasher?: PassswordHasher
+}
+
+function validatePrefix(prefix: string): prefix is ApiKeyPrefix {
+	return !prefix.includes("-")
+}
+
 export function newPrefix(prefix: string): ApiKeyPrefix | null {
-	if (prefix.includes("-")) {
+	if (!validatePrefix(prefix)) {
 		return null
 	}
-	return prefix as ApiKeyPrefix
+	return prefix
 }
 
 export async function generateApiKey({
@@ -42,6 +63,7 @@ export async function generateApiKey({
 	prefix,
 	expiresAt,
 	description,
+	hasher = new BunSha256Hasher(),
 }: GenerateApiKeyOptions): Promise<GenerateApiKeyResult> {
 	const keyContent = new Uint8Array(keyByteLength)
 	crypto.getRandomValues(keyContent)
@@ -49,11 +71,7 @@ export async function generateApiKey({
 	const base64KeyContent = Buffer.from(keyContent).toString("base64url")
 	const unhashedKey: UnhashedApiKey = `sk-${prefix}-${base64KeyContent}`
 
-	const hashedKey = await Bun.password.hash(unhashedKey, {
-		algorithm: "argon2id",
-		memoryCost: 4, // memory usage in kibibytes
-		timeCost: 3, // the number of iterations
-	})
+	const hashedKey = await hasher.hash(unhashedKey)
 
 	return {
 		unhashedKey,
@@ -61,4 +79,30 @@ export async function generateApiKey({
 		expiresAt,
 		description,
 	}
+}
+
+export function parseApiKey(key: string): ParsedApiKey | null {
+	if (!key.startsWith("sk-")) {
+		return null
+	}
+	const parts = key.split("-")
+	if (parts.length !== 3) {
+		return null
+	}
+	const prefix = parts[1]
+	if (!prefix || !validatePrefix(prefix)) {
+		return null
+	}
+	return {
+		prefix,
+		unhashedKey: key as UnhashedApiKey,
+	}
+}
+
+export async function verifyApiKey({
+	keyToBeVerified,
+	hashedKey,
+	hasher = new BunSha256Hasher(),
+}: VerifyApiKeyOptions): Promise<boolean> {
+	return await hasher.verify(keyToBeVerified, hashedKey)
 }
