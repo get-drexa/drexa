@@ -10,7 +10,8 @@
 	"scripts": {
 		"dev": "bun run --filter=@fileone/web dev",
 		"build": "bun run --filter=@fileone/web build",
-		"preview": "bun run --filter=@fileone/web preview"
+		"preview": "bun run --filter=@fileone/web preview",
+		"drexa": "bun run apps/cli/index.ts"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "2.2.4",
