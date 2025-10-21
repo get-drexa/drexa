@@ -8,7 +8,7 @@
 		"apps/*"
 	],
 	"scripts": {
-		"dev": "bun run --filter=@fileone/web dev",
+		"dev": "bun run --elide-lines=0 --filter './apps/*' dev",
 		"build": "bun run --filter=@fileone/web build",
 		"preview": "bun run --filter=@fileone/web preview",
 		"drexa": "bun run apps/cli/index.ts"
