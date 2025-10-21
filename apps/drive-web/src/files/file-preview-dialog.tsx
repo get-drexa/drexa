@@ -1,20 +1,20 @@
-import type { Doc } from "@fileone/convex/dataModel"
+import type { OpenedFile } from "@fileone/convex/filesystem"
 import { ImagePreviewDialog } from "./image-preview-dialog"
 
 export function FilePreviewDialog({
-	file,
+	openedFile,
 	onClose,
 }: {
-	file: Doc<"files">
+	openedFile: OpenedFile
 	onClose: () => void
 }) {
-	if (!file) return null
-
-	switch (file.mimeType) {
+	switch (openedFile.file.mimeType) {
 		case "image/jpeg":
 		case "image/png":
 		case "image/gif":
-			return <ImagePreviewDialog file={file} onClose={onClose} />
+			return (
+				<ImagePreviewDialog openedFile={openedFile} onClose={onClose} />
+			)
 		default:
 			return null
 	}

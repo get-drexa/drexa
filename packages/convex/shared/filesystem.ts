@@ -57,6 +57,11 @@ export type FileHandle = {
 
 export type FileSystemHandle = DirectoryHandle | FileHandle
 
+export type OpenedFile = {
+	file: Doc<"files">
+	shareToken: string
+}
+
 export type DeleteResult = {
 	deleted: {
 		files: number

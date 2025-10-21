@@ -1,7 +1,5 @@
-import { api } from "@fileone/convex/api"
-import type { Doc } from "@fileone/convex/dataModel"
+import type { OpenedFile } from "@fileone/convex/filesystem"
 import { DialogTitle } from "@radix-ui/react-dialog"
-import { useQuery as useConvexQuery } from "convex/react"
 import { atom, useAtom, useAtomValue, useSetAtom } from "jotai"
 import {
 	DownloadIcon,
@@ -18,9 +16,8 @@ import {
 	DialogClose,
 	DialogContent,
 	DialogHeader,
-	DialogOverlay,
 } from "@/components/ui/dialog"
-import { LoadingSpinner } from "@/components/ui/loading-spinner"
+import { fileShareUrl } from "./file-share"
 
 const zoomLevelAtom = atom(
 	1,
@@ -35,15 +32,12 @@ const zoomLevelAtom = atom(
 )
 
 export function ImagePreviewDialog({
-	file,
+	openedFile,
 	onClose,
 }: {
-	file: Doc<"files">
+	openedFile: OpenedFile
 	onClose: () => void
 }) {
-	const fileUrl = useConvexQuery(api.filesystem.fetchFileUrl, {
-		fileId: file._id,
-	})
 	const setZoomLevel = useSetAtom(zoomLevelAtom)
 
 	useEffect(
@@ -62,23 +56,12 @@ export function ImagePreviewDialog({
 				}
 			}}
 		>
-			<DialogOverlay className="flex items-center justify-center">
-				{!fileUrl ? (
-					<LoadingSpinner className="text-neutral-200 size-10" />
-				) : null}
-			</DialogOverlay>
-			{fileUrl ? <PreviewContent fileUrl={fileUrl} file={file} /> : null}
+			<PreviewContent openedFile={openedFile} />
 		</Dialog>
 	)
 }
 
-function PreviewContent({
-	fileUrl,
-	file,
-}: {
-	fileUrl: string
-	file: Doc<"files">
-}) {
+function PreviewContent({ openedFile }: { openedFile: OpenedFile }) {
 	return (
 		<DialogContent
 			showCloseButton={false}
@@ -86,10 +69,10 @@ function PreviewContent({
 		>
 			<DialogHeader className="overflow-auto border-b border-b-border p-4 flex flex-row items-center justify-between">
 				<DialogTitle className="truncate flex-1">
-					{file.name}
+					{openedFile.file.name}
 				</DialogTitle>
 				<div className="flex flex-row items-center space-x-2">
-					<Toolbar fileUrl={fileUrl} file={file} />
+					<Toolbar openedFile={openedFile} />
 					<Button variant="ghost" size="icon" asChild>
 						<DialogClose>
 							<XIcon />
@@ -99,13 +82,13 @@ function PreviewContent({
 				</div>
 			</DialogHeader>
 			<div className="w-full h-full flex items-center justify-center max-h-[calc(100vh-10rem)] overflow-auto">
-				<ImagePreview fileUrl={fileUrl} file={file} />
+				<ImagePreview openedFile={openedFile} />
 			</div>
 		</DialogContent>
 	)
 }
 
-function Toolbar({ fileUrl, file }: { fileUrl: string; file: Doc<"files"> }) {
+function Toolbar({ openedFile }: { openedFile: OpenedFile }) {
 	const setZoomLevel = useSetAtom(zoomLevelAtom)
 	const zoomInterval = useRef<ReturnType<typeof setInterval> | null>(null)
 
@@ -159,8 +142,8 @@ function Toolbar({ fileUrl, file }: { fileUrl: string; file: Doc<"files"> }) {
 			</Button>
 			<Button asChild>
 				<a
-					href={fileUrl}
-					download={file.name}
+					href={fileShareUrl(openedFile.shareToken)}
+					download={openedFile.file.name}
 					target="_blank"
 					className="flex flex-row items-center"
 				>
@@ -191,18 +174,12 @@ function ResetZoomButton() {
 	)
 }
 
-function ImagePreview({
-	fileUrl,
-	file,
-}: {
-	fileUrl: string
-	file: Doc<"files">
-}) {
+function ImagePreview({ openedFile }: { openedFile: OpenedFile }) {
 	const zoomLevel = useAtomValue(zoomLevelAtom)
 	return (
 		<img
-			src={fileUrl}
-			alt={file.name}
+			src={fileShareUrl(openedFile.shareToken)}
+			alt={openedFile.file.name}
 			className="object-contain"
 			style={{ transform: `scale(${zoomLevel})` }}
 		/>

@@ -24,6 +24,7 @@ const schema = defineSchema({
 			"name",
 			"deletedAt",
 		]),
+
 	directories: defineTable({
 		name: v.string(),
 		userId: v.string(), // BetterAuth user IDs are strings, not Convex Ids
@@ -40,13 +41,21 @@ const schema = defineSchema({
 			"name",
 			"deletedAt",
 		]),
+
 	apiKeys: defineTable({
 		publicId: v.string(),
 		hashedKey: v.string(),
-		createdAt: v.number(),
-		updatedAt: v.number(),
 		expiresAt: v.optional(v.number()),
 	}).index("byPublicId", ["publicId"]),
+
+	fileShares: defineTable({
+		shareToken: v.string(),
+		storageId: v.id("_storage"),
+		expiresAt: v.optional(v.number()),
+	})
+		.index("byShareToken", ["shareToken"])
+		.index("byExpiredAt", ["expiresAt"])
+		.index("byStorageId", ["storageId"]),
 })
 
 export default schema

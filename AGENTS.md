@@ -6,6 +6,7 @@ backend: convex
 This project uses npm workspaces.
 - `packages/convex` - convex functions and models
 - `apps/drive-web` - frontend dashboard
+- `apps/file-proxy` - proxies uploaded files via opaque share tokens
 - `packages/path` - path utils
 
 # General Guidelines

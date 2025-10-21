@@ -3,12 +3,14 @@ import type { Doc, Id } from "@fileone/convex/dataModel"
 import {
 	type FileSystemItem,
 	newFileSystemHandle,
+	type OpenedFile,
 } from "@fileone/convex/filesystem"
 import { useMutation } from "@tanstack/react-query"
 import { createFileRoute } from "@tanstack/react-router"
 import type { Row, Table } from "@tanstack/react-table"
 import {
 	useMutation as useContextMutation,
+	useMutation as useConvexMutation,
 	useQuery as useConvexQuery,
 } from "convex/react"
 import { atom, useAtom, useAtomValue, useSetAtom, useStore } from "jotai"
@@ -77,21 +79,11 @@ const fileDragInfoAtom = atom<FileDragInfo | null>(null)
 const optimisticDeletedItemsAtom = atom(
 	new Set<Id<"files"> | Id<"directories">>(),
 )
-const openedFileAtom = atom<Doc<"files"> | null>(null)
+const openedFileAtom = atom<OpenedFile | null>(null)
 const itemBeingRenamedAtom = atom<{
 	originalItem: FileSystemItem
 	name: string
 } | null>(null)
-
-const tableFilterAtom = atom((get) => {
-	const optimisticDeletedItems = get(optimisticDeletedItemsAtom)
-	console.log("optimisticDeletedItems", optimisticDeletedItems)
-	return (item: FileSystemItem) => {
-		const test = !optimisticDeletedItems.has(item.doc._id)
-		console.log("test", test)
-		return test
-	}
-})
 
 // MARK: page entry
 function RouteComponent() {
@@ -100,7 +92,6 @@ function RouteComponent() {
 	const directory = useConvexQuery(api.files.fetchDirectory, {
 		directoryId,
 	})
-	const store = useStore()
 	const directoryContent = useConvexQuery(
 		api.filesystem.fetchDirectoryContent,
 		{
@@ -108,44 +99,11 @@ function RouteComponent() {
 			trashed: false,
 		},
 	)
-	const setOpenedFile = useSetAtom(openedFileAtom)
-	const setContextMenuTargetItems = useSetAtom(contextMenuTargetItemsAtom)
-
-	const tableFilter = useCallback(
-		(item: FileSystemItem) =>
-			store.get(optimisticDeletedItemsAtom).has(item.doc._id),
-		[store],
-	)
-
-	const openFile = useCallback(
-		(file: Doc<"files">) => {
-			setOpenedFile(file)
-		},
-		[setOpenedFile],
-	)
-
-	const directoryUrlFn = useCallback(
-		(directory: Doc<"directories">) => `/directories/${directory._id}`,
-		[],
-	)
 
 	const directoryUrlById = useCallback(
 		(directoryId: Id<"directories">) => `/directories/${directoryId}`,
 		[],
 	)
-
-	const handleContextMenuRequest = (
-		row: Row<FileSystemItem>,
-		table: Table<FileSystemItem>,
-	) => {
-		if (row.getIsSelected()) {
-			setContextMenuTargetItems(
-				table.getSelectedRowModel().rows.map((row) => row.original),
-			)
-		} else {
-			setContextMenuTargetItems([row.original])
-		}
-	}
 
 	if (!directory || !directoryContent || !rootDirectory) {
 		return <DirectoryPageSkeleton />
@@ -171,17 +129,7 @@ function RouteComponent() {
 			{/* DirectoryContentContextMenu must wrap div instead of DirectoryContentTable, otherwise radix will throw "event.preventDefault is not a function" error, idk why */}
 			<DirectoryContentContextMenu>
 				<div className="w-full">
-					<WithAtom atom={optimisticDeletedItemsAtom}>
-						{(optimisticDeletedItems) => (
-							<DirectoryContentTable
-								hiddenItems={optimisticDeletedItems}
-								directoryUrlFn={directoryUrlFn}
-								fileDragInfoAtom={fileDragInfoAtom}
-								onContextMenu={handleContextMenuRequest}
-								onOpenFile={openFile}
-							/>
-						)}
-					</WithAtom>
+					<_DirectoryContentTable />
 				</div>
 			</DirectoryContentContextMenu>
 
@@ -228,13 +176,65 @@ function RouteComponent() {
 					if (!openedFile) return null
 					return (
 						<FilePreviewDialog
-							file={openedFile}
+							openedFile={openedFile}
 							onClose={() => setOpenedFile(null)}
 						/>
 					)
 				}}
 			</WithAtom>
 		</DirectoryPageContext>
+	)
+}
+
+// MARK: directory table
+
+function _DirectoryContentTable() {
+	const optimisticDeletedItems = useAtomValue(optimisticDeletedItemsAtom)
+	const setOpenedFile = useSetAtom(openedFileAtom)
+	const setContextMenuTargetItems = useSetAtom(contextMenuTargetItemsAtom)
+
+	const { mutate: openFile } = useMutation({
+		mutationFn: useConvexMutation(api.filesystem.openFile),
+		onSuccess: (openedFile: OpenedFile) => {
+			console.log("openedFile", openedFile)
+			setOpenedFile(openedFile)
+		},
+		onError: (error) => {
+			console.error(error)
+			toast.error("Failed to open file")
+		},
+	})
+
+	const onTableOpenFile = (file: Doc<"files">) => {
+		openFile({ fileId: file._id })
+	}
+
+	const directoryUrlFn = useCallback(
+		(directory: Doc<"directories">) => `/directories/${directory._id}`,
+		[],
+	)
+
+	const handleContextMenuRequest = (
+		row: Row<FileSystemItem>,
+		table: Table<FileSystemItem>,
+	) => {
+		if (row.getIsSelected()) {
+			setContextMenuTargetItems(
+				table.getSelectedRowModel().rows.map((row) => row.original),
+			)
+		} else {
+			setContextMenuTargetItems([row.original])
+		}
+	}
+
+	return (
+		<DirectoryContentTable
+			hiddenItems={optimisticDeletedItems}
+			directoryUrlFn={directoryUrlFn}
+			fileDragInfoAtom={fileDragInfoAtom}
+			onContextMenu={handleContextMenuRequest}
+			onOpenFile={onTableOpenFile}
+		/>
 	)
 }
 

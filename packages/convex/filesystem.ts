@@ -1,11 +1,13 @@
 import { v } from "convex/values"
 import {
+	apiKeyAuthenticatedQuery,
 	authenticatedMutation,
 	authenticatedQuery,
 	authorizedGet,
 } from "./functions"
 import * as Directories from "./model/directories"
 import * as Files from "./model/files"
+import * as FileSystem from "./model/filesystem"
 import {
 	deleteItemsPermanently,
 	emptyTrash as emptyTrashImpl,
@@ -160,11 +162,29 @@ export const restoreItems = authenticatedMutation({
 	},
 })
 
+export const getStorageUrl = apiKeyAuthenticatedQuery({
+	args: {
+		storageId: v.id("_storage"),
+	},
+	handler: async (ctx, { storageId }) => {
+		return await ctx.storage.getUrl(storageId)
+	},
+})
+
 export const fetchFileUrl = authenticatedQuery({
 	args: {
 		fileId: v.id("files"),
 	},
 	handler: async (ctx, { fileId }) => {
 		return await fetchFileUrlImpl(ctx, { fileId })
+	},
+})
+
+export const openFile = authenticatedMutation({
+	args: {
+		fileId: v.id("files"),
+	},
+	handler: async (ctx, { fileId }) => {
+		return await FileSystem.openFile(ctx, { fileId })
 	},
 })

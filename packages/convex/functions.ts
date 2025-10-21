@@ -26,6 +26,10 @@ export type AuthenticatedMutationCtx = MutationCtx & {
 	identity: UserIdentity
 }
 
+export type ApiKeyAuthenticatedQueryCtx = QueryCtx & {
+	__branded: "ApiKeyAuthenticatedQueryCtx"
+}
+
 /**
  * Custom query that automatically provides authenticated user context
  * Throws an error if the user is not authenticated
@@ -51,6 +55,21 @@ export const authenticatedMutation = customMutation(
 		return { user, identity }
 	}),
 )
+
+/**
+ * Custom query that requires api key authentication for a query.
+ */
+export const apiKeyAuthenticatedQuery = customQuery(query, {
+	args: {
+		apiKey: v.string(),
+	},
+	input: async (ctx, args) => {
+		if (!(await ApiKey.verifyApiKey(ctx, args.apiKey))) {
+			throw Err.create(Err.Code.Unauthenticated, "Invalid API key")
+		}
+		return { ctx: ctx as ApiKeyAuthenticatedQueryCtx, args }
+	},
+})
 
 /**
  * Custom mutation that requires api key authentication for a mutation.

@@ -1,10 +1,16 @@
 import { Hono } from "hono"
-import { handleFileRequest } from "./files"
+import { apiKeyMiddleware } from "./auth"
+import { convexMiddleware } from "./convex"
+import { files } from "./files"
 
-Bun.serve({
-	routes: {
-		"/files/:fileId": {
-			GET: handleFileRequest,
-		},
-	},
-})
+const app = new Hono()
+
+app.use(convexMiddleware)
+app.use(apiKeyMiddleware)
+
+app.route("/", files)
+
+export default {
+	port: 8081,
+	fetch: app.fetch,
+}

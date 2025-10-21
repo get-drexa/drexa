@@ -17,7 +17,9 @@ import {
 	newFileHandle,
 } from "../shared/filesystem"
 import * as Directories from "./directories"
+import * as FilePreview from "./filepreview"
 import * as Files from "./files"
+import * as FileShare from "./fileshare"
 
 export const VDirectoryHandle = v.object({
 	kind: v.literal(FileType.Directory),
@@ -227,4 +229,34 @@ export async function fetchFileUrl(
 	}
 
 	return url
+}
+
+export async function openFile(
+	ctx: AuthenticatedMutationCtx,
+	{ fileId }: { fileId: Id<"files"> },
+) {
+	const file = await authorizedGet(ctx, fileId)
+	if (!file) {
+		throw Err.create(Err.Code.NotFound, "file not found")
+	}
+
+	const fileShare = await FilePreview.find(ctx, {
+		storageId: file.storageId,
+	})
+	if (fileShare && !FileShare.hasExpired(fileShare)) {
+		await FilePreview.extend(ctx, { doc: fileShare })
+		return {
+			file,
+			shareToken: fileShare.shareToken,
+		}
+	}
+
+	const newFileShare = await FilePreview.create(ctx, {
+		storageId: file.storageId,
+	})
+
+	return {
+		file,
+		shareToken: newFileShare.shareToken,
+	}
 }
