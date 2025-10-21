@@ -251,9 +251,14 @@ export async function openFile(
 		}
 	}
 
-	const newFileShare = await FilePreview.create(ctx, {
-		storageId: file.storageId,
-	})
+	const [newFileShare] = await Promise.all([
+		FilePreview.create(ctx, {
+			storageId: file.storageId,
+		}),
+		ctx.db.patch(fileId, {
+			lastAccessedAt: Date.now(),
+		}),
+	])
 
 	return {
 		file,
