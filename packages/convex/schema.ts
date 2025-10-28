@@ -17,7 +17,7 @@ const schema = defineSchema({
 		.index("byDirectoryId", ["userId", "directoryId", "deletedAt"])
 		.index("byUserId", ["userId", "deletedAt"])
 		.index("byDeletedAt", ["deletedAt"])
-		.index("byLastAccessedAt", ["userId", "lastAccessedAt"])
+		.index("byLastAccessedAt", ["userId", "deletedAt", "lastAccessedAt"])
 		.index("uniqueFileInDirectory", [
 			"userId",
 			"directoryId",

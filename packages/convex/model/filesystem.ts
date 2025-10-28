@@ -265,3 +265,19 @@ export async function openFile(
 		shareToken: newFileShare.shareToken,
 	}
 }
+
+export async function fetchRecentFiles(
+	ctx: AuthenticatedQueryCtx,
+	{ limit }: { limit: number },
+) {
+	return await ctx.db
+		.query("files")
+		.withIndex("byLastAccessedAt", (q) =>
+			q
+				.eq("userId", ctx.user._id)
+				.eq("deletedAt", undefined)
+				.gte("lastAccessedAt", 0),
+		)
+		.order("desc")
+		.take(limit)
+}

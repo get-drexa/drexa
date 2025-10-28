@@ -3,8 +3,8 @@ import { Link, useLocation } from "@tanstack/react-router"
 import { useQuery as useConvexQuery } from "convex/react"
 import { useAtomValue } from "jotai"
 import {
+	ClockIcon,
 	FilesIcon,
-	HomeIcon,
 	LogOutIcon,
 	SettingsIcon,
 	TrashIcon,
@@ -66,10 +66,10 @@ function MainSidebarMenu() {
 	return (
 		<SidebarMenu>
 			<SidebarMenuItem>
-				<SidebarMenuButton asChild isActive={isActive("/")}>
-					<Link to="/">
-						<HomeIcon />
-						<span>Home</span>
+				<SidebarMenuButton asChild isActive={isActive("/recent")}>
+					<Link to="/recent">
+						<ClockIcon />
+						<span>Recent</span>
 					</Link>
 				</SidebarMenuButton>
 			</SidebarMenuItem>

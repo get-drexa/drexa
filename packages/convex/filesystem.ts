@@ -188,3 +188,12 @@ export const openFile = authenticatedMutation({
 		return await FileSystem.openFile(ctx, { fileId })
 	},
 })
+
+export const fetchRecentFiles = authenticatedQuery({
+	args: {
+		limit: v.number(),
+	},
+	handler: async (ctx, { limit }) => {
+		return await FileSystem.fetchRecentFiles(ctx, { limit })
+	},
+})
