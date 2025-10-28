@@ -196,7 +196,6 @@ function _DirectoryContentTable() {
 	const { mutate: openFile } = useMutation({
 		mutationFn: useConvexMutation(api.filesystem.openFile),
 		onSuccess: (openedFile: OpenedFile) => {
-			console.log("openedFile", openedFile)
 			setOpenedFile(openedFile)
 		},
 		onError: (error) => {
