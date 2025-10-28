@@ -36,7 +36,6 @@ import { DirectoryPageContext } from "@/directories/directory-page/context"
 import { DirectoryContentTable } from "@/directories/directory-page/directory-content-table"
 import { DirectoryPageSkeleton } from "@/directories/directory-page/directory-page-skeleton"
 import { DirectoryPathBreadcrumb } from "@/directories/directory-path-breadcrumb"
-import { FilePreviewDialog } from "@/files/file-preview-dialog"
 import type { FileDragInfo } from "@/files/use-file-drop"
 import { backgroundTaskProgressAtom } from "../../../dashboard/state"
 
@@ -136,18 +135,6 @@ function RouteComponent() {
 
 			<DeleteConfirmationDialog />
 			<EmptyTrashConfirmationDialog />
-
-			<WithAtom atom={openedFileAtom}>
-				{(openedFile, setOpenedFile) => {
-					if (!openedFile) return null
-					return (
-						<FilePreviewDialog
-							file={openedFile}
-							onClose={() => setOpenedFile(null)}
-						/>
-					)
-				}}
-			</WithAtom>
 		</DirectoryPageContext>
 	)
 }
