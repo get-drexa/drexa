@@ -20,6 +20,7 @@ import * as Directories from "./directories"
 import * as FilePreview from "./filepreview"
 import * as Files from "./files"
 import * as FileShare from "./fileshare"
+import * as User from "./user"
 
 export const VDirectoryHandle = v.object({
 	kind: v.literal(FileType.Directory),
@@ -264,6 +265,60 @@ export async function openFile(
 		file,
 		shareToken: newFileShare.shareToken,
 	}
+}
+
+export async function saveFile(
+	ctx: AuthenticatedMutationCtx,
+	{
+		name,
+		storageId,
+		directoryId,
+	}: {
+		name: string
+		storageId: Id<"_storage">
+		directoryId: Id<"directories">
+	},
+) {
+	const directory = await authorizedGet(ctx, directoryId)
+	if (!directory) {
+		throw Err.create(Err.Code.NotFound, "directory not found")
+	}
+
+	const [fileMetadata, userInfo] = await Promise.all([
+		ctx.db.system.get(storageId),
+		User.queryInfo(ctx),
+	])
+	if (!fileMetadata || !userInfo) {
+		throw Err.create(Err.Code.Internal, "Internal server error")
+	}
+
+	if (
+		userInfo.storageUsageBytes + fileMetadata.size >
+		userInfo.storageQuotaBytes
+	) {
+		await ctx.storage.delete(storageId)
+		throw Err.create(Err.Code.StorageQuotaExceeded, "Storage quota exceeded")
+	}
+
+	const now = Date.now()
+
+	const [fileId] = await Promise.all([
+		ctx.db.insert("files", {
+			name,
+			userId: ctx.user._id,
+			createdAt: now,
+			updatedAt: now,
+			storageId,
+			directoryId,
+			size: fileMetadata.size,
+			mimeType: fileMetadata.contentType,
+		}),
+		ctx.db.patch(userInfo._id, {
+			storageUsageBytes: userInfo.storageUsageBytes + fileMetadata.size,
+		}),
+	])
+
+	return fileId
 }
 
 export async function fetchRecentFiles(

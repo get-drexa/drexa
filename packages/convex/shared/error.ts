@@ -9,6 +9,7 @@ export enum Code {
 	Internal = "Internal",
 	Unauthenticated = "Unauthenticated",
 	NotFound = "NotFound",
+	StorageQuotaExceeded = "StorageQuotaExceeded",
 }
 
 export type ApplicationErrorData = { code: Code; message?: string }

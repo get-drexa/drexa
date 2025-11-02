@@ -7,9 +7,21 @@ import {
 } from "./functions"
 import * as Directories from "./model/directories"
 import * as Files from "./model/files"
+import * as User from "./model/user"
+import * as Err from "./shared/error"
 
 export const generateUploadUrl = authenticatedMutation({
 	handler: async (ctx) => {
+		const usageStatistics = await User.queryCachedUsageStatistics(ctx)
+		if (!usageStatistics) {
+			throw Err.create(Err.Code.Internal, "Internal server error")
+		}
+		if (
+			usageStatistics.storageUsageBytes >=
+			usageStatistics.storageQuotaBytes
+		) {
+			throw Err.create(Err.Code.Forbidden, "Storage quota exceeded")
+		}
 		return await ctx.storage.generateUploadUrl()
 	},
 })
@@ -68,12 +80,10 @@ export const createDirectory = authenticatedMutation({
 export const saveFile = authenticatedMutation({
 	args: {
 		name: v.string(),
-		size: v.number(),
 		directoryId: v.id("directories"),
 		storageId: v.id("_storage"),
-		mimeType: v.optional(v.string()),
 	},
-	handler: async (ctx, { name, storageId, directoryId, size, mimeType }) => {
+	handler: async (ctx, { name, storageId, directoryId }) => {
 		const directory = await authorizedGet(ctx, directoryId)
 		if (!directory) {
 			throw new Error("Directory not found")
@@ -81,16 +91,26 @@ export const saveFile = authenticatedMutation({
 
 		const now = Date.now()
 
-		await ctx.db.insert("files", {
-			name,
-			size,
-			storageId,
-			directoryId,
-			userId: ctx.user._id,
-			mimeType,
-			createdAt: now,
-			updatedAt: now,
-		})
+		const fileMetadata = await Promise.all([
+			ctx.db.system.get(storageId),
+			ctx.user.queryUsageStatistics(),
+		])
+		if (!fileMetadata) {
+			throw Err.create(Err.Code.Internal, "Internal server error")
+		}
+
+		await Promise.all([
+			ctx.db.insert("files", {
+				name,
+				size: fileMetadata.size,
+				storageId,
+				directoryId,
+				userId: ctx.user._id,
+				mimeType,
+				createdAt: now,
+				updatedAt: now,
+			}),
+		])
 	},
 })
 

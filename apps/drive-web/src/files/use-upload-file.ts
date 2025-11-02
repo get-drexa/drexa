@@ -9,7 +9,7 @@ function useUploadFile({
 	targetDirectory: Doc<"directories">
 }) {
 	const generateUploadUrl = useConvexMutation(api.files.generateUploadUrl)
-	const saveFile = useConvexMutation(api.files.saveFile)
+	const saveFile = useConvexMutation(api.filesystem.saveFile)
 
 	async function upload({
 		file,
@@ -44,8 +44,6 @@ function useUploadFile({
 			saveFile({
 				storageId,
 				name: file.name,
-				size: file.size,
-				mimeType: file.type,
 				directoryId: targetDirectory._id,
 			}),
 		)

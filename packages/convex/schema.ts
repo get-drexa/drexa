@@ -2,6 +2,12 @@ import { defineSchema, defineTable } from "convex/server"
 import { v } from "convex/values"
 
 const schema = defineSchema({
+	userInfo: defineTable({
+		userId: v.string(),
+		storageUsageBytes: v.number(),
+		storageQuotaBytes: v.number(),
+	}).index("byUserId", ["userId"]),
+
 	files: defineTable({
 		storageId: v.id("_storage"),
 		userId: v.string(), // BetterAuth user IDs are strings, not Convex Ids

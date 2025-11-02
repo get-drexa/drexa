@@ -19,12 +19,19 @@ export const authComponent = createClient<DataModel, typeof authSchema>(
 			user: {
 				onCreate: async (ctx, user) => {
 					const now = Date.now()
-					await ctx.db.insert("directories", {
-						name: "",
-						userId: user._id,
-						createdAt: now,
-						updatedAt: now,
-					})
+					await Promise.all([
+						ctx.db.insert("userInfo", {
+							userId: user._id,
+							storageUsageBytes: 0,
+							storageQuotaBytes: 1024 * 1024 * 1024 * 5, // 5GB
+						}),
+						ctx.db.insert("directories", {
+							name: "",
+							userId: user._id,
+							createdAt: now,
+							updatedAt: now,
+						}),
+					])
 				},
 			},
 		},

@@ -189,6 +189,17 @@ export const openFile = authenticatedMutation({
 	},
 })
 
+export const saveFile = authenticatedMutation({
+	args: {
+		name: v.string(),
+		directoryId: v.id("directories"),
+		storageId: v.id("_storage"),
+	},
+	handler: async (ctx, { name, directoryId, storageId }) => {
+		return await FileSystem.saveFile(ctx, { name, directoryId, storageId })
+	},
+})
+
 export const fetchRecentFiles = authenticatedQuery({
 	args: {
 		limit: v.number(),
