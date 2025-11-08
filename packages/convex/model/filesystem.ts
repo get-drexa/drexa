@@ -1,11 +1,11 @@
-import { v } from "convex/values"
+import { ConvexError, v } from "convex/values"
 import type { Doc, Id } from "../_generated/dataModel"
 import {
 	type AuthenticatedMutationCtx,
 	type AuthenticatedQueryCtx,
 	authorizedGet,
 } from "../functions"
-import * as Err from "../shared/error"
+import { ErrorCode, error } from "../shared/error"
 import type {
 	DirectoryHandle,
 	FileHandle,
@@ -174,7 +174,10 @@ export async function deleteItemsPermanently(
 export async function emptyTrash(ctx: AuthenticatedMutationCtx) {
 	const rootDir = await queryRootDirectory(ctx)
 	if (!rootDir) {
-		throw Err.create(Err.Code.NotFound, "user root directory not found")
+		error({
+			code: ErrorCode.NotFound,
+			message: "user root directory not found",
+		})
 	}
 
 	const dirs = await ctx.db
@@ -221,12 +224,18 @@ export async function fetchFileUrl(
 ): Promise<string> {
 	const file = await authorizedGet(ctx, fileId)
 	if (!file) {
-		throw Err.create(Err.Code.NotFound, "file not found")
+		error({
+			code: ErrorCode.NotFound,
+			message: "file not found",
+		})
 	}
 
 	const url = await ctx.storage.getUrl(file.storageId)
 	if (!url) {
-		throw Err.create(Err.Code.NotFound, "file not found")
+		error({
+			code: ErrorCode.NotFound,
+			message: "file not found",
+		})
 	}
 
 	return url
@@ -238,7 +247,10 @@ export async function openFile(
 ) {
 	const file = await authorizedGet(ctx, fileId)
 	if (!file) {
-		throw Err.create(Err.Code.NotFound, "file not found")
+		error({
+			code: ErrorCode.NotFound,
+			message: "file not found",
+		})
 	}
 
 	const fileShare = await FilePreview.find(ctx, {
@@ -281,7 +293,10 @@ export async function saveFile(
 ) {
 	const directory = await authorizedGet(ctx, directoryId)
 	if (!directory) {
-		throw Err.create(Err.Code.NotFound, "directory not found")
+		error({
+			code: ErrorCode.NotFound,
+			message: "directory not found",
+		})
 	}
 
 	const [fileMetadata, userInfo] = await Promise.all([
@@ -289,7 +304,7 @@ export async function saveFile(
 		User.queryInfo(ctx),
 	])
 	if (!fileMetadata || !userInfo) {
-		throw Err.create(Err.Code.Internal, "Internal server error")
+		throw new ConvexError({ message: "Internal server error" })
 	}
 
 	if (
@@ -297,7 +312,10 @@ export async function saveFile(
 		userInfo.storageQuotaBytes
 	) {
 		await ctx.storage.delete(storageId)
-		throw Err.create(Err.Code.StorageQuotaExceeded, "Storage quota exceeded")
+		error({
+			code: ErrorCode.StorageQuotaExceeded,
+			message: "Storage quota exceeded",
+		})
 	}
 
 	const now = Date.now()

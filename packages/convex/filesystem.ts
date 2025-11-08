@@ -1,4 +1,4 @@
-import { v } from "convex/values"
+import { ConvexError, v } from "convex/values"
 import {
 	apiKeyAuthenticatedQuery,
 	authenticatedMutation,
@@ -16,7 +16,7 @@ import {
 	VDirectoryHandle,
 	VFileSystemHandle,
 } from "./model/filesystem"
-import * as Err from "./shared/error"
+import { createErrorData, ErrorCode, error } from "./shared/error"
 import type {
 	DirectoryHandle,
 	FileHandle,
@@ -36,10 +36,10 @@ export const moveItems = authenticatedMutation({
 			targetDirectoryHandle.id,
 		)
 		if (!targetDirectory) {
-			throw Err.create(
-				Err.Code.DirectoryNotFound,
-				`Directory ${targetDirectoryHandle.id} not found`,
-			)
+			error({
+				code: ErrorCode.NotFound,
+				message: `Directory ${targetDirectoryHandle.id} not found`,
+			})
 		}
 
 		const directoryHandles: DirectoryHandle[] = []
@@ -81,10 +81,10 @@ export const moveToTrash = authenticatedMutation({
 		for (const handle of handles) {
 			const item = await authorizedGet(ctx, handle.id)
 			if (!item) {
-				throw Err.create(
-					Err.Code.NotFound,
-					`Item ${handle.id} not found`,
-				)
+				error({
+					code: ErrorCode.NotFound,
+					message: `Item ${handle.id} not found`,
+				})
 			}
 		}
 
@@ -105,7 +105,7 @@ export const moveToTrash = authenticatedMutation({
 		})
 
 		const results = await Promise.allSettled(promises)
-		const errors: Err.ApplicationErrorData[] = []
+		const errors = []
 		const okHandles: FileSystemHandle[] = []
 		for (const result of results) {
 			switch (result.status) {
@@ -113,7 +113,7 @@ export const moveToTrash = authenticatedMutation({
 					okHandles.push(result.value)
 					break
 				case "rejected":
-					errors.push(Err.createJson(Err.Code.Internal))
+					errors.push(createErrorData(ErrorCode.Internal))
 					break
 			}
 		}

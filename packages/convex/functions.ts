@@ -14,7 +14,7 @@ import {
 } from "convex-helpers/server/customFunctions"
 import * as ApiKey from "./model/apikey"
 import { type AuthUser, userIdentityOrThrow, userOrThrow } from "./model/user"
-import * as Err from "./shared/error"
+import { ErrorCode, error } from "./shared/error"
 
 export type AuthenticatedQueryCtx = QueryCtx & {
 	user: AuthUser
@@ -65,7 +65,10 @@ export const apiKeyAuthenticatedQuery = customQuery(query, {
 	},
 	input: async (ctx, args) => {
 		if (!(await ApiKey.verifyApiKey(ctx, args.apiKey))) {
-			throw Err.create(Err.Code.Unauthenticated, "Invalid API key")
+			error({
+				code: ErrorCode.Unauthenticated,
+				message: "Invalid API key",
+			})
 		}
 		return { ctx: ctx as ApiKeyAuthenticatedQueryCtx, args }
 	},
@@ -80,7 +83,10 @@ export const apiKeyAuthenticatedMutation = customMutation(mutation, {
 	},
 	input: async (ctx, args) => {
 		if (!(await ApiKey.verifyApiKey(ctx, args.apiKey))) {
-			throw Err.create(Err.Code.Unauthenticated, "Invalid API key")
+			error({
+				code: ErrorCode.Unauthenticated,
+				message: "Invalid API key",
+			})
 		}
 		return { ctx, args }
 	},

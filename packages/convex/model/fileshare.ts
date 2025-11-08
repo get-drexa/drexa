@@ -1,3 +1,4 @@
+import { ConvexError } from "convex/values"
 import type { Doc, Id } from "../_generated/dataModel"
 import type { MutationCtx } from "../_generated/server"
 import type {
@@ -5,7 +6,7 @@ import type {
 	AuthenticatedMutationCtx,
 	AuthenticatedQueryCtx,
 } from "../functions"
-import * as Err from "../shared/error"
+import { ErrorCode, error } from "../shared/error"
 
 export async function create(
 	ctx: MutationCtx,
@@ -22,7 +23,7 @@ export async function create(
 	})
 	const doc = await ctx.db.get(id)
 	if (!doc) {
-		throw Err.create(Err.Code.Internal, "Failed to create file share")
+		throw new ConvexError({ message: "Failed to create file share" })
 	}
 	return doc
 }
@@ -46,11 +47,17 @@ export async function find(
 		.withIndex("byShareToken", (q) => q.eq("shareToken", shareToken))
 		.first()
 	if (!doc) {
-		throw Err.create(Err.Code.NotFound, "File share not found")
+		error({
+			code: ErrorCode.NotFound,
+			message: "File share not found",
+		})
 	}
 
 	if (hasExpired(doc)) {
-		throw Err.create(Err.Code.NotFound, "File share not found")
+		error({
+			code: ErrorCode.NotFound,
+			message: "File share not found",
+		})
 	}
 
 	return doc

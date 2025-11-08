@@ -1,6 +1,7 @@
 import type { Doc, Id } from "@fileone/convex/dataModel"
 import { type AuthenticatedMutationCtx, authorizedGet } from "../functions"
-import * as Err from "../shared/error"
+import type { ApplicationErrorData } from "../shared/error"
+import { createErrorData, ErrorCode, error } from "../shared/error"
 import type { DirectoryHandle, FileHandle } from "../shared/filesystem"
 
 export async function renameFile(
@@ -27,10 +28,10 @@ export async function renameFile(
 		.first()
 
 	if (existing) {
-		throw Err.create(
-			Err.Code.FileExists,
-			`File with name ${newName} already exists in ${directoryId ? `directory ${directoryId}` : "root"}`,
-		)
+		error({
+			code: ErrorCode.FileExists,
+			message: `File with name ${newName} already exists in ${directoryId ? `directory ${directoryId}` : "root"}`,
+		})
 	}
 
 	await ctx.db.patch(itemId, { name: newName, updatedAt: Date.now() })
@@ -50,10 +51,10 @@ export async function move(
 		items.map((fileHandle) =>
 			authorizedGet(ctx, fileHandle.id).then((f) => {
 				if (!f) {
-					throw Err.create(
-						Err.Code.FileNotFound,
-						`File ${fileHandle.id} not found`,
-					)
+					error({
+						code: ErrorCode.NotFound,
+						message: `File ${fileHandle.id} not found`,
+					})
 				}
 				return ctx.db
 					.query("files")
@@ -69,14 +70,14 @@ export async function move(
 		),
 	)
 
-	const errors: Err.ApplicationErrorData[] = []
+	const errors: ApplicationErrorData[] = []
 	const okFiles: FileHandle[] = []
 	conflictCheckResults.forEach((result, i) => {
 		if (result.status === "fulfilled") {
 			if (result.value) {
 				errors.push(
-					Err.createJson(
-						Err.Code.Conflict,
+					createErrorData(
+						ErrorCode.Conflict,
 						`Directory ${targetDirectoryHandle.id} already contains a file with name ${result.value.name}`,
 					),
 				)
@@ -84,7 +85,7 @@ export async function move(
 				okFiles.push(items[i])
 			}
 		} else if (result.status === "rejected") {
-			errors.push(Err.createJson(Err.Code.Internal))
+			errors.push(createErrorData(ErrorCode.Internal))
 		}
 	})
 
@@ -99,7 +100,7 @@ export async function move(
 
 	for (const updateResult of results) {
 		if (updateResult.status === "rejected") {
-			errors.push(Err.createJson(Err.Code.Internal))
+			errors.push(createErrorData(ErrorCode.Internal))
 		}
 	}
 
@@ -136,11 +137,11 @@ export async function deletePermanently(
 
 	const deleteResults = await Promise.allSettled(deleteFilePromises)
 
-	const errors: Err.ApplicationErrorData[] = []
+	const errors: ApplicationErrorData[] = []
 	let successfulDeletions = 0
 	for (const result of deleteResults) {
 		if (result.status === "rejected") {
-			errors.push(Err.createJson(Err.Code.Internal))
+			errors.push(createErrorData(ErrorCode.Internal))
 		} else {
 			successfulDeletions += 1
 		}
@@ -179,11 +180,11 @@ export async function restore(
 
 	const restoreResults = await Promise.allSettled(restoreFilePromises)
 
-	const errors: Err.ApplicationErrorData[] = []
+	const errors: ApplicationErrorData[] = []
 	let successfulRestorations = 0
 	for (const result of restoreResults) {
 		if (result.status === "rejected") {
-			errors.push(Err.createJson(Err.Code.Internal))
+			errors.push(createErrorData(ErrorCode.Internal))
 		} else {
 			successfulRestorations += 1
 		}

@@ -4,7 +4,8 @@ import type {
 	AuthenticatedQueryCtx,
 } from "../functions"
 import { authorizedGet } from "../functions"
-import * as Err from "../shared/error"
+import type { ApplicationErrorData } from "../shared/error"
+import { createErrorData, ErrorCode, error } from "../shared/error"
 import {
 	type DirectoryHandle,
 	type DirectoryPath,
@@ -30,10 +31,10 @@ export async function fetchHandle(
 ): Promise<Doc<"directories">> {
 	const directory = await authorizedGet(ctx, handle.id)
 	if (!directory) {
-		throw Err.create(
-			Err.Code.DirectoryNotFound,
-			`Directory ${handle.id} not found`,
-		)
+		error({
+			code: ErrorCode.NotFound,
+			message: `Directory ${handle.id} not found`,
+		})
 	}
 	return directory
 }
@@ -44,10 +45,10 @@ export async function fetch(
 ): Promise<DirectoryInfo> {
 	const directory = await authorizedGet(ctx, directoryId)
 	if (!directory) {
-		throw Err.create(
-			Err.Code.DirectoryNotFound,
-			`Directory ${directoryId} not found`,
-		)
+		error({
+			code: ErrorCode.NotFound,
+			message: `Directory ${directoryId} not found`,
+		})
 	}
 
 	const path: DirectoryPath = [
@@ -66,7 +67,10 @@ export async function fetch(
 			})
 			parentDirId = parentDir.parentId
 		} else {
-			throw Err.create(Err.Code.DirectoryNotFound, "Parent directory not found")
+			error({
+				code: ErrorCode.NotFound,
+				message: "Parent directory not found",
+			})
 		}
 	}
 
@@ -135,10 +139,10 @@ export async function create(
 ): Promise<Id<"directories">> {
 	const parentDir = await authorizedGet(ctx, parentId)
 	if (!parentDir) {
-		throw Err.create(
-			Err.Code.DirectoryNotFound,
-			`Parent directory ${parentId} not found`,
-		)
+		error({
+			code: ErrorCode.NotFound,
+			message: `Parent directory ${parentId} not found`,
+		})
 	}
 
 	const existing = await ctx.db
@@ -153,10 +157,10 @@ export async function create(
 		.first()
 
 	if (existing) {
-		throw Err.create(
-			Err.Code.DirectoryExists,
-			`Directory with name ${name} already exists in ${parentId ? `directory ${parentId}` : "root"}`,
-		)
+		error({
+			code: ErrorCode.DirectoryExists,
+			message: `Directory with name ${name} already exists in ${parentId ? `directory ${parentId}` : "root"}`,
+		})
 	}
 
 	const now = Date.now()
@@ -183,10 +187,10 @@ export async function move(
 		sourceDirectories.map((directory) =>
 			authorizedGet(ctx, directory.id).then((d) => {
 				if (!d) {
-					throw Err.create(
-						Err.Code.DirectoryNotFound,
-						`Directory ${directory.id} not found`,
-					)
+					error({
+						code: ErrorCode.NotFound,
+						message: `Directory ${directory.id} not found`,
+					})
 				}
 				return ctx.db
 					.query("directories")
@@ -202,14 +206,14 @@ export async function move(
 		),
 	)
 
-	const errors: Err.ApplicationErrorData[] = []
+	const errors: ApplicationErrorData[] = []
 	const okDirectories: DirectoryHandle[] = []
 	conflictCheckResults.forEach((result, i) => {
 		if (result.status === "fulfilled") {
 			if (result.value) {
 				errors.push(
-					Err.createJson(
-						Err.Code.Conflict,
+					createErrorData(
+						ErrorCode.Conflict,
 						`Directory ${targetDirectory.id} already contains a directory with name ${result.value.name}`,
 					),
 				)
@@ -217,7 +221,7 @@ export async function move(
 				okDirectories.push(sourceDirectories[i]!)
 			}
 		} else if (result.status === "rejected") {
-			errors.push(Err.createJson(Err.Code.Internal))
+			errors.push(createErrorData(ErrorCode.Internal))
 		}
 	})
 
@@ -243,7 +247,7 @@ export async function move(
 
 	for (const updateResult of results) {
 		if (updateResult.status === "rejected") {
-			errors.push(Err.createJson(Err.Code.Internal))
+			errors.push(createErrorData(ErrorCode.Internal))
 		}
 	}
 
@@ -335,11 +339,11 @@ export async function deletePermanently(
 
 	const deleteResults = await Promise.allSettled(deleteDirectoryPromises)
 
-	const errors: Err.ApplicationErrorData[] = []
+	const errors: ApplicationErrorData[] = []
 	let successfulDeletions = 0
 	for (const result of deleteResults) {
 		if (result.status === "rejected") {
-			errors.push(Err.createJson(Err.Code.Internal))
+			errors.push(createErrorData(ErrorCode.Internal))
 		} else {
 			successfulDeletions += 1
 		}
@@ -378,11 +382,11 @@ export async function restore(
 
 	const restoreResults = await Promise.allSettled(restoreDirectoryPromises)
 
-	const errors: Err.ApplicationErrorData[] = []
+	const errors: ApplicationErrorData[] = []
 	let successfulRestorations = 0
 	for (const result of restoreResults) {
 		if (result.status === "rejected") {
-			errors.push(Err.createJson(Err.Code.Internal))
+			errors.push(createErrorData(ErrorCode.Internal))
 		} else {
 			successfulRestorations += 1
 		}

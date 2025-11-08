@@ -1,5 +1,5 @@
 import type { Id } from "@fileone/convex/dataModel"
-import { v } from "convex/values"
+import { ConvexError, v } from "convex/values"
 import {
 	authenticatedMutation,
 	authenticatedQuery,
@@ -8,19 +8,19 @@ import {
 import * as Directories from "./model/directories"
 import * as Files from "./model/files"
 import * as User from "./model/user"
-import * as Err from "./shared/error"
+import { ErrorCode, error } from "./shared/error"
 
 export const generateUploadUrl = authenticatedMutation({
 	handler: async (ctx) => {
-		const usageStatistics = await User.queryCachedUsageStatistics(ctx)
-		if (!usageStatistics) {
-			throw Err.create(Err.Code.Internal, "Internal server error")
+		const userInfo = await User.queryInfo(ctx)
+		if (!userInfo) {
+			throw new ConvexError({ message: "Internal server error" })
 		}
-		if (
-			usageStatistics.storageUsageBytes >=
-			usageStatistics.storageQuotaBytes
-		) {
-			throw Err.create(Err.Code.Forbidden, "Storage quota exceeded")
+		if (userInfo.storageUsageBytes >= userInfo.storageQuotaBytes) {
+			throw new ConvexError({
+				code: ErrorCode.StorageQuotaExceeded,
+				message: "Storage quota exceeded",
+			})
 		}
 		return await ctx.storage.generateUploadUrl()
 	},
@@ -53,7 +53,10 @@ export const fetchDirectory = authenticatedQuery({
 	handler: async (ctx, { directoryId }) => {
 		const directory = await authorizedGet(ctx, directoryId)
 		if (!directory) {
-			throw new Error("Directory not found")
+			error({
+				code: ErrorCode.NotFound,
+				message: "Directory not found",
+			})
 		}
 		return await Directories.fetch(ctx, { directoryId })
 	},
@@ -67,65 +70,15 @@ export const createDirectory = authenticatedMutation({
 	handler: async (ctx, { name, directoryId }): Promise<Id<"directories">> => {
 		const parentDirectory = await authorizedGet(ctx, directoryId)
 		if (!parentDirectory) {
-			throw new Error("Parent directory not found")
+			error({
+				code: ErrorCode.NotFound,
+				message: "Parent directory not found",
+			})
 		}
 
 		return await Directories.create(ctx, {
 			name,
 			parentId: directoryId,
 		})
-	},
-})
-
-export const saveFile = authenticatedMutation({
-	args: {
-		name: v.string(),
-		directoryId: v.id("directories"),
-		storageId: v.id("_storage"),
-	},
-	handler: async (ctx, { name, storageId, directoryId }) => {
-		const directory = await authorizedGet(ctx, directoryId)
-		if (!directory) {
-			throw new Error("Directory not found")
-		}
-
-		const now = Date.now()
-
-		const fileMetadata = await Promise.all([
-			ctx.db.system.get(storageId),
-			ctx.user.queryUsageStatistics(),
-		])
-		if (!fileMetadata) {
-			throw Err.create(Err.Code.Internal, "Internal server error")
-		}
-
-		await Promise.all([
-			ctx.db.insert("files", {
-				name,
-				size: fileMetadata.size,
-				storageId,
-				directoryId,
-				userId: ctx.user._id,
-				mimeType,
-				createdAt: now,
-				updatedAt: now,
-			}),
-		])
-	},
-})
-
-export const renameFile = authenticatedMutation({
-	args: {
-		directoryId: v.optional(v.id("directories")),
-		itemId: v.id("files"),
-		newName: v.string(),
-	},
-	handler: async (ctx, { directoryId, itemId, newName }) => {
-		const file = await authorizedGet(ctx, itemId)
-		if (!file) {
-			throw new Error("File not found")
-		}
-
-		await Files.renameFile(ctx, { directoryId, itemId, newName })
 	},
 })

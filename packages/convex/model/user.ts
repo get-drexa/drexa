@@ -2,7 +2,7 @@ import type { MutationCtx, QueryCtx } from "@fileone/convex/server"
 import type { Doc } from "../_generated/dataModel"
 import { authComponent } from "../auth"
 import { type AuthenticatedQueryCtx, authorizedGet } from "../functions"
-import * as Err from "../shared/error"
+import { ErrorCode, error } from "../shared/error"
 
 export type AuthUser = Awaited<ReturnType<typeof authComponent.getAuthUser>>
 
@@ -12,7 +12,10 @@ export type AuthUser = Awaited<ReturnType<typeof authComponent.getAuthUser>>
 export async function userIdentityOrThrow(ctx: QueryCtx | MutationCtx) {
 	const identity = await ctx.auth.getUserIdentity()
 	if (!identity) {
-		throw Err.create(Err.Code.Unauthenticated, "Not authenticated")
+		error({
+			code: ErrorCode.Unauthenticated,
+			message: "Not authenticated",
+		})
 	}
 	return identity
 }
