@@ -53,7 +53,7 @@ export const clearFileUploadStatusesAtom = atom(
 	},
 )
 
-export const clearAllFileUploadStatusesAtom = atom(null, (get, set) => {
+export const clearAllFileUploadStatusesAtom = atom(null, (_, set) => {
 	set(fileUploadStatusesAtom, {})
 })
 
