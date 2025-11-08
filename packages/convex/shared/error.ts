@@ -1,36 +1,44 @@
 import { ConvexError } from "convex/values"
 
-export enum Code {
+export enum ErrorCode {
 	Conflict = "Conflict",
 	DirectoryExists = "DirectoryExists",
-	DirectoryNotFound = "DirectoryNotFound",
 	FileExists = "FileExists",
-	FileNotFound = "FileNotFound",
 	Internal = "Internal",
 	Unauthenticated = "Unauthenticated",
 	NotFound = "NotFound",
 	StorageQuotaExceeded = "StorageQuotaExceeded",
 }
 
-export type ApplicationErrorData = { code: Code; message?: string }
-export type ApplicationError = ConvexError<ApplicationErrorData>
+export type ApplicationErrorData = { code: ErrorCode; message?: string }
 
-export function isApplicationError(error: unknown): error is ApplicationError {
-	return error instanceof ConvexError && "code" in error.data
+export function isApplicationError(
+	error: unknown,
+): error is ApplicationErrorData {
+	return (
+		error !== null &&
+		typeof error === "object" &&
+		"code" in error &&
+		"message" in error &&
+		Object.values(ErrorCode).includes(
+			(error as { code: string }).code as ErrorCode,
+		)
+	)
 }
 
-export function create(code: Code, message?: string): ApplicationError {
-	return new ConvexError({
-		code,
-		message:
-			code === Code.Internal ? "Internal application error" : message,
-	})
-}
-
-export function createJson(code: Code, message?: string): ApplicationErrorData {
+export function createErrorData(
+	code: ErrorCode,
+	message?: string,
+): ApplicationErrorData {
 	return {
 		code,
 		message:
-			code === Code.Internal ? "Internal application error" : message,
+			code === ErrorCode.Internal
+				? "Internal application error"
+				: message,
 	}
+}
+
+export function error(data: ApplicationErrorData): never {
+	throw new ConvexError(data)
 }
