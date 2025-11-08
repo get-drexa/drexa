@@ -1,8 +1,5 @@
 import type { Id } from "@fileone/convex/dataModel"
-import type {
-	DirectoryItem,
-	DirectoryItemKind,
-} from "@fileone/convex/types"
+import type { DirectoryItem, DirectoryItemKind } from "@fileone/convex/types"
 import type { RowSelectionState } from "@tanstack/react-table"
 import { atom } from "jotai"
 

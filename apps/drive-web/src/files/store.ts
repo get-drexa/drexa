@@ -53,12 +53,9 @@ export const clearFileUploadStatusesAtom = atom(
 	},
 )
 
-export const clearAllFileUploadStatusesAtom = atom(
-	null,
-	(get, set) => {
-		set(fileUploadStatusesAtom, {})
-	},
-)
+export const clearAllFileUploadStatusesAtom = atom(null, (get, set) => {
+	set(fileUploadStatusesAtom, {})
+})
 
 export const fileUploadCountAtom = atom(
 	(get) => Object.keys(get(fileUploadStatusesAtom)).length,
