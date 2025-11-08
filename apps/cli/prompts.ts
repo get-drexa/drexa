@@ -29,7 +29,9 @@ export async function promptNumber(
 ): Promise<number> {
 	const rl = createReadlineInterface()
 	try {
-		const defaultStr = defaultValue ? chalk.dim(` (default: ${defaultValue})`) : ""
+		const defaultStr = defaultValue
+			? chalk.dim(` (default: ${defaultValue})`)
+			: ""
 		const input = await rl.question(chalk.cyan(`${message}${defaultStr} `))
 
 		if ((!input || input.trim() === "") && defaultValue !== undefined) {
@@ -59,7 +61,8 @@ export async function promptOptionalDate(
 	const rl = createReadlineInterface()
 	try {
 		const input = await rl.question(
-			chalk.cyan(`${message} `) + chalk.dim("(optional, format: YYYY-MM-DD) "),
+			chalk.cyan(`${message} `) +
+				chalk.dim("(optional, format: YYYY-MM-DD) "),
 		)
 
 		if (!input || input.trim() === "") {
@@ -68,7 +71,9 @@ export async function promptOptionalDate(
 
 		const date = new Date(input.trim())
 		if (Number.isNaN(date.getTime())) {
-			console.error(chalk.red("✗ Invalid date format. Please use YYYY-MM-DD"))
+			console.error(
+				chalk.red("✗ Invalid date format. Please use YYYY-MM-DD"),
+			)
 			process.exit(1)
 		}
 

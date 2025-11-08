@@ -1,11 +1,7 @@
 import { generateApiKey, newPrefix } from "@drexa/auth"
 import chalk from "chalk"
 import { Command } from "commander"
-import {
-	promptNumber,
-	promptOptionalDate,
-	promptText,
-} from "../../prompts.ts"
+import { promptNumber, promptOptionalDate, promptText } from "../../prompts.ts"
 
 export const apikeyCommand = new Command("apikey")
 	.description("Generate a new API key")
@@ -53,7 +49,8 @@ export const apikeyCommand = new Command("apikey")
 		console.log(chalk.green(`  ${result.unhashedKey}\n`))
 		console.log(chalk.gray("─".repeat(60)))
 		console.log(
-			chalk.bold("\nHashed Key ") + chalk.dim("(store this in your database):"),
+			chalk.bold("\nHashed Key ") +
+				chalk.dim("(store this in your database):"),
 		)
 		console.log(chalk.dim(`  ${result.hashedKey}\n`))
 		console.log(chalk.bold("Description:"))

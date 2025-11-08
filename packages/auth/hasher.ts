@@ -62,10 +62,14 @@ export class WebCryptoSha256Hasher implements PassswordHasher {
 		}
 		return btoa(binary).replace(/[+/=]/g, (char) => {
 			switch (char) {
-				case "+": return "-"
-				case "/": return "_"
-				case "=": return ""
-				default: return char
+				case "+":
+					return "-"
+				case "/":
+					return "_"
+				case "=":
+					return ""
+				default:
+					return char
 			}
 		})
 	}
