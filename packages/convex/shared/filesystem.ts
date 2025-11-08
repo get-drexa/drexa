@@ -5,7 +5,7 @@
  */
 
 import type { Doc, Id } from "@fileone/convex/dataModel"
-import type * as Err from "./error"
+import type { ApplicationErrorData } from "./error"
 
 export enum FileType {
 	File = "File",
@@ -67,7 +67,7 @@ export type DeleteResult = {
 		files: number
 		directories: number
 	}
-	errors: Err.ApplicationErrorData[]
+	errors: ApplicationErrorData[]
 }
 
 export function newFileSystemHandle(item: FileSystemItem): FileSystemHandle {
