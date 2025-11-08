@@ -1,6 +1,5 @@
 import type { Doc } from "@fileone/convex/dataModel"
 import { mutationOptions } from "@tanstack/react-query"
-import { ConvexError } from "convex/values"
 import { atom, useAtom, useAtomValue, useSetAtom, useStore } from "jotai"
 import { atomEffect } from "jotai-effect"
 import { atomWithMutation } from "jotai-tanstack-query"
@@ -273,6 +272,7 @@ export function UploadFileDialog({
 						onClick={openFilePicker}
 						uploadFilesAtom={uploadFilesAtom}
 					/>
+					<ClearUploadErrorsButton />
 					<UploadButton
 						uploadFilesAtom={uploadFilesAtom}
 						onClick={onUploadButtonClick}
@@ -376,16 +376,39 @@ function SelectMoreFilesButton({
 	uploadFilesAtom: UploadFilesAtom
 }) {
 	const pickedFiles = useAtomValue(pickedFilesAtom)
-	const { data: uploadResults, isPending: isUploading } =
-		useAtomValue(uploadFilesAtom)
+	const fileUploadCount = useAtomValue(fileUploadCountAtom)
+	const { isPending: isUploading } = useAtomValue(uploadFilesAtom)
 
-	if (pickedFiles.length === 0 || uploadResults) {
+	if (pickedFiles.length === 0 || fileUploadCount > 0) {
 		return null
 	}
 
 	return (
 		<Button variant="outline" onClick={onClick} disabled={isUploading}>
 			Select more files
+		</Button>
+	)
+}
+
+function ClearUploadErrorsButton() {
+	const hasUploadErrors = useAtomValue(hasFileUploadsErrorAtom)
+	const clearAllFileUploadStatuses = useSetAtom(
+		clearAllFileUploadStatusesAtom,
+	)
+	const setPickedFiles = useSetAtom(pickedFilesAtom)
+
+	if (!hasUploadErrors) {
+		return null
+	}
+
+	function clearUploadErrors() {
+		setPickedFiles([])
+		clearAllFileUploadStatuses()
+	}
+
+	return (
+		<Button variant="outline" onClick={clearUploadErrors}>
+			Clear uploads
 		</Button>
 	)
 }
