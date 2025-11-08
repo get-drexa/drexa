@@ -54,7 +54,7 @@ export function useFileDrop({
 			errors: Err.ApplicationErrorData[]
 		}) => {
 			const conflictCount = errors.reduce((acc, error) => {
-				if (error.code === Err.Code.Conflict) {
+				if (error.code === Err.ErrorCode.Conflict) {
 					return acc + 1
 				}
 				return acc

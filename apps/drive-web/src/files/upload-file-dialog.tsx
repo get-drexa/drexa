@@ -1,5 +1,6 @@
 import type { Doc } from "@fileone/convex/dataModel"
 import { mutationOptions } from "@tanstack/react-query"
+import { ConvexError } from "convex/values"
 import { atom, useAtom, useAtomValue, useSetAtom, useStore } from "jotai"
 import { atomEffect } from "jotai-effect"
 import { atomWithMutation } from "jotai-tanstack-query"
@@ -88,7 +89,6 @@ function useUploadFilesAtom({
 								)
 							},
 						}).catch((error) => {
-							console.log("error", error)
 							store.set(
 								fileUploadStatusAtomFamily(pickedFile.id),
 								{
@@ -129,6 +129,9 @@ function useUploadFilesAtom({
 					if (remainingPickedFiles.length === 0) {
 						toast.success("All files uploaded successfully")
 					}
+				},
+				onError: (error) => {
+					toast.error(formatError(error))
 				},
 			}),
 		[uploadFile, store.set],
@@ -533,7 +536,6 @@ function PickedFileItem({
 }) {
 	const fileUploadAtom = fileUploadStatusAtomFamily(pickedFile.id)
 	const fileUpload = useAtomValue(fileUploadAtom)
-	console.log("fileUpload", fileUpload)
 	const { file, id } = pickedFile
 
 	let statusIndicator: React.ReactNode
