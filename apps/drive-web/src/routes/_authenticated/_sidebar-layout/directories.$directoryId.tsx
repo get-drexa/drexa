@@ -17,6 +17,7 @@ import { atom, useAtom, useAtomValue, useSetAtom, useStore } from "jotai"
 import {
 	ChevronDownIcon,
 	PlusIcon,
+	ScissorsIcon,
 	TextCursorInputIcon,
 	TrashIcon,
 } from "lucide-react"
@@ -46,7 +47,7 @@ import { NewDirectoryDialog } from "@/directories/directory-page/new-directory-d
 import { RenameFileDialog } from "@/directories/directory-page/rename-file-dialog"
 import { DirectoryPathBreadcrumb } from "@/directories/directory-path-breadcrumb"
 import { FilePreviewDialog } from "@/files/file-preview-dialog"
-import { inProgressFileUploadCountAtom } from "@/files/store"
+import { cutHandlesAtom, inProgressFileUploadCountAtom } from "@/files/store"
 import { UploadFileDialog } from "@/files/upload-file-dialog"
 import type { FileDragInfo } from "@/files/use-file-drop"
 
@@ -250,6 +251,7 @@ function DirectoryContentContextMenu({
 	const [target, setTarget] = useAtom(contextMenuTargetItemsAtom)
 	const setOptimisticDeletedItems = useSetAtom(optimisticDeletedItemsAtom)
 	const setBackgroundTaskProgress = useSetAtom(backgroundTaskProgressAtom)
+	const setCutHandles = useSetAtom(cutHandlesAtom)
 	const moveToTrashMutation = useContextMutation(api.filesystem.moveToTrash)
 
 	const { mutate: moveToTrash } = useMutation({
@@ -293,6 +295,13 @@ function DirectoryContentContextMenu({
 		},
 	})
 
+	const handleCut = () => {
+		const selectedItems = store.get(contextMenuTargetItemsAtom)
+		if (selectedItems.length > 0) {
+			setCutHandles(selectedItems.map(newFileSystemHandle))
+		}
+	}
+
 	const handleDelete = () => {
 		const selectedItems = store.get(contextMenuTargetItemsAtom)
 		if (selectedItems.length > 0) {
@@ -314,6 +323,10 @@ function DirectoryContentContextMenu({
 			{target.length > 0 && (
 				<ContextMenuContent>
 					<RenameMenuItem />
+					<ContextMenuItem onClick={handleCut}>
+						<ScissorsIcon />
+						Cut
+					</ContextMenuItem>
 					<ContextMenuItem
 						variant="destructive"
 						onClick={handleDelete}

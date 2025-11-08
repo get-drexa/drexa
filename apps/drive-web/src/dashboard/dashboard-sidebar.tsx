@@ -1,15 +1,25 @@
 import { api } from "@fileone/convex/api"
-import { Link, useLocation } from "@tanstack/react-router"
-import { useQuery as useConvexQuery } from "convex/react"
-import { useAtomValue } from "jotai"
+import { newDirectoryHandle } from "@fileone/convex/filesystem"
+import { useMutation } from "@tanstack/react-query"
+import { Link, useLocation, useParams } from "@tanstack/react-router"
 import {
+	useMutation as useConvexMutation,
+	useQuery as useConvexQuery,
+} from "convex/react"
+import { useAtomValue, useSetAtom, useStore } from "jotai"
+import {
+	CircleXIcon,
 	ClockIcon,
 	FilesIcon,
+	FolderInputIcon,
 	LogOutIcon,
+	ScissorsIcon,
 	SettingsIcon,
 	TrashIcon,
 	User2Icon,
 } from "lucide-react"
+import { toast } from "sonner"
+import { Card, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import {
 	DropdownMenu,
 	DropdownMenuContent,
@@ -26,7 +36,10 @@ import {
 	SidebarMenuButton,
 	SidebarMenuItem,
 } from "@/components/ui/sidebar"
+import { formatError } from "@/lib/error"
+import { Button } from "../components/ui/button"
 import { LoadingSpinner } from "../components/ui/loading-spinner"
+import { clearCutItemsAtom, cutHandlesAtom } from "../files/store"
 import { backgroundTaskProgressAtom } from "./state"
 
 export function DashboardSidebar() {
@@ -46,6 +59,7 @@ export function DashboardSidebar() {
 			</SidebarContent>
 			<SidebarFooter>
 				<SidebarMenu>
+					<CutItemsCard />
 					<BackgroundTaskProgressItem />
 				</SidebarMenu>
 			</SidebarFooter>
@@ -130,6 +144,93 @@ function BackgroundTaskProgressItem() {
 		<SidebarMenuItem className="flex items-center gap-2 opacity-80 text-sm">
 			<LoadingSpinner />
 			{backgroundTaskProgress.label}
+		</SidebarMenuItem>
+	)
+}
+
+/**
+ * Displays the number of cut items and allows the user to perform actions on them, such as moving them to a target directory.
+ * Visible when there are cut items.
+ */
+function CutItemsCard() {
+	const { directoryId } = useParams({ strict: false })
+	const cutHandles = useAtomValue(cutHandlesAtom)
+	const clearCutItems = useSetAtom(clearCutItemsAtom)
+	const setCutHandles = useSetAtom(cutHandlesAtom)
+	const setBackgroundTaskProgress = useSetAtom(backgroundTaskProgressAtom)
+	const store = useStore()
+
+	const _moveItems = useConvexMutation(api.filesystem.moveItems)
+	const { mutate: moveItems } = useMutation({
+		mutationFn: _moveItems,
+		onMutate: () => {
+			setBackgroundTaskProgress({
+				label: "Moving items…",
+			})
+			const cutHandles = store.get(cutHandlesAtom)
+			clearCutItems()
+			return { cutHandles }
+		},
+		onError: (error, _variables, context) => {
+			if (context?.cutHandles) {
+				setCutHandles(context.cutHandles)
+			}
+			toast.error("Failed to move items", {
+				description: formatError(error),
+			})
+		},
+		onSuccess: () => {
+			toast.success("Items moved")
+		},
+		onSettled: () => {
+			setBackgroundTaskProgress(null)
+		},
+	})
+
+	if (cutHandles.length === 0) return null
+
+	const moveCutItems = () => {
+		if (directoryId) {
+			moveItems({
+				targetDirectory: newDirectoryHandle(directoryId),
+				items: cutHandles,
+			})
+		}
+	}
+
+	return (
+		<SidebarMenuItem>
+			<Card className="p-0 gap-0 rounded-md overflow-clip">
+				<CardHeader className="px-3.5 py-1.5! gap-0 border-b border-b-primary-foreground/10 bg-primary text-primary-foreground">
+					<CardTitle className="p-0 m-0 text-xs uppercase">
+						<div className="flex items-center gap-1.5">
+							<ScissorsIcon size={16} /> {cutHandles.length} Cut
+							Items
+						</div>
+					</CardTitle>
+				</CardHeader>
+				<CardFooter className="p-1 flex flex-col">
+					<Button
+						size="sm"
+						variant="ghost"
+						className="w-full justify-start transition-none"
+						disabled={!directoryId}
+						onClick={moveCutItems}
+					>
+						<FolderInputIcon size={16} />
+						Move items here
+					</Button>
+					<Button
+						size="sm"
+						variant="ghost"
+						className="w-full justify-start transition-none"
+						onClick={() => clearCutItems()}
+					>
+						<CircleXIcon size={16} />
+						Clear
+					</Button>
+				</CardFooter>
+			</Card>
 		</SidebarMenuItem>
 	)
 }

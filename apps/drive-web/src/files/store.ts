@@ -1,3 +1,4 @@
+import type { FileSystemHandle } from "@fileone/convex/filesystem"
 import { atom } from "jotai"
 import { atomFamily } from "jotai/utils"
 
@@ -91,4 +92,9 @@ export const hasFileUploadsErrorAtom = atom((get) => {
 		}
 	}
 	return false
+})
+
+export const cutHandlesAtom = atom<FileSystemHandle[]>([])
+export const clearCutItemsAtom = atom(null, (_, set) => {
+	set(cutHandlesAtom, [])
 })
