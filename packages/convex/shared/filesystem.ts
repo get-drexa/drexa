@@ -71,7 +71,6 @@ export type DeleteResult = {
 }
 
 export function newFileSystemHandle(item: FileSystemItem): FileSystemHandle {
-	console.log("item", item)
 	switch (item.kind) {
 		case FileType.File:
 			return { kind: item.kind, id: item.doc._id }
