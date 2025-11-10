@@ -12,6 +12,10 @@
 		},
 		"ghcr.io/tailscale/codespace/tailscale": {
 			"version": "latest"
+		},
+		"ghcr.io/devcontainers/features/go:1": {
+			"version": "1.25.4",
+			"golangciLintVersion": "2.6.1"
 		}
 	},
 	"postCreateCommand": "./scripts/setup-git.sh",
