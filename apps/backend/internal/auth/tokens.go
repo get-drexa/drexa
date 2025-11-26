@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/get-drexa/drexa/internal/user"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 	"github.com/uptrace/bun"
@@ -35,7 +36,7 @@ type RefreshToken struct {
 	CreatedAt time.Time `bun:"created_at,notnull"`
 }
 
-func GenerateAccessToken(user *User, c *TokenConfig) (string, error) {
+func GenerateAccessToken(user *user.User, c *TokenConfig) (string, error) {
 	now := time.Now()
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.RegisteredClaims{
@@ -54,7 +55,7 @@ func GenerateAccessToken(user *User, c *TokenConfig) (string, error) {
 	return signed, nil
 }
 
-func GenerateRefreshToken(user *User, c *TokenConfig) (*RefreshToken, error) {
+func GenerateRefreshToken(user *user.User, c *TokenConfig) (*RefreshToken, error) {
 	now := time.Now()
 
 	buf := make([]byte, refreshTokenByteLength)
@@ -80,6 +81,8 @@ func GenerateRefreshToken(user *User, c *TokenConfig) (*RefreshToken, error) {
 	}, nil
 }
 
+// ParseAccessToken parses a JWT access token and returns the claims.
+// Returns an InvalidAccessTokenError if the token is invalid.
 func ParseAccessToken(token string, c *TokenConfig) (*jwt.RegisteredClaims, error) {
 	parsed, err := jwt.ParseWithClaims(token, &jwt.RegisteredClaims{}, func(token *jwt.Token) (any, error) {
 		return c.SecretKey, nil

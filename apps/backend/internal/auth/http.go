@@ -3,6 +3,7 @@ package auth
 import (
 	"errors"
 
+	"github.com/get-drexa/drexa/internal/user"
 	"github.com/gofiber/fiber/v2"
 )
 
@@ -20,9 +21,9 @@ type registerRequest struct {
 }
 
 type loginResponse struct {
-	User         User   `json:"user"`
-	AccessToken  string `json:"accessToken"`
-	RefreshToken string `json:"refreshToken"`
+	User         user.User `json:"user"`
+	AccessToken  string    `json:"accessToken"`
+	RefreshToken string    `json:"refreshToken"`
 }
 
 func RegisterAPIRoutes(api fiber.Router, s *Service) {
@@ -56,7 +57,7 @@ func login(c *fiber.Ctx) error {
 	}
 
 	return c.JSON(loginResponse{
-		User:         result.User,
+		User:         *result.User,
 		AccessToken:  result.AccessToken,
 		RefreshToken: result.RefreshToken,
 	})
@@ -83,7 +84,7 @@ func register(c *fiber.Ctx) error {
 	}
 
 	return c.JSON(loginResponse{
-		User:         result.User,
+		User:         *result.User,
 		AccessToken:  result.AccessToken,
 		RefreshToken: result.RefreshToken,
 	})

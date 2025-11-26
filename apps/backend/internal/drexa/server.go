@@ -9,6 +9,7 @@ import (
 
 	"github.com/get-drexa/drexa/internal/auth"
 	"github.com/get-drexa/drexa/internal/database"
+	"github.com/get-drexa/drexa/internal/user"
 	"github.com/gofiber/fiber/v2"
 )
 
@@ -24,7 +25,8 @@ func NewServer(c ServerConfig) *fiber.App {
 	app := fiber.New()
 	db := database.NewFromPostgres(c.PostgresURL)
 
-	authService := auth.NewService(db, auth.TokenConfig{
+	userService := user.NewService(db)
+	authService := auth.NewService(db, userService, auth.TokenConfig{
 		Issuer:    c.JWTIssuer,
 		Audience:  c.JWTAudience,
 		SecretKey: c.JWTSecretKey,

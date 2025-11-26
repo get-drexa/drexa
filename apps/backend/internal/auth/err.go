@@ -1,6 +1,11 @@
 package auth
 
-import "fmt"
+import (
+	"errors"
+	"fmt"
+)
+
+var ErrUnauthenticatedRequest = errors.New("unauthenticated request")
 
 type InvalidAccessTokenError struct {
 	err error
