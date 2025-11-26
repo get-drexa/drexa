@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"errors"
 
+	"github.com/get-drexa/drexa/internal/password"
 	"github.com/get-drexa/drexa/internal/user"
 	"github.com/google/uuid"
 	"github.com/uptrace/bun"
@@ -39,25 +40,27 @@ func NewService(db *bun.DB, userService *user.Service, tokenConfig TokenConfig) 
 	}
 }
 
-func (s *Service) LoginWithEmailAndPassword(ctx context.Context, email, password string) (*LoginResult, error) {
-	var u user.User
-
-	err := s.db.NewSelect().Model(&u).Where("email = ?", email).Scan(ctx)
+func (s *Service) LoginWithEmailAndPassword(ctx context.Context, email, plain string) (*LoginResult, error) {
+	u, err := s.userService.UserByEmail(ctx, email)
 	if err != nil {
+		var nf *user.NotFoundError
+		if errors.As(err, &nf) {
+			return nil, ErrInvalidCredentials
+		}
 		return nil, err
 	}
 
-	ok, err := VerifyPassword(password, u.Password)
+	ok, err := password.Verify(plain, u.Password)
 	if err != nil || !ok {
 		return nil, ErrInvalidCredentials
 	}
 
-	at, err := GenerateAccessToken(&u, &s.tokenConfig)
+	at, err := GenerateAccessToken(u, &s.tokenConfig)
 	if err != nil {
 		return nil, err
 	}
 
-	rt, err := GenerateRefreshToken(&u, &s.tokenConfig)
+	rt, err := GenerateRefreshToken(u, &s.tokenConfig)
 	if err != nil {
 		return nil, err
 	}
@@ -68,48 +71,44 @@ func (s *Service) LoginWithEmailAndPassword(ctx context.Context, email, password
 	}
 
 	return &LoginResult{
-		User:         &u,
+		User:         u,
 		AccessToken:  at,
 		RefreshToken: hex.EncodeToString(rt.Token),
 	}, nil
 }
 
 func (s *Service) Register(ctx context.Context, opts registerOptions) (*LoginResult, error) {
-	u := user.User{
+	hashed, err := password.Hash(opts.password)
+	if err != nil {
+		return nil, err
+	}
+
+	u, err := s.userService.RegisterUser(ctx, user.UserRegistrationOptions{
 		Email:       opts.email,
 		DisplayName: opts.displayName,
-	}
-
-	exists, err := s.db.NewSelect().Model(&u).Where("email = ?", opts.email).Exists(ctx)
-	if err != nil {
-		return nil, err
-	}
-	if exists {
-		return nil, ErrUserExists
-	}
-
-	u.Password, err = HashPassword(opts.password)
+		Password:    hashed,
+	})
 	if err != nil {
 		return nil, err
 	}
 
-	_, err = s.db.NewInsert().Model(&u).Exec(ctx)
+	at, err := GenerateAccessToken(u, &s.tokenConfig)
 	if err != nil {
 		return nil, err
 	}
 
-	at, err := GenerateAccessToken(&u, &s.tokenConfig)
+	rt, err := GenerateRefreshToken(u, &s.tokenConfig)
 	if err != nil {
 		return nil, err
 	}
 
-	rt, err := GenerateRefreshToken(&u, &s.tokenConfig)
+	_, err = s.db.NewInsert().Model(rt).Exec(ctx)
 	if err != nil {
 		return nil, err
 	}
 
 	return &LoginResult{
-		User:         &u,
+		User:         u,
 		AccessToken:  at,
 		RefreshToken: hex.EncodeToString(rt.Token),
 	}, nil

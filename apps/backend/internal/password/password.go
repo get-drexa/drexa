@@ -1,4 +1,4 @@
-package auth
+package password
 
 import (
 	"crypto/rand"
@@ -10,6 +10,10 @@ import (
 
 	"golang.org/x/crypto/argon2"
 )
+
+// Hashed represents a securely hashed password.
+// This type ensures plaintext passwords cannot be accidentally stored.
+type Hashed string
 
 // argon2id parameters
 const (
@@ -34,14 +38,15 @@ type argon2Hash struct {
 	hash        []byte
 }
 
-func HashPassword(password string) (string, error) {
+// Hash securely hashes a plaintext password using argon2id.
+func Hash(plain string) (Hashed, error) {
 	salt := make([]byte, saltLength)
 	if _, err := rand.Read(salt); err != nil {
 		return "", fmt.Errorf("failed to generate salt: %w", err)
 	}
 
 	hash := argon2.IDKey(
-		[]byte(password),
+		[]byte(plain),
 		salt,
 		iterations,
 		memory,
@@ -52,7 +57,7 @@ func HashPassword(password string) (string, error) {
 	b64Salt := base64.RawStdEncoding.EncodeToString(salt)
 	b64Hash := base64.RawStdEncoding.EncodeToString(hash)
 
-	encodedHash := fmt.Sprintf(
+	encoded := fmt.Sprintf(
 		"$argon2id$v=%d$m=%d,t=%d,p=%d$%s$%s",
 		argon2.Version,
 		memory,
@@ -62,17 +67,18 @@ func HashPassword(password string) (string, error) {
 		b64Hash,
 	)
 
-	return encodedHash, nil
+	return Hashed(encoded), nil
 }
 
-func VerifyPassword(password, encodedHash string) (bool, error) {
-	h, err := decodeHash(encodedHash)
+// Verify checks if a plaintext password matches a hashed password.
+func Verify(plain string, hashed Hashed) (bool, error) {
+	h, err := decodeHash(string(hashed))
 	if err != nil {
 		return false, err
 	}
 
 	otherHash := argon2.IDKey(
-		[]byte(password),
+		[]byte(plain),
 		h.salt,
 		h.iterations,
 		h.memory,
