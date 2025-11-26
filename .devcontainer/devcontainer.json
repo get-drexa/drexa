@@ -7,9 +7,6 @@
 	"features": {
 		"ghcr.io/devcontainers/features/git:1": {},
 		"ghcr.io/devcontainers/features/github-cli:1": {},
-		"ghcr.io/devcontainers/features/docker-in-docker:2": {
-			"moby": false
-		},
 		"ghcr.io/tailscale/codespace/tailscale": {
 			"version": "latest"
 		},
@@ -18,19 +15,14 @@
 			"golangciLintVersion": "2.6.1"
 		}
 	},
-	"postCreateCommand": "./scripts/setup-git.sh",
+	"postCreateCommand": "./scripts/setup-git.sh && ./scripts/install-vscode-extensions.sh",
 	"customizations": {
 		"vscode": {
 			"extensions": [
 				"biomejs.biome",
 				"bradlc.vscode-tailwindcss",
-				"ms-vscode.vscode-typescript-next",
-				"esbenp.prettier-vscode",
-				"ms-vscode.vscode-json",
-				"formulahendry.auto-rename-tag",
 				"christian-kohler.path-intellisense",
-				"ms-vscode.vscode-eslint",
-				"convex.convex-vscode"
+				"golang.go"
 			],
 			"settings": {
 				"editor.defaultFormatter": "biomejs.biome",
