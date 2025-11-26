@@ -77,7 +77,8 @@ func register(c *fiber.Ctx) error {
 		displayName: req.DisplayName,
 	})
 	if err != nil {
-		if errors.Is(err, ErrUserExists) {
+		var ae *user.AlreadyExistsError
+		if errors.As(err, &ae) {
 			return c.Status(fiber.StatusConflict).JSON(fiber.Map{"error": "User already exists"})
 		}
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Internal server error"})
