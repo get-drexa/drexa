@@ -15,7 +15,7 @@
 			"golangciLintVersion": "2.6.1"
 		}
 	},
-	"postCreateCommand": "./scripts/setup-git.sh && ./scripts/install-vscode-extensions.sh",
+	"postCreateCommand": "./scripts/setup-git.sh",
 	"customizations": {
 		"vscode": {
 			"extensions": [
