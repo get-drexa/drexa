@@ -50,52 +50,50 @@ CREATE INDEX idx_refresh_tokens_user_id ON refresh_tokens(user_id);
 CREATE INDEX idx_refresh_tokens_token_hash ON refresh_tokens(token_hash);
 CREATE INDEX idx_refresh_tokens_expires_at ON refresh_tokens(expires_at);
 
-CREATE TABLE IF NOT EXISTS directories (
+-- Virtual filesystem nodes (unified files + directories)
+CREATE TABLE IF NOT EXISTS vfs_nodes (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v7(),
+    public_id TEXT NOT NULL UNIQUE,  -- opaque ID for external API (no timestamp leak)
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    parent_id UUID REFERENCES vfs_nodes(id) ON DELETE CASCADE,  -- NULL = root directory
+    kind TEXT NOT NULL CHECK (kind IN ('file', 'directory')),
+    status TEXT NOT NULL DEFAULT 'ready' CHECK (status IN ('pending', 'ready')),
     name TEXT NOT NULL,
-    parent_id UUID REFERENCES directories(id) ON DELETE CASCADE,
+    
+    -- File-specific fields (NULL for directories)
+    blob_key TEXT,      -- reference to blob storage (flat mode), NULL for hierarchical
+    size BIGINT,        -- file size in bytes
+    mime_type TEXT,     -- content type
+    
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    deleted_at TIMESTAMPTZ,
-    CONSTRAINT unique_directory_path UNIQUE NULLS NOT DISTINCT (user_id, parent_id, name, deleted_at)
+    deleted_at TIMESTAMPTZ,  -- soft delete for trash
+    
+    -- No duplicate names in same parent (per user, excluding deleted)
+    CONSTRAINT unique_node_name UNIQUE NULLS NOT DISTINCT (user_id, parent_id, name, deleted_at)
 );
 
-CREATE INDEX idx_directories_user_id ON directories(user_id, deleted_at);
-CREATE INDEX idx_directories_path ON directories(user_id, path, deleted_at);
+CREATE INDEX idx_vfs_nodes_user_id ON vfs_nodes(user_id) WHERE deleted_at IS NULL;
+CREATE INDEX idx_vfs_nodes_parent_id ON vfs_nodes(parent_id) WHERE deleted_at IS NULL;
+CREATE INDEX idx_vfs_nodes_user_parent ON vfs_nodes(user_id, parent_id) WHERE deleted_at IS NULL;
+CREATE INDEX idx_vfs_nodes_kind ON vfs_nodes(user_id, kind) WHERE deleted_at IS NULL;
+CREATE INDEX idx_vfs_nodes_deleted ON vfs_nodes(user_id, deleted_at) WHERE deleted_at IS NOT NULL;
+CREATE INDEX idx_vfs_nodes_public_id ON vfs_nodes(public_id);
+CREATE UNIQUE INDEX idx_vfs_nodes_user_root ON vfs_nodes(user_id) WHERE parent_id IS NULL;  -- one root per user
+CREATE INDEX idx_vfs_nodes_pending ON vfs_nodes(created_at) WHERE status = 'pending';  -- for cleanup job
 
-CREATE TABLE IF NOT EXISTS files (
+CREATE TABLE IF NOT EXISTS node_shares (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v7(),
-    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    directory_id UUID REFERENCES directories(id) ON DELETE CASCADE,
-    name TEXT NOT NULL,
-    size BIGINT NOT NULL,
-    mime_type TEXT,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    deleted_at TIMESTAMPTZ,
-    last_accessed_at TIMESTAMPTZ,
-    CONSTRAINT unique_file_in_directory UNIQUE NULLS NOT DISTINCT (user_id, directory_id, name, deleted_at)
-);
-
-CREATE INDEX idx_files_user_id ON files(user_id, deleted_at);
-CREATE INDEX idx_files_directory_id ON files(directory_id) WHERE directory_id IS NOT NULL;
-CREATE INDEX idx_files_path ON files(user_id, path, deleted_at);
-CREATE INDEX idx_files_deleted_at ON files(deleted_at) WHERE deleted_at IS NOT NULL;
-CREATE INDEX idx_files_last_accessed_at ON files(user_id, deleted_at, last_accessed_at);
-
-CREATE TABLE IF NOT EXISTS file_shares (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v7(),
-    file_id UUID NOT NULL REFERENCES files(id) ON DELETE CASCADE,
+    node_id UUID NOT NULL REFERENCES vfs_nodes(id) ON DELETE CASCADE,
     share_token TEXT NOT NULL UNIQUE,
     expires_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_file_shares_share_token ON file_shares(share_token);
-CREATE INDEX idx_file_shares_file_id ON file_shares(file_id);
-CREATE INDEX idx_file_shares_expires_at ON file_shares(expires_at) WHERE expires_at IS NOT NULL;
+CREATE INDEX idx_node_shares_share_token ON node_shares(share_token);
+CREATE INDEX idx_node_shares_node_id ON node_shares(node_id);
+CREATE INDEX idx_node_shares_expires_at ON node_shares(expires_at) WHERE expires_at IS NOT NULL;
 
 -- ============================================================================
 -- Triggers for updated_at timestamps
@@ -112,11 +110,8 @@ $$ LANGUAGE plpgsql;
 CREATE TRIGGER update_users_updated_at BEFORE UPDATE ON users
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
-CREATE TRIGGER update_directories_updated_at BEFORE UPDATE ON directories
+CREATE TRIGGER update_vfs_nodes_updated_at BEFORE UPDATE ON vfs_nodes
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
-CREATE TRIGGER update_files_updated_at BEFORE UPDATE ON files
-    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-
-CREATE TRIGGER update_file_shares_updated_at BEFORE UPDATE ON file_shares
+CREATE TRIGGER update_node_shares_updated_at BEFORE UPDATE ON node_shares
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
