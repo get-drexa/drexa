@@ -9,10 +9,15 @@ import (
 )
 
 type BlobKeyResolver interface {
+	KeyMode() blob.KeyMode
 	Resolve(ctx context.Context, node *Node) (blob.Key, error)
 }
 
 type FlatKeyResolver struct{}
+
+func (r *FlatKeyResolver) KeyMode() blob.KeyMode {
+	return blob.KeyModeStable
+}
 
 func (r *FlatKeyResolver) Resolve(ctx context.Context, node *Node) (blob.Key, error) {
 	if node.BlobKey == "" {
@@ -29,10 +34,15 @@ type HierarchicalKeyResolver struct {
 	db *bun.DB
 }
 
+func (r *HierarchicalKeyResolver) KeyMode() blob.KeyMode {
+	return blob.KeyModeDerived
+}
+
 func (r *HierarchicalKeyResolver) Resolve(ctx context.Context, node *Node) (blob.Key, error) {
 	path, err := buildNodeAbsolutePath(ctx, r.db, node.ID)
 	if err != nil {
 		return "", err
 	}
+
 	return blob.Key(path), nil
 }

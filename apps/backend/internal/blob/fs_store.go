@@ -5,6 +5,8 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+
+	"github.com/get-drexa/drexa/internal/ioext"
 )
 
 var _ Store = &FSStore{}
@@ -14,11 +16,16 @@ type FSStore struct {
 }
 
 type FSStoreConfig struct {
-	Root string
+	Root      string
+	UploadURL string
 }
 
 func NewFSStore(config FSStoreConfig) *FSStore {
 	return &FSStore{config: config}
+}
+
+func (s *FSStore) GenerateUploadURL(ctx context.Context, key Key, opts UploadURLOptions) (string, error) {
+	return s.config.UploadURL, nil
 }
 
 func (s *FSStore) Put(ctx context.Context, key Key, reader io.Reader) error {
@@ -47,7 +54,7 @@ func (s *FSStore) Put(ctx context.Context, key Key, reader io.Reader) error {
 	return nil
 }
 
-func (s *FSStore) Retrieve(ctx context.Context, key Key) (io.ReadCloser, error) {
+func (s *FSStore) Read(ctx context.Context, key Key) (io.ReadCloser, error) {
 	path := filepath.Join(s.config.Root, string(key))
 	f, err := os.Open(path)
 	if err != nil {
@@ -59,6 +66,37 @@ func (s *FSStore) Retrieve(ctx context.Context, key Key) (io.ReadCloser, error) 
 	return f, nil
 }
 
+func (s *FSStore) ReadRange(ctx context.Context, key Key, offset, length int64) (io.ReadCloser, error) {
+	path := filepath.Join(s.config.Root, string(key))
+
+	f, err := os.Open(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, ErrNotFound
+		}
+		return nil, err
+	}
+
+	_, err = f.Seek(offset, io.SeekStart)
+	if err != nil {
+		return nil, err
+	}
+
+	return ioext.NewLimitReadCloser(f, length), nil
+}
+
+func (s *FSStore) ReadSize(ctx context.Context, key Key) (int64, error) {
+	path := filepath.Join(s.config.Root, string(key))
+	fi, err := os.Stat(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return 0, ErrNotFound
+		}
+		return 0, err
+	}
+	return fi.Size(), nil
+}
+
 func (s *FSStore) Delete(ctx context.Context, key Key) error {
 	err := os.Remove(filepath.Join(s.config.Root, string(key)))
 	// no op if file does not exist
@@ -66,6 +104,11 @@ func (s *FSStore) Delete(ctx context.Context, key Key) error {
 	if err != nil && !os.IsNotExist(err) {
 		return err
 	}
+	return nil
+}
+
+func (s *FSStore) Update(ctx context.Context, key Key, opts UpdateOptions) error {
+	// Update is a no-op for FSStore
 	return nil
 }
 

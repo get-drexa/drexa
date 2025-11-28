@@ -1,4 +1,4 @@
-package virtualfs
+package ioext
 
 import "io"
 
@@ -20,3 +20,4 @@ func (r *CountingReader) Read(p []byte) (n int, err error) {
 func (r *CountingReader) Count() int64 {
 	return r.count
 }
+
