@@ -16,7 +16,10 @@ func main() {
 		log.Fatal(err)
 	}
 
-	server := drexa.NewServer(*config)
+	server, err := drexa.NewServer(*config)
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	log.Fatal(server.Listen(fmt.Sprintf(":%d", config.Port)))
 }
