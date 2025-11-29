@@ -1,5 +1,4 @@
 {
-	"name": "React + Bun + Convex Development",
 	"build": {
 		"context": ".",
 		"dockerfile": "Dockerfile"
