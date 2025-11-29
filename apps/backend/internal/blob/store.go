@@ -15,6 +15,7 @@ type UpdateOptions struct {
 }
 
 type Store interface {
+	Initialize(ctx context.Context) error
 	GenerateUploadURL(ctx context.Context, key Key, opts UploadURLOptions) (string, error)
 	Put(ctx context.Context, key Key, reader io.Reader) error
 	Update(ctx context.Context, key Key, opts UpdateOptions) error

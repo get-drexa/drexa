@@ -1,6 +1,7 @@
 package drexa
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/get-drexa/drexa/internal/auth"
@@ -27,6 +28,11 @@ func NewServer(c Config) (*fiber.App, error) {
 		return nil, fmt.Errorf("s3 storage backend not yet implemented")
 	default:
 		return nil, fmt.Errorf("unknown storage backend: %s", c.Storage.Backend)
+	}
+
+	err := blobStore.Initialize(context.Background())
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize blob store: %w", err)
 	}
 
 	// Initialize key resolver based on config

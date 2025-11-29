@@ -24,6 +24,10 @@ func NewFSStore(config FSStoreConfig) *FSStore {
 	return &FSStore{config: config}
 }
 
+func (s *FSStore) Initialize(ctx context.Context) error {
+	return os.MkdirAll(s.config.Root, 0755)
+}
+
 func (s *FSStore) GenerateUploadURL(ctx context.Context, key Key, opts UploadURLOptions) (string, error) {
 	return s.config.UploadURL, nil
 }
