@@ -11,9 +11,7 @@ import (
 	"github.com/uptrace/bun"
 )
 
-type Service struct {
-	db *bun.DB
-}
+type Service struct{}
 
 type UserRegistrationOptions struct {
 	Email       string
@@ -21,20 +19,24 @@ type UserRegistrationOptions struct {
 	Password    password.Hashed
 }
 
-func NewService(db *bun.DB) *Service {
-	return &Service{
-		db: db,
-	}
+func NewService() *Service {
+	return &Service{}
 }
 
-func (s *Service) RegisterUser(ctx context.Context, opts UserRegistrationOptions) (*User, error) {
+func (s *Service) RegisterUser(ctx context.Context, db bun.IDB, opts UserRegistrationOptions) (*User, error) {
+	uid, err := newUserID()
+	if err != nil {
+		return nil, err
+	}
+
 	u := User{
+		ID:          uid,
 		Email:       opts.Email,
 		DisplayName: opts.DisplayName,
 		Password:    opts.Password,
 	}
 
-	_, err := s.db.NewInsert().Model(&u).Returning("*").Exec(ctx)
+	_, err = db.NewInsert().Model(&u).Returning("*").Exec(ctx)
 	if err != nil {
 		if database.IsUniqueViolation(err) {
 			return nil, newAlreadyExistsError(u.Email)
@@ -45,9 +47,9 @@ func (s *Service) RegisterUser(ctx context.Context, opts UserRegistrationOptions
 	return &u, nil
 }
 
-func (s *Service) UserByID(ctx context.Context, id uuid.UUID) (*User, error) {
+func (s *Service) UserByID(ctx context.Context, db bun.IDB, id uuid.UUID) (*User, error) {
 	var user User
-	err := s.db.NewSelect().Model(&user).Where("id = ?", id).Scan(ctx)
+	err := db.NewSelect().Model(&user).Where("id = ?", id).Scan(ctx)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, newNotFoundError(id, "")
@@ -57,9 +59,9 @@ func (s *Service) UserByID(ctx context.Context, id uuid.UUID) (*User, error) {
 	return &user, nil
 }
 
-func (s *Service) UserByEmail(ctx context.Context, email string) (*User, error) {
+func (s *Service) UserByEmail(ctx context.Context, db bun.IDB, email string) (*User, error) {
 	var user User
-	err := s.db.NewSelect().Model(&user).Where("email = ?", email).Scan(ctx)
+	err := db.NewSelect().Model(&user).Where("email = ?", email).Scan(ctx)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, newNotFoundError(uuid.Nil, email)
@@ -69,6 +71,6 @@ func (s *Service) UserByEmail(ctx context.Context, email string) (*User, error) 
 	return &user, nil
 }
 
-func (s *Service) UserExistsByEmail(ctx context.Context, email string) (bool, error) {
-	return s.db.NewSelect().Model(&User{}).Where("email = ?", email).Exists(ctx)
+func (s *Service) UserExistsByEmail(ctx context.Context, db bun.IDB, email string) (bool, error) {
+	return db.NewSelect().Model(&User{}).Where("email = ?", email).Exists(ctx)
 }

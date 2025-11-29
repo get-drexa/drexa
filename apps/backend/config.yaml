@@ -1,0 +1,15 @@
+server:
+  port: 8080
+
+database:
+  postgres_url: postgres://drexa:hunter2@helian:5433/drexa?sslmode=disable
+
+jwt:
+  issuer: drexa
+  audience: drexa-api
+  secret_key_base64: "pNeUExoqdakfecZLFL53NJpY4iB9zFot9EuEBItlYKY="
+
+storage:
+  mode: hierarchical
+  backend: fs
+  root_path: ./data

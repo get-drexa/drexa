@@ -2,12 +2,12 @@ package auth
 
 import (
 	"errors"
+	"log/slog"
 
 	"github.com/get-drexa/drexa/internal/user"
 	"github.com/gofiber/fiber/v2"
+	"github.com/uptrace/bun"
 )
-
-const authServiceKey = "authService"
 
 type loginRequest struct {
 	Email    string `json:"email"`
@@ -26,33 +26,43 @@ type loginResponse struct {
 	RefreshToken string    `json:"refreshToken"`
 }
 
-func RegisterAPIRoutes(api fiber.Router, s *Service) {
-	auth := api.Group("/auth", func(c *fiber.Ctx) error {
-		c.Locals(authServiceKey, s)
-		return c.Next()
-	})
-
-	auth.Post("/login", login)
-	auth.Post("/register", register)
+type HTTPHandler struct {
+	service *Service
+	db      *bun.DB
 }
 
-func mustAuthService(c *fiber.Ctx) *Service {
-	return c.Locals(authServiceKey).(*Service)
+func NewHTTPHandler(s *Service, db *bun.DB) *HTTPHandler {
+	return &HTTPHandler{service: s, db: db}
 }
 
-func login(c *fiber.Ctx) error {
-	s := mustAuthService(c)
+func (h *HTTPHandler) RegisterRoutes(api fiber.Router) {
+	auth := api.Group("/auth")
 
+	auth.Post("/login", h.Login)
+	auth.Post("/register", h.Register)
+}
+
+func (h *HTTPHandler) Login(c *fiber.Ctx) error {
 	req := new(loginRequest)
 	if err := c.BodyParser(req); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid request"})
 	}
 
-	result, err := s.LoginWithEmailAndPassword(c.Context(), req.Email, req.Password)
+	tx, err := h.db.BeginTx(c.Context(), nil)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Internal server error"})
+	}
+	defer tx.Rollback()
+
+	result, err := h.service.LoginWithEmailAndPassword(c.Context(), tx, req.Email, req.Password)
 	if err != nil {
 		if errors.Is(err, ErrInvalidCredentials) {
 			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid credentials"})
 		}
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Internal server error"})
+	}
+
+	if err := tx.Commit(); err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Internal server error"})
 	}
 
@@ -63,15 +73,20 @@ func login(c *fiber.Ctx) error {
 	})
 }
 
-func register(c *fiber.Ctx) error {
-	s := mustAuthService(c)
-
+func (h *HTTPHandler) Register(c *fiber.Ctx) error {
 	req := new(registerRequest)
 	if err := c.BodyParser(req); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid request"})
 	}
 
-	result, err := s.Register(c.Context(), registerOptions{
+	tx, err := h.db.BeginTx(c.Context(), nil)
+	if err != nil {
+		slog.Error("failed to begin transaction", "error", err)
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Internal server error"})
+	}
+	defer tx.Rollback()
+
+	result, err := h.service.Register(c.Context(), tx, registerOptions{
 		email:       req.Email,
 		password:    req.Password,
 		displayName: req.DisplayName,
@@ -81,6 +96,12 @@ func register(c *fiber.Ctx) error {
 		if errors.As(err, &ae) {
 			return c.Status(fiber.StatusConflict).JSON(fiber.Map{"error": "User already exists"})
 		}
+		slog.Error("failed to register user", "error", err)
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Internal server error"})
+	}
+
+	if err := tx.Commit(); err != nil {
+		slog.Error("failed to commit transaction", "error", err)
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Internal server error"})
 	}
 

@@ -7,8 +7,6 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
-const uploadServiceKey = "uploadService"
-
 type createUploadRequest struct {
 	ParentID string `json:"parentId"`
 	Name     string `json:"name"`
@@ -18,35 +16,34 @@ type updateUploadRequest struct {
 	Status Status `json:"status"`
 }
 
-func RegisterAPIRoutes(api fiber.Router, s *Service) {
-	upload := api.Group("/uploads", func(c *fiber.Ctx) error {
-		c.Locals(uploadServiceKey, s)
-		return c.Next()
-	})
-
-	upload.Post("/", createUpload)
-	upload.Put("/:uploadID/content", receiveUpload)
-	upload.Patch("/:uploadID", updateUpload)
+type HTTPHandler struct {
+	service *Service
 }
 
-func mustUploadService(c *fiber.Ctx) *Service {
-	return c.Locals(uploadServiceKey).(*Service)
+func NewHTTPHandler(s *Service) *HTTPHandler {
+	return &HTTPHandler{service: s}
 }
 
-func createUpload(c *fiber.Ctx) error {
+func (h *HTTPHandler) RegisterRoutes(api fiber.Router) {
+	upload := api.Group("/uploads")
+
+	upload.Post("/", h.Create)
+	upload.Put("/:uploadID/content", h.ReceiveContent)
+	upload.Patch("/:uploadID", h.Update)
+}
+
+func (h *HTTPHandler) Create(c *fiber.Ctx) error {
 	u, err := auth.AuthenticatedUser(c)
 	if err != nil {
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Unauthorized"})
 	}
-
-	s := mustUploadService(c)
 
 	req := new(createUploadRequest)
 	if err := c.BodyParser(req); err != nil {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid request"})
 	}
 
-	upload, err := s.CreateUpload(c.Context(), u.ID, CreateUploadOptions{
+	upload, err := h.service.CreateUpload(c.Context(), u.ID, CreateUploadOptions{
 		ParentID: req.ParentID,
 		Name:     req.Name,
 	})
@@ -57,17 +54,15 @@ func createUpload(c *fiber.Ctx) error {
 	return c.JSON(upload)
 }
 
-func receiveUpload(c *fiber.Ctx) error {
+func (h *HTTPHandler) ReceiveContent(c *fiber.Ctx) error {
 	u, err := auth.AuthenticatedUser(c)
 	if err != nil {
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Unauthorized"})
 	}
 
-	s := mustUploadService(c)
-
 	uploadID := c.Params("uploadID")
 
-	err = s.ReceiveUpload(c.Context(), u.ID, uploadID, c.Request().BodyStream())
+	err = h.service.ReceiveUpload(c.Context(), u.ID, uploadID, c.Request().BodyStream())
 	defer c.Request().CloseBodyStream()
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Internal server error"})
@@ -76,13 +71,11 @@ func receiveUpload(c *fiber.Ctx) error {
 	return c.SendStatus(fiber.StatusNoContent)
 }
 
-func updateUpload(c *fiber.Ctx) error {
+func (h *HTTPHandler) Update(c *fiber.Ctx) error {
 	u, err := auth.AuthenticatedUser(c)
 	if err != nil {
 		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Unauthorized"})
 	}
-
-	s := mustUploadService(c)
 
 	req := new(updateUploadRequest)
 	if err := c.BodyParser(req); err != nil {
@@ -90,7 +83,7 @@ func updateUpload(c *fiber.Ctx) error {
 	}
 
 	if req.Status == StatusCompleted {
-		upload, err := s.CompleteUpload(c.Context(), u.ID, c.Params("uploadID"))
+		upload, err := h.service.CompleteUpload(c.Context(), u.ID, c.Params("uploadID"))
 		if err != nil {
 			if errors.Is(err, ErrNotFound) {
 				return c.SendStatus(fiber.StatusNotFound)

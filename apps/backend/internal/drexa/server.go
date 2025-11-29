@@ -11,11 +11,14 @@ import (
 	"github.com/get-drexa/drexa/internal/user"
 	"github.com/get-drexa/drexa/internal/virtualfs"
 	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2/middleware/logger"
 )
 
 func NewServer(c Config) (*fiber.App, error) {
 	app := fiber.New()
 	db := database.NewFromPostgres(c.Database.PostgresURL)
+
+	app.Use(logger.New())
 
 	// Initialize blob store based on config
 	var blobStore blob.Store
@@ -51,8 +54,8 @@ func NewServer(c Config) (*fiber.App, error) {
 		return nil, fmt.Errorf("failed to create virtual file system: %w", err)
 	}
 
-	userService := user.NewService(db)
-	authService := auth.NewService(db, userService, auth.TokenConfig{
+	userService := user.NewService()
+	authService := auth.NewService(userService, auth.TokenConfig{
 		Issuer:    c.JWT.Issuer,
 		Audience:  c.JWT.Audience,
 		SecretKey: c.JWT.SecretKey,
@@ -60,8 +63,8 @@ func NewServer(c Config) (*fiber.App, error) {
 	uploadService := upload.NewService(vfs, blobStore)
 
 	api := app.Group("/api")
-	auth.RegisterAPIRoutes(api, authService)
-	upload.RegisterAPIRoutes(api, uploadService)
+	auth.NewHTTPHandler(authService, db).RegisterRoutes(api)
+	upload.NewHTTPHandler(uploadService).RegisterRoutes(api)
 
 	return app, nil
 }

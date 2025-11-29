@@ -36,6 +36,10 @@ type RefreshToken struct {
 	CreatedAt time.Time `bun:"created_at,notnull"`
 }
 
+func newTokenID() (uuid.UUID, error) {
+	return uuid.NewV7()
+}
+
 func GenerateAccessToken(user *user.User, c *TokenConfig) (string, error) {
 	now := time.Now()
 
@@ -63,9 +67,9 @@ func GenerateRefreshToken(user *user.User, c *TokenConfig) (*RefreshToken, error
 		return nil, fmt.Errorf("failed to generate refresh token: %w", err)
 	}
 
-	id, err := uuid.NewV7()
+	id, err := newTokenID()
 	if err != nil {
-		return nil, fmt.Errorf("failed to generate refresh token: %w", err)
+		return nil, fmt.Errorf("failed to generate token ID: %w", err)
 	}
 
 	h := sha256.Sum256(buf)

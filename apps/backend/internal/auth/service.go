@@ -20,7 +20,6 @@ type LoginResult struct {
 var ErrInvalidCredentials = errors.New("invalid credentials")
 
 type Service struct {
-	db          *bun.DB
 	userService *user.Service
 	tokenConfig TokenConfig
 }
@@ -31,16 +30,15 @@ type registerOptions struct {
 	password    string
 }
 
-func NewService(db *bun.DB, userService *user.Service, tokenConfig TokenConfig) *Service {
+func NewService(userService *user.Service, tokenConfig TokenConfig) *Service {
 	return &Service{
-		db:          db,
 		userService: userService,
 		tokenConfig: tokenConfig,
 	}
 }
 
-func (s *Service) LoginWithEmailAndPassword(ctx context.Context, email, plain string) (*LoginResult, error) {
-	u, err := s.userService.UserByEmail(ctx, email)
+func (s *Service) LoginWithEmailAndPassword(ctx context.Context, db bun.IDB, email, plain string) (*LoginResult, error) {
+	u, err := s.userService.UserByEmail(ctx, db, email)
 	if err != nil {
 		var nf *user.NotFoundError
 		if errors.As(err, &nf) {
@@ -64,7 +62,7 @@ func (s *Service) LoginWithEmailAndPassword(ctx context.Context, email, plain st
 		return nil, err
 	}
 
-	_, err = s.db.NewInsert().Model(rt).Exec(ctx)
+	_, err = db.NewInsert().Model(rt).Exec(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -76,13 +74,13 @@ func (s *Service) LoginWithEmailAndPassword(ctx context.Context, email, plain st
 	}, nil
 }
 
-func (s *Service) Register(ctx context.Context, opts registerOptions) (*LoginResult, error) {
+func (s *Service) Register(ctx context.Context, db bun.IDB, opts registerOptions) (*LoginResult, error) {
 	hashed, err := password.Hash(opts.password)
 	if err != nil {
 		return nil, err
 	}
 
-	u, err := s.userService.RegisterUser(ctx, user.UserRegistrationOptions{
+	u, err := s.userService.RegisterUser(ctx, db, user.UserRegistrationOptions{
 		Email:       opts.email,
 		DisplayName: opts.displayName,
 		Password:    hashed,
@@ -101,7 +99,7 @@ func (s *Service) Register(ctx context.Context, opts registerOptions) (*LoginRes
 		return nil, err
 	}
 
-	_, err = s.db.NewInsert().Model(rt).Exec(ctx)
+	_, err = db.NewInsert().Model(rt).Exec(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -113,7 +111,7 @@ func (s *Service) Register(ctx context.Context, opts registerOptions) (*LoginRes
 	}, nil
 }
 
-func (s *Service) AuthenticateWithAccessToken(ctx context.Context, token string) (*user.User, error) {
+func (s *Service) AuthenticateWithAccessToken(ctx context.Context, db bun.IDB, token string) (*user.User, error) {
 	claims, err := ParseAccessToken(token, &s.tokenConfig)
 	if err != nil {
 		return nil, err
@@ -124,5 +122,5 @@ func (s *Service) AuthenticateWithAccessToken(ctx context.Context, token string)
 		return nil, newInvalidAccessTokenError(err)
 	}
 
-	return s.userService.UserByID(ctx, id)
+	return s.userService.UserByID(ctx, db, id)
 }

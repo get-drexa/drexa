@@ -6,13 +6,14 @@ import (
 
 	"github.com/get-drexa/drexa/internal/user"
 	"github.com/gofiber/fiber/v2"
+	"github.com/uptrace/bun"
 )
 
 const authenticatedUserKey = "authenticatedUser"
 
 // NewBearerAuthMiddleware is a middleware that authenticates a request using a bearer token.
 // To obtain the authenticated user in subsequent handlers, see AuthenticatedUser.
-func NewBearerAuthMiddleware(s *Service) fiber.Handler {
+func NewBearerAuthMiddleware(s *Service, db *bun.DB) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		authHeader := c.Get("Authorization")
 		if authHeader == "" {
@@ -25,7 +26,7 @@ func NewBearerAuthMiddleware(s *Service) fiber.Handler {
 		}
 
 		token := parts[1]
-		u, err := s.AuthenticateWithAccessToken(c.Context(), token)
+		u, err := s.AuthenticateWithAccessToken(c.Context(), db, token)
 		if err != nil {
 			var e *InvalidAccessTokenError
 			if errors.As(err, &e) {

@@ -6,7 +6,6 @@ require (
 	github.com/gabriel-vasile/mimetype v1.4.11
 	github.com/gofiber/fiber/v2 v2.52.9
 	github.com/google/uuid v1.6.0
-	github.com/joho/godotenv v1.5.1
 	github.com/sqids/sqids-go v0.4.1
 	github.com/uptrace/bun v1.2.15
 	golang.org/x/crypto v0.40.0
