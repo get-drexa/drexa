@@ -38,6 +38,10 @@ type HierarchicalKeyResolver struct {
 	db *bun.DB
 }
 
+func NewHierarchicalKeyResolver(db *bun.DB) *HierarchicalKeyResolver {
+	return &HierarchicalKeyResolver{db: db}
+}
+
 func (r *HierarchicalKeyResolver) KeyMode() blob.KeyMode {
 	return blob.KeyModeDerived
 }

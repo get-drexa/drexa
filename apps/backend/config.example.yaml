@@ -1,0 +1,30 @@
+# Drexa Backend Configuration
+# Copy this file to config.yaml and adjust values for your environment.
+
+server:
+  port: 8080
+
+database:
+  postgres_url: postgres://user:password@localhost:5432/drexa?sslmode=disable
+
+jwt:
+  issuer: drexa
+  audience: drexa-api
+  # Secret key can be provided via (in order of precedence):
+  # 1. JWT_SECRET_KEY environment variable (base64 encoded)
+  # 2. secret_key_base64 below (base64 encoded)
+  # 3. secret_key_path below (file with base64 encoded content)
+  # secret_key_base64: "base64encodedkey"
+  secret_key_path: /run/secrets/jwt_secret_key
+
+storage:
+  # Mode: "flat" (UUID-based keys) or "hierarchical" (path-based keys)
+  # Note: S3 backend only supports "flat" mode
+  mode: flat
+  # Backend: "fs" (filesystem) or "s3" (not yet implemented)
+  backend: fs
+  # Required when backend is "fs"
+  root_path: /var/lib/drexa/blobs
+  # Required when backend is "s3"
+  # bucket: my-drexa-bucket
+
