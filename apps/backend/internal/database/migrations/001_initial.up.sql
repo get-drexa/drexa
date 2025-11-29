@@ -1,32 +1,9 @@
--- Enable UUID extension for UUIDv7 support
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
-
--- UUIDv7 generation function (timestamp-ordered UUIDs)
--- Based on the draft RFC: https://datatracker.ietf.org/doc/html/draft-peabody-dispatch-new-uuid-format
-CREATE OR REPLACE FUNCTION uuid_generate_v7()
-RETURNS UUID
-AS $$
-DECLARE
-  unix_ts_ms BIGINT;
-  uuid_bytes BYTEA;
-BEGIN
-  unix_ts_ms = (EXTRACT(EPOCH FROM CLOCK_TIMESTAMP()) * 1000)::BIGINT;
-  uuid_bytes = OVERLAY(gen_random_bytes(16) PLACING
-    SUBSTRING(INT8SEND(unix_ts_ms) FROM 3) FROM 1 FOR 6
-  );
-  -- Set version (7) and variant bits
-  uuid_bytes = SET_BYTE(uuid_bytes, 6, (GET_BYTE(uuid_bytes, 6) & 15) | 112);
-  uuid_bytes = SET_BYTE(uuid_bytes, 8, (GET_BYTE(uuid_bytes, 8) & 63) | 128);
-  RETURN ENCODE(uuid_bytes, 'hex')::UUID;
-END;
-$$ LANGUAGE plpgsql VOLATILE;
-
 -- ============================================================================
 -- Application Tables
 -- ============================================================================
 
 CREATE TABLE IF NOT EXISTS users (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v7(),
+    id UUID PRIMARY KEY,
     display_name TEXT,
     email TEXT NOT NULL UNIQUE,
     password TEXT NOT NULL,
@@ -39,7 +16,7 @@ CREATE TABLE IF NOT EXISTS users (
 CREATE INDEX idx_users_email ON users(email);
 
 CREATE TABLE IF NOT EXISTS refresh_tokens (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v7(),
+    id UUID PRIMARY KEY,
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     token_hash TEXT NOT NULL UNIQUE,
     expires_at TIMESTAMPTZ NOT NULL,
@@ -52,7 +29,7 @@ CREATE INDEX idx_refresh_tokens_expires_at ON refresh_tokens(expires_at);
 
 -- Virtual filesystem nodes (unified files + directories)
 CREATE TABLE IF NOT EXISTS vfs_nodes (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v7(),
+    id UUID PRIMARY KEY,
     public_id TEXT NOT NULL UNIQUE,  -- opaque ID for external API (no timestamp leak)
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     parent_id UUID REFERENCES vfs_nodes(id) ON DELETE CASCADE,  -- NULL = root directory
@@ -83,7 +60,7 @@ CREATE UNIQUE INDEX idx_vfs_nodes_user_root ON vfs_nodes(user_id) WHERE parent_i
 CREATE INDEX idx_vfs_nodes_pending ON vfs_nodes(created_at) WHERE status = 'pending';  -- for cleanup job
 
 CREATE TABLE IF NOT EXISTS node_shares (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v7(),
+    id UUID PRIMARY KEY,
     node_id UUID NOT NULL REFERENCES vfs_nodes(id) ON DELETE CASCADE,
     share_token TEXT NOT NULL UNIQUE,
     expires_at TIMESTAMPTZ,
