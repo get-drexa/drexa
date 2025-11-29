@@ -15,6 +15,10 @@ type BlobKeyResolver interface {
 
 type FlatKeyResolver struct{}
 
+func NewFlatKeyResolver() *FlatKeyResolver {
+	return &FlatKeyResolver{}
+}
+
 func (r *FlatKeyResolver) KeyMode() blob.KeyMode {
 	return blob.KeyModeStable
 }

@@ -8,8 +8,11 @@ import (
 	"strconv"
 
 	"github.com/get-drexa/drexa/internal/auth"
+	"github.com/get-drexa/drexa/internal/blob"
 	"github.com/get-drexa/drexa/internal/database"
+	"github.com/get-drexa/drexa/internal/upload"
 	"github.com/get-drexa/drexa/internal/user"
+	"github.com/get-drexa/drexa/internal/virtualfs"
 	"github.com/gofiber/fiber/v2"
 )
 
@@ -21,9 +24,20 @@ type ServerConfig struct {
 	JWTSecretKey []byte
 }
 
-func NewServer(c ServerConfig) *fiber.App {
+func NewServer(c ServerConfig) (*fiber.App, error) {
 	app := fiber.New()
 	db := database.NewFromPostgres(c.PostgresURL)
+
+	// TODO: load correct blob store and resolver from config
+	blobStore := blob.NewFSStore(blob.FSStoreConfig{
+		Root:      os.Getenv("BLOB_ROOT"),
+		UploadURL: os.Getenv("BLOB_UPLOAD_URL"),
+	})
+	keyResolver := virtualfs.NewFlatKeyResolver()
+	vfs, err := virtualfs.NewVirtualFS(db, blobStore, keyResolver)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create virtual file system: %w", err)
+	}
 
 	userService := user.NewService(db)
 	authService := auth.NewService(db, userService, auth.TokenConfig{
@@ -31,11 +45,13 @@ func NewServer(c ServerConfig) *fiber.App {
 		Audience:  c.JWTAudience,
 		SecretKey: c.JWTSecretKey,
 	})
+	uploadService := upload.NewService(vfs, blobStore)
 
 	api := app.Group("/api")
 	auth.RegisterAPIRoutes(api, authService)
+	upload.RegisterAPIRoutes(api, uploadService)
 
-	return app
+	return app, nil
 }
 
 // ServerConfigFromEnv creates a ServerConfig from environment variables.

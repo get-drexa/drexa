@@ -33,17 +33,6 @@ type CreateUploadOptions struct {
 	Name     string
 }
 
-type Upload struct {
-	ID         string
-	TargetNode *virtualfs.Node
-	UploadURL  string
-}
-
-type CreateUploadResult struct {
-	UploadID  string
-	UploadURL string
-}
-
 func (s *Service) CreateUpload(ctx context.Context, userID uuid.UUID, opts CreateUploadOptions) (*Upload, error) {
 	parentNode, err := s.vfs.FindNodeByPublicID(ctx, userID, opts.ParentID)
 	if err != nil {
@@ -77,6 +66,7 @@ func (s *Service) CreateUpload(ctx context.Context, userID uuid.UUID, opts Creat
 
 	upload := &Upload{
 		ID:         node.PublicID,
+		Status:     StatusPending,
 		TargetNode: node,
 		UploadURL:  uploadURL,
 	}
@@ -106,36 +96,37 @@ func (s *Service) ReceiveUpload(ctx context.Context, userID uuid.UUID, uploadID 
 		return err
 	}
 
-	s.pendingUploads.Delete(uploadID)
+	upload.Status = StatusCompleted
 
 	return nil
 }
 
-func (s *Service) CompleteUpload(ctx context.Context, userID uuid.UUID, uploadID string) error {
+func (s *Service) CompleteUpload(ctx context.Context, userID uuid.UUID, uploadID string) (*Upload, error) {
 	n, ok := s.pendingUploads.Load(uploadID)
 	if !ok {
-		return ErrNotFound
+		return nil, ErrNotFound
 	}
 
 	upload, ok := n.(*Upload)
 	if !ok {
-		return ErrNotFound
+		return nil, ErrNotFound
 	}
 
 	if upload.TargetNode.UserID != userID {
-		return ErrNotFound
+		return nil, ErrNotFound
 	}
 
-	if upload.TargetNode.Status == virtualfs.NodeStatusReady {
-		return nil
+	if upload.TargetNode.Status == virtualfs.NodeStatusReady && upload.Status == StatusCompleted {
+		return upload, nil
 	}
 
 	err := s.vfs.WriteFile(ctx, upload.TargetNode, virtualfs.FileContentFromBlobKey(upload.TargetNode.BlobKey))
 	if err != nil {
-		return err
+		return nil, err
 	}
 
+	upload.Status = StatusCompleted
 	s.pendingUploads.Delete(uploadID)
 
-	return nil
+	return upload, nil
 }
