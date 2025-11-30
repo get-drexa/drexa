@@ -29,6 +29,5 @@ func main() {
 		log.Fatal(err)
 	}
 
-	log.Printf("starting server on :%d", config.Server.Port)
-	log.Fatal(server.Listen(fmt.Sprintf(":%d", config.Server.Port)))
+	log.Fatal(server.Start())
 }

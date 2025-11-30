@@ -14,10 +14,24 @@ import (
 	"github.com/get-drexa/drexa/internal/virtualfs"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/logger"
+	"github.com/uptrace/bun"
 	"github.com/uptrace/bun/extra/bundebug"
 )
 
-func NewServer(c Config) (*fiber.App, error) {
+type Server struct {
+	config         Config
+	app            *fiber.App
+	db             *bun.DB
+	blobStore      blob.Store
+	vfs            *virtualfs.VirtualFS
+	userService    *user.Service
+	authService    *auth.Service
+	accountService *account.Service
+	uploadService  *upload.Service
+	authMiddleware fiber.Handler
+}
+
+func NewServer(c Config) (*Server, error) {
 	app := fiber.New(fiber.Config{
 		ErrorHandler:      httperr.ErrorHandler,
 		StreamRequestBody: true,
@@ -68,7 +82,7 @@ func NewServer(c Config) (*fiber.App, error) {
 		SecretKey: c.JWT.SecretKey,
 	})
 	uploadService := upload.NewService(vfs, blobStore)
-	accountService := account.NewService(userService, vfs)
+	accountService := account.NewService(userService)
 
 	authMiddleware := auth.NewBearerAuthMiddleware(authService, db)
 
@@ -79,5 +93,22 @@ func NewServer(c Config) (*fiber.App, error) {
 	auth.NewHTTPHandler(authService, db).RegisterRoutes(api)
 	upload.NewHTTPHandler(uploadService, db).RegisterRoutes(accRouter)
 
-	return app, nil
+	s := &Server{
+		config:         c,
+		app:            app,
+		db:             db,
+		blobStore:      blobStore,
+		vfs:            vfs,
+		userService:    userService,
+		authService:    authService,
+		accountService: accountService,
+		uploadService:  uploadService,
+		authMiddleware: authMiddleware,
+	}
+
+	return s, nil
+}
+
+func (s *Server) Start() error {
+	return s.app.Listen(fmt.Sprintf(":%d", s.config.Server.Port))
 }
