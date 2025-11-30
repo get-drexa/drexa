@@ -2,6 +2,7 @@ package virtualfs
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/get-drexa/drexa/internal/blob"
 	"github.com/uptrace/bun"
@@ -27,7 +28,7 @@ func (r *HierarchicalKeyResolver) Resolve(ctx context.Context, node *Node) (blob
 		return "", err
 	}
 
-	return blob.Key(path), nil
+	return blob.Key(fmt.Sprintf("%s/%s", node.AccountID, path)), nil
 }
 
 func (r *HierarchicalKeyResolver) ResolveDeletionKeys(ctx context.Context, node *Node, allKeys []blob.Key) (*DeletionPlan, error) {
