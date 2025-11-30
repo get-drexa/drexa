@@ -28,18 +28,22 @@ type Node struct {
 	ID        uuid.UUID  `bun:",pk,type:uuid"`
 	PublicID  string     `bun:"public_id,notnull"`
 	AccountID uuid.UUID  `bun:"account_id,notnull,type:uuid"`
-	ParentID  uuid.UUID  `bun:"parent_id"`
+	ParentID  uuid.UUID  `bun:"parent_id,nullzero"`
 	Kind      NodeKind   `bun:"kind,notnull"`
 	Status    NodeStatus `bun:"status,notnull"`
 	Name      string     `bun:"name,notnull"`
 
-	BlobKey  blob.Key `bun:"blob_key"`
+	BlobKey  blob.Key `bun:"blob_key,nullzero"`
 	Size     int64    `bun:"size"`
-	MimeType string   `bun:"mime_type"`
+	MimeType string   `bun:"mime_type,nullzero"`
 
 	CreatedAt time.Time `bun:"created_at,notnull,nullzero"`
 	UpdatedAt time.Time `bun:"updated_at,notnull,nullzero"`
-	DeletedAt time.Time `bun:"deleted_at"`
+	DeletedAt time.Time `bun:"deleted_at,nullzero"`
+}
+
+func newNodeID() (uuid.UUID, error) {
+	return uuid.NewV7()
 }
 
 // IsAccessible returns true if the node can be accessed.

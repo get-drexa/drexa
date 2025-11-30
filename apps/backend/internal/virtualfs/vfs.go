@@ -125,7 +125,13 @@ func (vfs *VirtualFS) CreateFile(ctx context.Context, db bun.IDB, accountID uuid
 		return nil, err
 	}
 
+	id, err := newNodeID()
+	if err != nil {
+		return nil, err
+	}
+
 	node := Node{
+		ID:        id,
 		PublicID:  pid,
 		AccountID: accountID,
 		ParentID:  opts.ParentID,
@@ -239,7 +245,13 @@ func (vfs *VirtualFS) CreateDirectory(ctx context.Context, db bun.IDB, accountID
 		return nil, err
 	}
 
+	id, err := newNodeID()
+	if err != nil {
+		return nil, err
+	}
+
 	node := Node{
+		ID:        id,
 		PublicID:  pid,
 		AccountID: accountID,
 		ParentID:  parentID,
