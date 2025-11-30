@@ -131,6 +131,9 @@ func (s *Service) CompleteUpload(ctx context.Context, db bun.IDB, accountID uuid
 
 	err := s.vfs.WriteFile(ctx, db, upload.TargetNode, virtualfs.FileContentFromBlobKey(upload.TargetNode.BlobKey))
 	if err != nil {
+		if errors.Is(err, blob.ErrNotFound) {
+			return nil, ErrContentNotUploaded
+		}
 		return nil, err
 	}
 

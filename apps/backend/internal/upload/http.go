@@ -55,6 +55,12 @@ func (h *HTTPHandler) Create(c *fiber.Ctx) error {
 		if errors.Is(err, ErrNotFound) {
 			return c.SendStatus(fiber.StatusNotFound)
 		}
+		if errors.Is(err, ErrParentNotDirectory) {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Parent is not a directory"})
+		}
+		if errors.Is(err, ErrConflict) {
+			return c.Status(fiber.StatusConflict).JSON(fiber.Map{"error": "A file with this name already exists"})
+		}
 		return httperr.Internal(err)
 	}
 
@@ -101,6 +107,9 @@ func (h *HTTPHandler) Update(c *fiber.Ctx) error {
 		if err != nil {
 			if errors.Is(err, ErrNotFound) {
 				return c.SendStatus(fiber.StatusNotFound)
+			}
+			if errors.Is(err, ErrContentNotUploaded) {
+				return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Content has not been uploaded"})
 			}
 			return httperr.Internal(err)
 		}
