@@ -37,8 +37,8 @@ type Node struct {
 	Size     int64    `bun:"size"`
 	MimeType string   `bun:"mime_type"`
 
-	CreatedAt time.Time `bun:"created_at,notnull"`
-	UpdatedAt time.Time `bun:"updated_at,notnull"`
+	CreatedAt time.Time `bun:"created_at,notnull,nullzero"`
+	UpdatedAt time.Time `bun:"updated_at,notnull,nullzero"`
 	DeletedAt time.Time `bun:"deleted_at"`
 }
 

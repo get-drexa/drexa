@@ -33,7 +33,7 @@ type RefreshToken struct {
 	Token     []byte    `bun:"-"`
 	TokenHash string    `bun:"token_hash,notnull"`
 	ExpiresAt time.Time `bun:"expires_at,notnull"`
-	CreatedAt time.Time `bun:"created_at,notnull"`
+	CreatedAt time.Time `bun:"created_at,notnull,nullzero"`
 }
 
 func newTokenID() (uuid.UUID, error) {
