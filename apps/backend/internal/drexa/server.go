@@ -19,7 +19,8 @@ import (
 
 func NewServer(c Config) (*fiber.App, error) {
 	app := fiber.New(fiber.Config{
-		ErrorHandler: httperr.ErrorHandler,
+		ErrorHandler:      httperr.ErrorHandler,
+		StreamRequestBody: true,
 	})
 	app.Use(logger.New())
 

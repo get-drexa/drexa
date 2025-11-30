@@ -2,6 +2,7 @@ package upload
 
 import (
 	"errors"
+	"fmt"
 
 	"github.com/get-drexa/drexa/internal/account"
 	"github.com/get-drexa/drexa/internal/httperr"
@@ -57,6 +58,10 @@ func (h *HTTPHandler) Create(c *fiber.Ctx) error {
 		return httperr.Internal(err)
 	}
 
+	if upload.UploadURL == "" {
+		upload.UploadURL = fmt.Sprintf("%s%s/%s/content", c.BaseURL(), c.OriginalURL(), upload.ID)
+	}
+
 	return c.JSON(upload)
 }
 
@@ -68,9 +73,12 @@ func (h *HTTPHandler) ReceiveContent(c *fiber.Ctx) error {
 
 	uploadID := c.Params("uploadID")
 
-	err := h.service.ReceiveUpload(c.Context(), h.db, account.ID, uploadID, c.Request().BodyStream())
-	defer c.Request().CloseBodyStream()
+	err := h.service.ReceiveUpload(c.Context(), h.db, account.ID, uploadID, c.Context().RequestBodyStream())
+	defer c.Context().Request.CloseBodyStream()
 	if err != nil {
+		if errors.Is(err, ErrNotFound) {
+			return c.SendStatus(fiber.StatusNotFound)
+		}
 		return httperr.Internal(err)
 	}
 

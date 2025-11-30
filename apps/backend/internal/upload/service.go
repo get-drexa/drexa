@@ -3,6 +3,7 @@ package upload
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"sync"
 	"time"
@@ -84,6 +85,7 @@ func (s *Service) CreateUpload(ctx context.Context, db bun.IDB, accountID uuid.U
 }
 
 func (s *Service) ReceiveUpload(ctx context.Context, db bun.IDB, accountID uuid.UUID, uploadID string, reader io.Reader) error {
+	fmt.Printf("reader: %v\n", reader)
 	n, ok := s.pendingUploads.Load(uploadID)
 	if !ok {
 		return ErrNotFound

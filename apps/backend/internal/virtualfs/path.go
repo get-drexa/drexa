@@ -12,7 +12,7 @@ import (
 
 const absolutePathQuery = `WITH RECURSIVE path AS (
     SELECT id, parent_id, name, 1 as depth
-    FROM vfs_nodes WHERE id = $1 AND deleted_at IS NULL
+    FROM vfs_nodes WHERE id = ? AND deleted_at IS NULL
     
     UNION ALL
     

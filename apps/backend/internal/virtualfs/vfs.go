@@ -228,7 +228,7 @@ func (vfs *VirtualFS) WriteFile(ctx context.Context, db bun.IDB, node *Node, con
 		setCols = append(setCols, "mime_type", "blob_key", "size", "status")
 	}
 
-	_, err := db.NewUpdate().Model(&node).
+	_, err := db.NewUpdate().Model(node).
 		Column(setCols...).
 		WherePK().
 		Exec(ctx)
@@ -260,7 +260,7 @@ func (vfs *VirtualFS) CreateDirectory(ctx context.Context, db bun.IDB, accountID
 		Name:      name,
 	}
 
-	_, err = db.NewInsert().Model(&node).Exec(ctx)
+	_, err = db.NewInsert().Model(node).Exec(ctx)
 	if err != nil {
 		if database.IsUniqueViolation(err) {
 			return nil, ErrNodeConflict
