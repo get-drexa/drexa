@@ -134,7 +134,7 @@ func (vfs *VirtualFS) CreateFile(ctx context.Context, userID uuid.UUID, opts Cre
 		Name:     opts.Name,
 	}
 
-	if vfs.keyResolver.KeyMode() == blob.KeyModeStable {
+	if vfs.keyResolver.ShouldPersistKey() {
 		node.BlobKey, err = vfs.keyResolver.Resolve(ctx, &node)
 		if err != nil {
 			return nil, err
@@ -184,7 +184,7 @@ func (vfs *VirtualFS) WriteFile(ctx context.Context, node *Node, content FileCon
 			return err
 		}
 
-		if vfs.keyResolver.KeyMode() == blob.KeyModeStable {
+		if vfs.keyResolver.ShouldPersistKey() {
 			node.BlobKey = key
 			setCols = append(setCols, "blob_key")
 		}
@@ -360,7 +360,7 @@ func (vfs *VirtualFS) MoveNode(ctx context.Context, node *Node, parentID uuid.UU
 		return err
 	}
 
-	if vfs.keyResolver.KeyMode() == blob.KeyModeStable {
+	if vfs.keyResolver.ShouldPersistKey() {
 		node.BlobKey = newKey
 		_, err = vfs.db.NewUpdate().Model(node).
 			WherePK().

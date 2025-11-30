@@ -15,8 +15,8 @@ func NewFlatKeyResolver() *FlatKeyResolver {
 	return &FlatKeyResolver{}
 }
 
-func (r *FlatKeyResolver) KeyMode() blob.KeyMode {
-	return blob.KeyModeStable
+func (r *FlatKeyResolver) ShouldPersistKey() bool {
+	return true
 }
 
 func (r *FlatKeyResolver) Resolve(ctx context.Context, node *Node) (blob.Key, error) {

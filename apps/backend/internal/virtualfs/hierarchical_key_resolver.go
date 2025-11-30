@@ -17,8 +17,8 @@ func NewHierarchicalKeyResolver(db *bun.DB) *HierarchicalKeyResolver {
 	return &HierarchicalKeyResolver{db: db}
 }
 
-func (r *HierarchicalKeyResolver) KeyMode() blob.KeyMode {
-	return blob.KeyModeDerived
+func (r *HierarchicalKeyResolver) ShouldPersistKey() bool {
+	return false
 }
 
 func (r *HierarchicalKeyResolver) Resolve(ctx context.Context, node *Node) (blob.Key, error) {
