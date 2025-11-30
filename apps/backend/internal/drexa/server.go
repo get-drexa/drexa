@@ -50,7 +50,7 @@ func NewServer(c Config) (*fiber.App, error) {
 		return nil, fmt.Errorf("unknown storage mode: %s", c.Storage.Mode)
 	}
 
-	vfs, err := virtualfs.NewVirtualFS(db, blobStore, keyResolver)
+	vfs, err := virtualfs.NewVirtualFS(blobStore, keyResolver)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create virtual file system: %w", err)
 	}
@@ -62,7 +62,7 @@ func NewServer(c Config) (*fiber.App, error) {
 		SecretKey: c.JWT.SecretKey,
 	})
 	uploadService := upload.NewService(vfs, blobStore)
-	accountService := account.NewService(userService)
+	accountService := account.NewService(userService, vfs)
 
 	authMiddleware := auth.NewBearerAuthMiddleware(authService, db)
 
@@ -71,7 +71,7 @@ func NewServer(c Config) (*fiber.App, error) {
 	accRouter := account.NewHTTPHandler(accountService, authService, db, authMiddleware).RegisterRoutes(api)
 
 	auth.NewHTTPHandler(authService, db).RegisterRoutes(api)
-	upload.NewHTTPHandler(uploadService).RegisterRoutes(accRouter)
+	upload.NewHTTPHandler(uploadService, db).RegisterRoutes(accRouter)
 
 	return app, nil
 }

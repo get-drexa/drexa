@@ -8,12 +8,14 @@ import (
 	"github.com/get-drexa/drexa/internal/database"
 	"github.com/get-drexa/drexa/internal/password"
 	"github.com/get-drexa/drexa/internal/user"
+	"github.com/get-drexa/drexa/internal/virtualfs"
 	"github.com/google/uuid"
 	"github.com/uptrace/bun"
 )
 
 type Service struct {
 	userService user.Service
+	vfs         *virtualfs.VirtualFS
 }
 
 type RegisterOptions struct {
@@ -27,9 +29,10 @@ type CreateAccountOptions struct {
 	QuotaBytes     int64
 }
 
-func NewService(userService *user.Service) *Service {
+func NewService(userService *user.Service, vfs *virtualfs.VirtualFS) *Service {
 	return &Service{
 		userService: *userService,
+		vfs:         vfs,
 	}
 }
 

@@ -19,7 +19,6 @@ import (
 )
 
 type VirtualFS struct {
-	db          *bun.DB
 	blobStore   blob.Store
 	keyResolver BlobKeyResolver
 
@@ -50,22 +49,21 @@ func FileContentFromBlobKey(blobKey blob.Key) FileContent {
 	return FileContent{blobKey: blobKey}
 }
 
-func NewVirtualFS(db *bun.DB, blobStore blob.Store, keyResolver BlobKeyResolver) (*VirtualFS, error) {
+func NewVirtualFS(blobStore blob.Store, keyResolver BlobKeyResolver) (*VirtualFS, error) {
 	sqid, err := sqids.New()
 	if err != nil {
 		return nil, err
 	}
 	return &VirtualFS{
-		db:          db,
 		blobStore:   blobStore,
 		keyResolver: keyResolver,
 		sqid:        sqid,
 	}, nil
 }
 
-func (vfs *VirtualFS) FindNode(ctx context.Context, accountID, fileID string) (*Node, error) {
+func (vfs *VirtualFS) FindNode(ctx context.Context, db bun.IDB, accountID, fileID string) (*Node, error) {
 	var node Node
-	err := vfs.db.NewSelect().Model(&node).
+	err := db.NewSelect().Model(&node).
 		Where("account_id = ?", accountID).
 		Where("id = ?", fileID).
 		Where("status = ?", NodeStatusReady).
@@ -80,9 +78,9 @@ func (vfs *VirtualFS) FindNode(ctx context.Context, accountID, fileID string) (*
 	return &node, nil
 }
 
-func (vfs *VirtualFS) FindNodeByPublicID(ctx context.Context, accountID uuid.UUID, publicID string) (*Node, error) {
+func (vfs *VirtualFS) FindNodeByPublicID(ctx context.Context, db bun.IDB, accountID uuid.UUID, publicID string) (*Node, error) {
 	var node Node
-	err := vfs.db.NewSelect().Model(&node).
+	err := db.NewSelect().Model(&node).
 		Where("account_id = ?", accountID).
 		Where("public_id = ?", publicID).
 		Where("status = ?", NodeStatusReady).
@@ -97,13 +95,13 @@ func (vfs *VirtualFS) FindNodeByPublicID(ctx context.Context, accountID uuid.UUI
 	return &node, nil
 }
 
-func (vfs *VirtualFS) ListChildren(ctx context.Context, node *Node) ([]*Node, error) {
+func (vfs *VirtualFS) ListChildren(ctx context.Context, db bun.IDB, node *Node) ([]*Node, error) {
 	if !node.IsAccessible() {
 		return nil, ErrNodeNotFound
 	}
 
 	var nodes []*Node
-	err := vfs.db.NewSelect().Model(&nodes).
+	err := db.NewSelect().Model(&nodes).
 		Where("account_id = ?", node.AccountID).
 		Where("parent_id = ?", node.ID).
 		Where("status = ?", NodeStatusReady).
@@ -119,7 +117,7 @@ func (vfs *VirtualFS) ListChildren(ctx context.Context, node *Node) ([]*Node, er
 	return nodes, nil
 }
 
-func (vfs *VirtualFS) CreateFile(ctx context.Context, accountID uuid.UUID, opts CreateFileOptions) (*Node, error) {
+func (vfs *VirtualFS) CreateFile(ctx context.Context, db bun.IDB, accountID uuid.UUID, opts CreateFileOptions) (*Node, error) {
 	pid, err := vfs.generatePublicID()
 	if err != nil {
 		return nil, err
@@ -141,7 +139,7 @@ func (vfs *VirtualFS) CreateFile(ctx context.Context, accountID uuid.UUID, opts 
 		}
 	}
 
-	_, err = vfs.db.NewInsert().Model(&node).Returning("*").Exec(ctx)
+	_, err = db.NewInsert().Model(&node).Returning("*").Exec(ctx)
 	if err != nil {
 		if database.IsUniqueViolation(err) {
 			return nil, ErrNodeConflict
@@ -152,7 +150,7 @@ func (vfs *VirtualFS) CreateFile(ctx context.Context, accountID uuid.UUID, opts 
 	return &node, nil
 }
 
-func (vfs *VirtualFS) WriteFile(ctx context.Context, node *Node, content FileContent) error {
+func (vfs *VirtualFS) WriteFile(ctx context.Context, db bun.IDB, node *Node, content FileContent) error {
 	if content.reader == nil && content.blobKey.IsNil() {
 		return blob.ErrInvalidFileContent
 	}
@@ -222,7 +220,7 @@ func (vfs *VirtualFS) WriteFile(ctx context.Context, node *Node, content FileCon
 		setCols = append(setCols, "mime_type", "blob_key", "size", "status")
 	}
 
-	_, err := vfs.db.NewUpdate().Model(&node).
+	_, err := db.NewUpdate().Model(&node).
 		Column(setCols...).
 		WherePK().
 		Exec(ctx)
@@ -233,7 +231,7 @@ func (vfs *VirtualFS) WriteFile(ctx context.Context, node *Node, content FileCon
 	return nil
 }
 
-func (vfs *VirtualFS) CreateDirectory(ctx context.Context, accountID uuid.UUID, parentID uuid.UUID, name string) (*Node, error) {
+func (vfs *VirtualFS) CreateDirectory(ctx context.Context, db bun.IDB, accountID uuid.UUID, parentID uuid.UUID, name string) (*Node, error) {
 	pid, err := vfs.generatePublicID()
 	if err != nil {
 		return nil, err
@@ -248,7 +246,7 @@ func (vfs *VirtualFS) CreateDirectory(ctx context.Context, accountID uuid.UUID, 
 		Name:      name,
 	}
 
-	_, err = vfs.db.NewInsert().Model(&node).Exec(ctx)
+	_, err = db.NewInsert().Model(&node).Exec(ctx)
 	if err != nil {
 		if database.IsUniqueViolation(err) {
 			return nil, ErrNodeConflict
@@ -259,12 +257,12 @@ func (vfs *VirtualFS) CreateDirectory(ctx context.Context, accountID uuid.UUID, 
 	return &node, nil
 }
 
-func (vfs *VirtualFS) SoftDeleteNode(ctx context.Context, node *Node) error {
+func (vfs *VirtualFS) SoftDeleteNode(ctx context.Context, db bun.IDB, node *Node) error {
 	if !node.IsAccessible() {
 		return ErrNodeNotFound
 	}
 
-	_, err := vfs.db.NewUpdate().Model(node).
+	_, err := db.NewUpdate().Model(node).
 		WherePK().
 		Where("deleted_at IS NULL").
 		Where("status = ?", NodeStatusReady).
@@ -281,12 +279,12 @@ func (vfs *VirtualFS) SoftDeleteNode(ctx context.Context, node *Node) error {
 	return nil
 }
 
-func (vfs *VirtualFS) RestoreNode(ctx context.Context, node *Node) error {
+func (vfs *VirtualFS) RestoreNode(ctx context.Context, db bun.IDB, node *Node) error {
 	if node.Status != NodeStatusReady {
 		return ErrNodeNotFound
 	}
 
-	_, err := vfs.db.NewUpdate().Model(node).
+	_, err := db.NewUpdate().Model(node).
 		WherePK().
 		Where("deleted_at IS NOT NULL").
 		Set("deleted_at = NULL").
@@ -302,12 +300,12 @@ func (vfs *VirtualFS) RestoreNode(ctx context.Context, node *Node) error {
 	return nil
 }
 
-func (vfs *VirtualFS) RenameNode(ctx context.Context, node *Node, name string) error {
+func (vfs *VirtualFS) RenameNode(ctx context.Context, db bun.IDB, node *Node, name string) error {
 	if !node.IsAccessible() {
 		return ErrNodeNotFound
 	}
 
-	_, err := vfs.db.NewUpdate().Model(node).
+	_, err := db.NewUpdate().Model(node).
 		WherePK().
 		Where("status = ?", NodeStatusReady).
 		Where("deleted_at IS NULL").
@@ -323,7 +321,7 @@ func (vfs *VirtualFS) RenameNode(ctx context.Context, node *Node, name string) e
 	return nil
 }
 
-func (vfs *VirtualFS) MoveNode(ctx context.Context, node *Node, parentID uuid.UUID) error {
+func (vfs *VirtualFS) MoveNode(ctx context.Context, db bun.IDB, node *Node, parentID uuid.UUID) error {
 	if !node.IsAccessible() {
 		return ErrNodeNotFound
 	}
@@ -333,7 +331,7 @@ func (vfs *VirtualFS) MoveNode(ctx context.Context, node *Node, parentID uuid.UU
 		return err
 	}
 
-	_, err = vfs.db.NewUpdate().Model(node).
+	_, err = db.NewUpdate().Model(node).
 		WherePK().
 		Where("status = ?", NodeStatusReady).
 		Where("deleted_at IS NULL").
@@ -362,7 +360,7 @@ func (vfs *VirtualFS) MoveNode(ctx context.Context, node *Node, parentID uuid.UU
 
 	if vfs.keyResolver.ShouldPersistKey() {
 		node.BlobKey = newKey
-		_, err = vfs.db.NewUpdate().Model(node).
+		_, err = db.NewUpdate().Model(node).
 			WherePK().
 			Set("blob_key = ?", newKey).
 			Exec(ctx)
@@ -374,34 +372,34 @@ func (vfs *VirtualFS) MoveNode(ctx context.Context, node *Node, parentID uuid.UU
 	return nil
 }
 
-func (vfs *VirtualFS) AbsolutePath(ctx context.Context, node *Node) (string, error) {
+func (vfs *VirtualFS) AbsolutePath(ctx context.Context, db bun.IDB, node *Node) (string, error) {
 	if !node.IsAccessible() {
 		return "", ErrNodeNotFound
 	}
-	return buildNodeAbsolutePath(ctx, vfs.db, node.ID)
+	return buildNodeAbsolutePath(ctx, db, node.ID)
 }
 
-func (vfs *VirtualFS) PermanentlyDeleteNode(ctx context.Context, node *Node) error {
+func (vfs *VirtualFS) PermanentlyDeleteNode(ctx context.Context, db bun.IDB, node *Node) error {
 	if !node.IsAccessible() {
 		return ErrNodeNotFound
 	}
 	switch node.Kind {
 	case NodeKindFile:
-		return vfs.permanentlyDeleteFileNode(ctx, node)
+		return vfs.permanentlyDeleteFileNode(ctx, db, node)
 	case NodeKindDirectory:
-		return vfs.permanentlyDeleteDirectoryNode(ctx, node)
+		return vfs.permanentlyDeleteDirectoryNode(ctx, db, node)
 	default:
 		return ErrUnsupportedOperation
 	}
 }
 
-func (vfs *VirtualFS) permanentlyDeleteFileNode(ctx context.Context, node *Node) error {
+func (vfs *VirtualFS) permanentlyDeleteFileNode(ctx context.Context, db bun.IDB, node *Node) error {
 	err := vfs.blobStore.Delete(ctx, node.BlobKey)
 	if err != nil {
 		return err
 	}
 
-	_, err = vfs.db.NewDelete().Model(node).WherePK().Exec(ctx)
+	_, err = db.NewDelete().Model(node).WherePK().Exec(ctx)
 	if err != nil {
 		return err
 	}
@@ -409,7 +407,7 @@ func (vfs *VirtualFS) permanentlyDeleteFileNode(ctx context.Context, node *Node)
 	return nil
 }
 
-func (vfs *VirtualFS) permanentlyDeleteDirectoryNode(ctx context.Context, node *Node) error {
+func (vfs *VirtualFS) permanentlyDeleteDirectoryNode(ctx context.Context, db bun.IDB, node *Node) error {
 	const descendantsQuery = `WITH RECURSIVE descendants AS (
 		SELECT id, blob_key FROM vfs_nodes WHERE id = ?
 		UNION ALL
@@ -423,14 +421,29 @@ func (vfs *VirtualFS) permanentlyDeleteDirectoryNode(ctx context.Context, node *
 		BlobKey blob.Key  `bun:"blob_key"`
 	}
 
-	tx, err := vfs.db.BeginTx(ctx, nil)
-	if err != nil {
-		return err
+	// If db is already a transaction, use it directly; otherwise start a new transaction
+	var tx bun.IDB
+	var startedTx *bun.Tx
+	switch v := db.(type) {
+	case *bun.DB:
+		newTx, err := v.BeginTx(ctx, nil)
+		if err != nil {
+			return err
+		}
+		startedTx = &newTx
+		tx = newTx
+		defer func() {
+			if startedTx != nil {
+				(*startedTx).Rollback()
+			}
+		}()
+	default:
+		// Assume it's already a transaction
+		tx = db
 	}
-	defer tx.Rollback()
 
 	var records []nodeRecord
-	err = tx.NewRaw(descendantsQuery, node.ID).Scan(ctx, &records)
+	err := tx.NewRaw(descendantsQuery, node.ID).Scan(ctx, &records)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return ErrNodeNotFound
@@ -472,7 +485,14 @@ func (vfs *VirtualFS) permanentlyDeleteDirectoryNode(ctx context.Context, node *
 		}
 	}
 
-	return tx.Commit()
+	// Only commit if we started the transaction
+	if startedTx != nil {
+		err := (*startedTx).Commit()
+		startedTx = nil // Prevent defer from rolling back
+		return err
+	}
+
+	return nil
 }
 
 func (vfs *VirtualFS) generatePublicID() (string, error) {

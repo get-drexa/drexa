@@ -29,7 +29,7 @@ func JoinPath(parts ...string) string {
 	return strings.Join(parts, "/")
 }
 
-func buildNodeAbsolutePath(ctx context.Context, db *bun.DB, nodeID uuid.UUID) (string, error) {
+func buildNodeAbsolutePath(ctx context.Context, db bun.IDB, nodeID uuid.UUID) (string, error) {
 	var path []string
 	err := db.NewRaw(absolutePathQuery, nodeID).Scan(ctx, &path)
 	if err != nil {

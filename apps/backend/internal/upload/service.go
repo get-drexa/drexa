@@ -10,6 +10,7 @@ import (
 	"github.com/get-drexa/drexa/internal/blob"
 	"github.com/get-drexa/drexa/internal/virtualfs"
 	"github.com/google/uuid"
+	"github.com/uptrace/bun"
 )
 
 type Service struct {
@@ -33,8 +34,8 @@ type CreateUploadOptions struct {
 	Name     string
 }
 
-func (s *Service) CreateUpload(ctx context.Context, accountID uuid.UUID, opts CreateUploadOptions) (*Upload, error) {
-	parentNode, err := s.vfs.FindNodeByPublicID(ctx, accountID, opts.ParentID)
+func (s *Service) CreateUpload(ctx context.Context, db bun.IDB, accountID uuid.UUID, opts CreateUploadOptions) (*Upload, error) {
+	parentNode, err := s.vfs.FindNodeByPublicID(ctx, db, accountID, opts.ParentID)
 	if err != nil {
 		if errors.Is(err, virtualfs.ErrNodeNotFound) {
 			return nil, ErrNotFound
@@ -46,7 +47,7 @@ func (s *Service) CreateUpload(ctx context.Context, accountID uuid.UUID, opts Cr
 		return nil, ErrParentNotDirectory
 	}
 
-	node, err := s.vfs.CreateFile(ctx, accountID, virtualfs.CreateFileOptions{
+	node, err := s.vfs.CreateFile(ctx, db, accountID, virtualfs.CreateFileOptions{
 		ParentID: parentNode.ID,
 		Name:     opts.Name,
 	})
@@ -61,7 +62,7 @@ func (s *Service) CreateUpload(ctx context.Context, accountID uuid.UUID, opts Cr
 		Duration: 1 * time.Hour,
 	})
 	if err != nil {
-		_ = s.vfs.PermanentlyDeleteNode(ctx, node)
+		_ = s.vfs.PermanentlyDeleteNode(ctx, db, node)
 		return nil, err
 	}
 
@@ -77,7 +78,7 @@ func (s *Service) CreateUpload(ctx context.Context, accountID uuid.UUID, opts Cr
 	return upload, nil
 }
 
-func (s *Service) ReceiveUpload(ctx context.Context, accountID uuid.UUID, uploadID string, reader io.Reader) error {
+func (s *Service) ReceiveUpload(ctx context.Context, db bun.IDB, accountID uuid.UUID, uploadID string, reader io.Reader) error {
 	n, ok := s.pendingUploads.Load(uploadID)
 	if !ok {
 		return ErrNotFound
@@ -92,7 +93,7 @@ func (s *Service) ReceiveUpload(ctx context.Context, accountID uuid.UUID, upload
 		return ErrNotFound
 	}
 
-	err := s.vfs.WriteFile(ctx, upload.TargetNode, virtualfs.FileContentFromReader(reader))
+	err := s.vfs.WriteFile(ctx, db, upload.TargetNode, virtualfs.FileContentFromReader(reader))
 	if err != nil {
 		return err
 	}
@@ -102,7 +103,7 @@ func (s *Service) ReceiveUpload(ctx context.Context, accountID uuid.UUID, upload
 	return nil
 }
 
-func (s *Service) CompleteUpload(ctx context.Context, accountID uuid.UUID, uploadID string) (*Upload, error) {
+func (s *Service) CompleteUpload(ctx context.Context, db bun.IDB, accountID uuid.UUID, uploadID string) (*Upload, error) {
 	n, ok := s.pendingUploads.Load(uploadID)
 	if !ok {
 		return nil, ErrNotFound
@@ -121,7 +122,7 @@ func (s *Service) CompleteUpload(ctx context.Context, accountID uuid.UUID, uploa
 		return upload, nil
 	}
 
-	err := s.vfs.WriteFile(ctx, upload.TargetNode, virtualfs.FileContentFromBlobKey(upload.TargetNode.BlobKey))
+	err := s.vfs.WriteFile(ctx, db, upload.TargetNode, virtualfs.FileContentFromBlobKey(upload.TargetNode.BlobKey))
 	if err != nil {
 		return nil, err
 	}
