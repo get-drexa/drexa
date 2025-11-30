@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/hex"
 	"errors"
+	"log/slog"
 
 	"github.com/get-drexa/drexa/internal/password"
 	"github.com/get-drexa/drexa/internal/user"
@@ -94,11 +95,13 @@ func (s *Service) AuthenticateWithEmailAndPassword(ctx context.Context, db bun.I
 func (s *Service) AuthenticateWithAccessToken(ctx context.Context, db bun.IDB, token string) (*user.User, error) {
 	claims, err := ParseAccessToken(token, &s.tokenConfig)
 	if err != nil {
+		slog.Info("failed to parse access token", "error", err)
 		return nil, err
 	}
 
 	id, err := uuid.Parse(claims.Subject)
 	if err != nil {
+		slog.Info("failed to parse access token subject", "error", err)
 		return nil, newInvalidAccessTokenError(err)
 	}
 

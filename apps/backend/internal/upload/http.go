@@ -4,6 +4,7 @@ import (
 	"errors"
 
 	"github.com/get-drexa/drexa/internal/account"
+	"github.com/get-drexa/drexa/internal/httperr"
 	"github.com/gofiber/fiber/v2"
 	"github.com/uptrace/bun"
 )
@@ -50,7 +51,10 @@ func (h *HTTPHandler) Create(c *fiber.Ctx) error {
 		Name:     req.Name,
 	})
 	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Internal server error"})
+		if errors.Is(err, ErrNotFound) {
+			return c.SendStatus(fiber.StatusNotFound)
+		}
+		return httperr.Internal(err)
 	}
 
 	return c.JSON(upload)
@@ -67,7 +71,7 @@ func (h *HTTPHandler) ReceiveContent(c *fiber.Ctx) error {
 	err := h.service.ReceiveUpload(c.Context(), h.db, account.ID, uploadID, c.Request().BodyStream())
 	defer c.Request().CloseBodyStream()
 	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Internal server error"})
+		return httperr.Internal(err)
 	}
 
 	return c.SendStatus(fiber.StatusNoContent)
@@ -90,7 +94,7 @@ func (h *HTTPHandler) Update(c *fiber.Ctx) error {
 			if errors.Is(err, ErrNotFound) {
 				return c.SendStatus(fiber.StatusNotFound)
 			}
-			return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Internal server error"})
+			return httperr.Internal(err)
 		}
 		return c.JSON(upload)
 	}

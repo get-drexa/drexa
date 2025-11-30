@@ -8,18 +8,23 @@ import (
 	"github.com/get-drexa/drexa/internal/auth"
 	"github.com/get-drexa/drexa/internal/blob"
 	"github.com/get-drexa/drexa/internal/database"
+	"github.com/get-drexa/drexa/internal/httperr"
 	"github.com/get-drexa/drexa/internal/upload"
 	"github.com/get-drexa/drexa/internal/user"
 	"github.com/get-drexa/drexa/internal/virtualfs"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/logger"
+	"github.com/uptrace/bun/extra/bundebug"
 )
 
 func NewServer(c Config) (*fiber.App, error) {
-	app := fiber.New()
-	db := database.NewFromPostgres(c.Database.PostgresURL)
-
+	app := fiber.New(fiber.Config{
+		ErrorHandler: httperr.ErrorHandler,
+	})
 	app.Use(logger.New())
+
+	db := database.NewFromPostgres(c.Database.PostgresURL)
+	db.AddQueryHook(bundebug.NewQueryHook(bundebug.WithVerbose(true)))
 
 	// Initialize blob store based on config
 	var blobStore blob.Store

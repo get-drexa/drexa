@@ -3,6 +3,7 @@ package auth
 import (
 	"errors"
 
+	"github.com/get-drexa/drexa/internal/httperr"
 	"github.com/get-drexa/drexa/internal/user"
 	"github.com/gofiber/fiber/v2"
 	"github.com/uptrace/bun"
@@ -41,7 +42,7 @@ func (h *HTTPHandler) Login(c *fiber.Ctx) error {
 
 	tx, err := h.db.BeginTx(c.Context(), nil)
 	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Internal server error"})
+		return httperr.Internal(err)
 	}
 	defer tx.Rollback()
 
@@ -50,11 +51,11 @@ func (h *HTTPHandler) Login(c *fiber.Ctx) error {
 		if errors.Is(err, ErrInvalidCredentials) {
 			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid credentials"})
 		}
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Internal server error"})
+		return httperr.Internal(err)
 	}
 
 	if err := tx.Commit(); err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Internal server error"})
+		return httperr.Internal(err)
 	}
 
 	return c.JSON(loginResponse{

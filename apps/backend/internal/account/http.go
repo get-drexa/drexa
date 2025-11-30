@@ -4,6 +4,7 @@ import (
 	"errors"
 
 	"github.com/get-drexa/drexa/internal/auth"
+	"github.com/get-drexa/drexa/internal/httperr"
 	"github.com/get-drexa/drexa/internal/user"
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
@@ -68,7 +69,7 @@ func (h *HTTPHandler) accountMiddleware(c *fiber.Ctx) error {
 		if errors.Is(err, ErrAccountNotFound) {
 			return c.SendStatus(fiber.StatusNotFound)
 		}
-		return c.SendStatus(fiber.StatusInternalServerError)
+		return httperr.Internal(err)
 	}
 
 	c.Locals(currentAccountKey, account)
@@ -92,7 +93,7 @@ func (h *HTTPHandler) registerAccount(c *fiber.Ctx) error {
 
 	tx, err := h.db.BeginTx(c.Context(), nil)
 	if err != nil {
-		return c.SendStatus(fiber.StatusInternalServerError)
+		return httperr.Internal(err)
 	}
 	defer tx.Rollback()
 
@@ -109,17 +110,17 @@ func (h *HTTPHandler) registerAccount(c *fiber.Ctx) error {
 		if errors.Is(err, ErrAccountAlreadyExists) {
 			return c.SendStatus(fiber.StatusConflict)
 		}
-		return c.SendStatus(fiber.StatusBadRequest)
+		return httperr.Internal(err)
 	}
 
 	result, err := h.authService.GenerateTokenForUser(c.Context(), tx, u)
 	if err != nil {
-		return c.SendStatus(fiber.StatusInternalServerError)
+		return httperr.Internal(err)
 	}
 
 	err = tx.Commit()
 	if err != nil {
-		return c.SendStatus(fiber.StatusInternalServerError)
+		return httperr.Internal(err)
 	}
 
 	return c.JSON(registerAccountResponse{
