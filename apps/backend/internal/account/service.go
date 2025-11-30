@@ -59,6 +59,11 @@ func (s *Service) Register(ctx context.Context, db bun.IDB, opts RegisterOptions
 		return nil, nil, err
 	}
 
+	_, err = s.vfs.CreateDirectory(ctx, db, acc.ID, uuid.Nil, virtualfs.RootDirectoryName)
+	if err != nil {
+		return nil, nil, err
+	}
+
 	return acc, u, nil
 }
 

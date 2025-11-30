@@ -41,6 +41,8 @@ type FileContent struct {
 	blobKey blob.Key
 }
 
+const RootDirectoryName = "root"
+
 func FileContentFromReader(reader io.Reader) FileContent {
 	return FileContent{reader: reader}
 }
