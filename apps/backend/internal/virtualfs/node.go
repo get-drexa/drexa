@@ -25,13 +25,13 @@ const (
 type Node struct {
 	bun.BaseModel `bun:"vfs_nodes"`
 
-	ID       uuid.UUID  `bun:",pk,type:uuid"`
-	PublicID string     `bun:"public_id,notnull"`
-	UserID   uuid.UUID  `bun:"user_id,notnull"`
-	ParentID uuid.UUID  `bun:"parent_id,notnull"`
-	Kind     NodeKind   `bun:"kind,notnull"`
-	Status   NodeStatus `bun:"status,notnull"`
-	Name     string     `bun:"name,notnull"`
+	ID        uuid.UUID  `bun:",pk,type:uuid"`
+	PublicID  string     `bun:"public_id,notnull"`
+	AccountID uuid.UUID  `bun:"account_id,notnull,type:uuid"`
+	ParentID  uuid.UUID  `bun:"parent_id"`
+	Kind      NodeKind   `bun:"kind,notnull"`
+	Status    NodeStatus `bun:"status,notnull"`
+	Name      string     `bun:"name,notnull"`
 
 	BlobKey  blob.Key `bun:"blob_key"`
 	Size     int64    `bun:"size"`

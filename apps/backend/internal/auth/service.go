@@ -11,7 +11,7 @@ import (
 	"github.com/uptrace/bun"
 )
 
-type LoginResult struct {
+type AuthenticationResult struct {
 	User         *user.User
 	AccessToken  string
 	RefreshToken string
@@ -24,12 +24,6 @@ type Service struct {
 	tokenConfig TokenConfig
 }
 
-type registerOptions struct {
-	displayName string
-	email       string
-	password    string
-}
-
 func NewService(userService *user.Service, tokenConfig TokenConfig) *Service {
 	return &Service{
 		userService: userService,
@@ -37,7 +31,30 @@ func NewService(userService *user.Service, tokenConfig TokenConfig) *Service {
 	}
 }
 
-func (s *Service) LoginWithEmailAndPassword(ctx context.Context, db bun.IDB, email, plain string) (*LoginResult, error) {
+func (s *Service) GenerateTokenForUser(ctx context.Context, db bun.IDB, user *user.User) (*AuthenticationResult, error) {
+	at, err := GenerateAccessToken(user, &s.tokenConfig)
+	if err != nil {
+		return nil, err
+	}
+
+	rt, err := GenerateRefreshToken(user, &s.tokenConfig)
+	if err != nil {
+		return nil, err
+	}
+
+	_, err = db.NewInsert().Model(rt).Exec(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return &AuthenticationResult{
+		User:         user,
+		AccessToken:  at,
+		RefreshToken: hex.EncodeToString(rt.Token),
+	}, nil
+}
+
+func (s *Service) AuthenticateWithEmailAndPassword(ctx context.Context, db bun.IDB, email, plain string) (*AuthenticationResult, error) {
 	u, err := s.userService.UserByEmail(ctx, db, email)
 	if err != nil {
 		var nf *user.NotFoundError
@@ -67,44 +84,7 @@ func (s *Service) LoginWithEmailAndPassword(ctx context.Context, db bun.IDB, ema
 		return nil, err
 	}
 
-	return &LoginResult{
-		User:         u,
-		AccessToken:  at,
-		RefreshToken: hex.EncodeToString(rt.Token),
-	}, nil
-}
-
-func (s *Service) Register(ctx context.Context, db bun.IDB, opts registerOptions) (*LoginResult, error) {
-	hashed, err := password.Hash(opts.password)
-	if err != nil {
-		return nil, err
-	}
-
-	u, err := s.userService.RegisterUser(ctx, db, user.UserRegistrationOptions{
-		Email:       opts.email,
-		DisplayName: opts.displayName,
-		Password:    hashed,
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	at, err := GenerateAccessToken(u, &s.tokenConfig)
-	if err != nil {
-		return nil, err
-	}
-
-	rt, err := GenerateRefreshToken(u, &s.tokenConfig)
-	if err != nil {
-		return nil, err
-	}
-
-	_, err = db.NewInsert().Model(rt).Exec(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	return &LoginResult{
+	return &AuthenticationResult{
 		User:         u,
 		AccessToken:  at,
 		RefreshToken: hex.EncodeToString(rt.Token),

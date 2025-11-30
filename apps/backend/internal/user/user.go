@@ -11,14 +11,12 @@ import (
 type User struct {
 	bun.BaseModel `bun:"users"`
 
-	ID                uuid.UUID       `bun:",pk,type:uuid" json:"id"`
-	DisplayName       string          `bun:"display_name" json:"displayName"`
-	Email             string          `bun:"email,unique,notnull" json:"email"`
-	Password          password.Hashed `bun:"password,notnull" json:"-"`
-	StorageUsageBytes int64           `bun:"storage_usage_bytes,notnull" json:"storageUsageBytes"`
-	StorageQuotaBytes int64           `bun:"storage_quota_bytes,notnull" json:"storageQuotaBytes"`
-	CreatedAt         time.Time       `bun:"created_at,notnull" json:"createdAt"`
-	UpdatedAt         time.Time       `bun:"updated_at,notnull" json:"updatedAt"`
+	ID          uuid.UUID       `bun:",pk,type:uuid" json:"id"`
+	DisplayName string          `bun:"display_name" json:"displayName"`
+	Email       string          `bun:"email,unique,notnull" json:"email"`
+	Password    password.Hashed `bun:"password,notnull" json:"-"`
+	CreatedAt   time.Time       `bun:"created_at,notnull" json:"createdAt"`
+	UpdatedAt   time.Time       `bun:"updated_at,notnull" json:"updatedAt"`
 }
 
 func newUserID() (uuid.UUID, error) {

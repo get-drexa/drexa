@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/get-drexa/drexa/internal/account"
 	"github.com/get-drexa/drexa/internal/auth"
 	"github.com/get-drexa/drexa/internal/blob"
 	"github.com/get-drexa/drexa/internal/database"
@@ -61,12 +62,16 @@ func NewServer(c Config) (*fiber.App, error) {
 		SecretKey: c.JWT.SecretKey,
 	})
 	uploadService := upload.NewService(vfs, blobStore)
+	accountService := account.NewService(userService)
 
 	authMiddleware := auth.NewBearerAuthMiddleware(authService, db)
 
 	api := app.Group("/api")
+
+	accRouter := account.NewHTTPHandler(accountService, authService, db, authMiddleware).RegisterRoutes(api)
+
 	auth.NewHTTPHandler(authService, db).RegisterRoutes(api)
-	upload.NewHTTPHandler(uploadService, authMiddleware).RegisterRoutes(api, authMiddleware)
+	upload.NewHTTPHandler(uploadService).RegisterRoutes(accRouter)
 
 	return app, nil
 }

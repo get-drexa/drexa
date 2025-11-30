@@ -33,8 +33,8 @@ type CreateUploadOptions struct {
 	Name     string
 }
 
-func (s *Service) CreateUpload(ctx context.Context, userID uuid.UUID, opts CreateUploadOptions) (*Upload, error) {
-	parentNode, err := s.vfs.FindNodeByPublicID(ctx, userID, opts.ParentID)
+func (s *Service) CreateUpload(ctx context.Context, accountID uuid.UUID, opts CreateUploadOptions) (*Upload, error) {
+	parentNode, err := s.vfs.FindNodeByPublicID(ctx, accountID, opts.ParentID)
 	if err != nil {
 		if errors.Is(err, virtualfs.ErrNodeNotFound) {
 			return nil, ErrNotFound
@@ -46,7 +46,7 @@ func (s *Service) CreateUpload(ctx context.Context, userID uuid.UUID, opts Creat
 		return nil, ErrParentNotDirectory
 	}
 
-	node, err := s.vfs.CreateFile(ctx, userID, virtualfs.CreateFileOptions{
+	node, err := s.vfs.CreateFile(ctx, accountID, virtualfs.CreateFileOptions{
 		ParentID: parentNode.ID,
 		Name:     opts.Name,
 	})
@@ -77,7 +77,7 @@ func (s *Service) CreateUpload(ctx context.Context, userID uuid.UUID, opts Creat
 	return upload, nil
 }
 
-func (s *Service) ReceiveUpload(ctx context.Context, userID uuid.UUID, uploadID string, reader io.Reader) error {
+func (s *Service) ReceiveUpload(ctx context.Context, accountID uuid.UUID, uploadID string, reader io.Reader) error {
 	n, ok := s.pendingUploads.Load(uploadID)
 	if !ok {
 		return ErrNotFound
@@ -88,7 +88,7 @@ func (s *Service) ReceiveUpload(ctx context.Context, userID uuid.UUID, uploadID 
 		return ErrNotFound
 	}
 
-	if upload.TargetNode.UserID != userID {
+	if upload.TargetNode.AccountID != accountID {
 		return ErrNotFound
 	}
 
@@ -102,7 +102,7 @@ func (s *Service) ReceiveUpload(ctx context.Context, userID uuid.UUID, uploadID 
 	return nil
 }
 
-func (s *Service) CompleteUpload(ctx context.Context, userID uuid.UUID, uploadID string) (*Upload, error) {
+func (s *Service) CompleteUpload(ctx context.Context, accountID uuid.UUID, uploadID string) (*Upload, error) {
 	n, ok := s.pendingUploads.Load(uploadID)
 	if !ok {
 		return nil, ErrNotFound
@@ -113,7 +113,7 @@ func (s *Service) CompleteUpload(ctx context.Context, userID uuid.UUID, uploadID
 		return nil, ErrNotFound
 	}
 
-	if upload.TargetNode.UserID != userID {
+	if upload.TargetNode.AccountID != accountID {
 		return nil, ErrNotFound
 	}
 

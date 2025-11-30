@@ -63,10 +63,10 @@ func NewVirtualFS(db *bun.DB, blobStore blob.Store, keyResolver BlobKeyResolver)
 	}, nil
 }
 
-func (vfs *VirtualFS) FindNode(ctx context.Context, userID, fileID string) (*Node, error) {
+func (vfs *VirtualFS) FindNode(ctx context.Context, accountID, fileID string) (*Node, error) {
 	var node Node
 	err := vfs.db.NewSelect().Model(&node).
-		Where("user_id = ?", userID).
+		Where("account_id = ?", accountID).
 		Where("id = ?", fileID).
 		Where("status = ?", NodeStatusReady).
 		Where("deleted_at IS NULL").
@@ -80,10 +80,10 @@ func (vfs *VirtualFS) FindNode(ctx context.Context, userID, fileID string) (*Nod
 	return &node, nil
 }
 
-func (vfs *VirtualFS) FindNodeByPublicID(ctx context.Context, userID uuid.UUID, publicID string) (*Node, error) {
+func (vfs *VirtualFS) FindNodeByPublicID(ctx context.Context, accountID uuid.UUID, publicID string) (*Node, error) {
 	var node Node
 	err := vfs.db.NewSelect().Model(&node).
-		Where("user_id = ?", userID).
+		Where("account_id = ?", accountID).
 		Where("public_id = ?", publicID).
 		Where("status = ?", NodeStatusReady).
 		Where("deleted_at IS NULL").
@@ -104,7 +104,7 @@ func (vfs *VirtualFS) ListChildren(ctx context.Context, node *Node) ([]*Node, er
 
 	var nodes []*Node
 	err := vfs.db.NewSelect().Model(&nodes).
-		Where("user_id = ?", node.UserID).
+		Where("account_id = ?", node.AccountID).
 		Where("parent_id = ?", node.ID).
 		Where("status = ?", NodeStatusReady).
 		Where("deleted_at IS NULL").
@@ -119,19 +119,19 @@ func (vfs *VirtualFS) ListChildren(ctx context.Context, node *Node) ([]*Node, er
 	return nodes, nil
 }
 
-func (vfs *VirtualFS) CreateFile(ctx context.Context, userID uuid.UUID, opts CreateFileOptions) (*Node, error) {
+func (vfs *VirtualFS) CreateFile(ctx context.Context, accountID uuid.UUID, opts CreateFileOptions) (*Node, error) {
 	pid, err := vfs.generatePublicID()
 	if err != nil {
 		return nil, err
 	}
 
 	node := Node{
-		PublicID: pid,
-		UserID:   userID,
-		ParentID: opts.ParentID,
-		Kind:     NodeKindFile,
-		Status:   NodeStatusPending,
-		Name:     opts.Name,
+		PublicID:  pid,
+		AccountID: accountID,
+		ParentID:  opts.ParentID,
+		Kind:      NodeKindFile,
+		Status:    NodeStatusPending,
+		Name:      opts.Name,
 	}
 
 	if vfs.keyResolver.ShouldPersistKey() {
@@ -233,19 +233,19 @@ func (vfs *VirtualFS) WriteFile(ctx context.Context, node *Node, content FileCon
 	return nil
 }
 
-func (vfs *VirtualFS) CreateDirectory(ctx context.Context, userID uuid.UUID, parentID uuid.UUID, name string) (*Node, error) {
+func (vfs *VirtualFS) CreateDirectory(ctx context.Context, accountID uuid.UUID, parentID uuid.UUID, name string) (*Node, error) {
 	pid, err := vfs.generatePublicID()
 	if err != nil {
 		return nil, err
 	}
 
 	node := Node{
-		PublicID: pid,
-		UserID:   userID,
-		ParentID: parentID,
-		Kind:     NodeKindDirectory,
-		Status:   NodeStatusReady,
-		Name:     name,
+		PublicID:  pid,
+		AccountID: accountID,
+		ParentID:  parentID,
+		Kind:      NodeKindDirectory,
+		Status:    NodeStatusReady,
+		Name:      name,
 	}
 
 	_, err = vfs.db.NewInsert().Model(&node).Exec(ctx)

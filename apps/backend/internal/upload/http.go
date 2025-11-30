@@ -3,7 +3,7 @@ package upload
 import (
 	"errors"
 
-	"github.com/get-drexa/drexa/internal/auth"
+	"github.com/get-drexa/drexa/internal/account"
 	"github.com/gofiber/fiber/v2"
 )
 
@@ -17,17 +17,15 @@ type updateUploadRequest struct {
 }
 
 type HTTPHandler struct {
-	service        *Service
-	authMiddleware fiber.Handler
+	service *Service
 }
 
-func NewHTTPHandler(s *Service, authMiddleware fiber.Handler) *HTTPHandler {
-	return &HTTPHandler{service: s, authMiddleware: authMiddleware}
+func NewHTTPHandler(s *Service) *HTTPHandler {
+	return &HTTPHandler{service: s}
 }
 
-func (h *HTTPHandler) RegisterRoutes(api fiber.Router, authMiddleware fiber.Handler) {
+func (h *HTTPHandler) RegisterRoutes(api fiber.Router) {
 	upload := api.Group("/uploads")
-	upload.Use(authMiddleware)
 
 	upload.Post("/", h.Create)
 	upload.Put("/:uploadID/content", h.ReceiveContent)
@@ -35,9 +33,9 @@ func (h *HTTPHandler) RegisterRoutes(api fiber.Router, authMiddleware fiber.Hand
 }
 
 func (h *HTTPHandler) Create(c *fiber.Ctx) error {
-	u, err := auth.AuthenticatedUser(c)
-	if err != nil {
-		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Unauthorized"})
+	account := account.CurrentAccount(c)
+	if account == nil {
+		return c.SendStatus(fiber.StatusUnauthorized)
 	}
 
 	req := new(createUploadRequest)
@@ -45,7 +43,7 @@ func (h *HTTPHandler) Create(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid request"})
 	}
 
-	upload, err := h.service.CreateUpload(c.Context(), u.ID, CreateUploadOptions{
+	upload, err := h.service.CreateUpload(c.Context(), account.ID, CreateUploadOptions{
 		ParentID: req.ParentID,
 		Name:     req.Name,
 	})
@@ -57,14 +55,14 @@ func (h *HTTPHandler) Create(c *fiber.Ctx) error {
 }
 
 func (h *HTTPHandler) ReceiveContent(c *fiber.Ctx) error {
-	u, err := auth.AuthenticatedUser(c)
-	if err != nil {
-		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Unauthorized"})
+	account := account.CurrentAccount(c)
+	if account == nil {
+		return c.SendStatus(fiber.StatusUnauthorized)
 	}
 
 	uploadID := c.Params("uploadID")
 
-	err = h.service.ReceiveUpload(c.Context(), u.ID, uploadID, c.Request().BodyStream())
+	err := h.service.ReceiveUpload(c.Context(), account.ID, uploadID, c.Request().BodyStream())
 	defer c.Request().CloseBodyStream()
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{"error": "Internal server error"})
@@ -74,9 +72,9 @@ func (h *HTTPHandler) ReceiveContent(c *fiber.Ctx) error {
 }
 
 func (h *HTTPHandler) Update(c *fiber.Ctx) error {
-	u, err := auth.AuthenticatedUser(c)
-	if err != nil {
-		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Unauthorized"})
+	account := account.CurrentAccount(c)
+	if account == nil {
+		return c.SendStatus(fiber.StatusUnauthorized)
 	}
 
 	req := new(updateUploadRequest)
@@ -85,7 +83,7 @@ func (h *HTTPHandler) Update(c *fiber.Ctx) error {
 	}
 
 	if req.Status == StatusCompleted {
-		upload, err := h.service.CompleteUpload(c.Context(), u.ID, c.Params("uploadID"))
+		upload, err := h.service.CompleteUpload(c.Context(), account.ID, c.Params("uploadID"))
 		if err != nil {
 			if errors.Is(err, ErrNotFound) {
 				return c.SendStatus(fiber.StatusNotFound)
