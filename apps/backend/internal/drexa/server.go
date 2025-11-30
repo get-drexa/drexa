@@ -62,9 +62,11 @@ func NewServer(c Config) (*fiber.App, error) {
 	})
 	uploadService := upload.NewService(vfs, blobStore)
 
+	authMiddleware := auth.NewBearerAuthMiddleware(authService, db)
+
 	api := app.Group("/api")
 	auth.NewHTTPHandler(authService, db).RegisterRoutes(api)
-	upload.NewHTTPHandler(uploadService).RegisterRoutes(api)
+	upload.NewHTTPHandler(uploadService, authMiddleware).RegisterRoutes(api, authMiddleware)
 
 	return app, nil
 }

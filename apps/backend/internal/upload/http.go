@@ -17,15 +17,17 @@ type updateUploadRequest struct {
 }
 
 type HTTPHandler struct {
-	service *Service
+	service        *Service
+	authMiddleware fiber.Handler
 }
 
-func NewHTTPHandler(s *Service) *HTTPHandler {
-	return &HTTPHandler{service: s}
+func NewHTTPHandler(s *Service, authMiddleware fiber.Handler) *HTTPHandler {
+	return &HTTPHandler{service: s, authMiddleware: authMiddleware}
 }
 
-func (h *HTTPHandler) RegisterRoutes(api fiber.Router) {
+func (h *HTTPHandler) RegisterRoutes(api fiber.Router, authMiddleware fiber.Handler) {
 	upload := api.Group("/uploads")
+	upload.Use(authMiddleware)
 
 	upload.Post("/", h.Create)
 	upload.Put("/:uploadID/content", h.ReceiveContent)

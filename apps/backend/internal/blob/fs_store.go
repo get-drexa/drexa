@@ -111,6 +111,15 @@ func (s *FSStore) Delete(ctx context.Context, key Key) error {
 	return nil
 }
 
+func (s *FSStore) DeletePrefix(ctx context.Context, prefix Key) error {
+	prefixPath := filepath.Join(s.config.Root, string(prefix))
+	err := os.RemoveAll(prefixPath)
+	if err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	return nil
+}
+
 func (s *FSStore) Update(ctx context.Context, key Key, opts UpdateOptions) error {
 	// Update is a no-op for FSStore
 	return nil

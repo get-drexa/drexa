@@ -20,6 +20,7 @@ type Store interface {
 	Put(ctx context.Context, key Key, reader io.Reader) error
 	Update(ctx context.Context, key Key, opts UpdateOptions) error
 	Delete(ctx context.Context, key Key) error
+	DeletePrefix(ctx context.Context, prefix Key) error
 	Move(ctx context.Context, srcKey, dstKey Key) error
 	Read(ctx context.Context, key Key) (io.ReadCloser, error)
 	ReadRange(ctx context.Context, key Key, offset, length int64) (io.ReadCloser, error)

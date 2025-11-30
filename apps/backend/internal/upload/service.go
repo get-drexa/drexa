@@ -61,6 +61,7 @@ func (s *Service) CreateUpload(ctx context.Context, userID uuid.UUID, opts Creat
 		Duration: 1 * time.Hour,
 	})
 	if err != nil {
+		_ = s.vfs.PermanentlyDeleteNode(ctx, node)
 		return nil, err
 	}
 

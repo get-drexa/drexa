@@ -385,7 +385,31 @@ func (vfs *VirtualFS) PermanentlyDeleteNode(ctx context.Context, node *Node) err
 	if !node.IsAccessible() {
 		return ErrNodeNotFound
 	}
+	switch node.Kind {
+	case NodeKindFile:
+		return vfs.permanentlyDeleteFileNode(ctx, node)
+	case NodeKindDirectory:
+		return vfs.permanentlyDeleteDirectoryNode(ctx, node)
+	default:
+		return ErrUnsupportedOperation
+	}
+}
 
+func (vfs *VirtualFS) permanentlyDeleteFileNode(ctx context.Context, node *Node) error {
+	err := vfs.blobStore.Delete(ctx, node.BlobKey)
+	if err != nil {
+		return err
+	}
+
+	_, err = vfs.db.NewDelete().Model(node).WherePK().Exec(ctx)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (vfs *VirtualFS) permanentlyDeleteDirectoryNode(ctx context.Context, node *Node) error {
 	const descendantsQuery = `WITH RECURSIVE descendants AS (
 		SELECT id, blob_key FROM vfs_nodes WHERE id = ?
 		UNION ALL
@@ -399,46 +423,56 @@ func (vfs *VirtualFS) PermanentlyDeleteNode(ctx context.Context, node *Node) err
 		BlobKey blob.Key  `bun:"blob_key"`
 	}
 
-	var blobKeys []blob.Key
+	tx, err := vfs.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
 
-	err := vfs.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
-		var records []nodeRecord
-		err := tx.NewRaw(descendantsQuery, node.ID).Scan(ctx, &records)
-		if err != nil {
-			if errors.Is(err, sql.ErrNoRows) {
-				return ErrNodeNotFound
-			}
-			return err
-		}
-
-		if len(records) == 0 {
+	var records []nodeRecord
+	err = tx.NewRaw(descendantsQuery, node.ID).Scan(ctx, &records)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
 			return ErrNodeNotFound
 		}
-
-		nodeIDs := make([]uuid.UUID, 0, len(records))
-		for _, r := range records {
-			nodeIDs = append(nodeIDs, r.ID)
-			if !r.BlobKey.IsNil() {
-				blobKeys = append(blobKeys, r.BlobKey)
-			}
-		}
-
-		_, err = tx.NewDelete().
-			Model((*Node)(nil)).
-			Where("id IN (?)", bun.In(nodeIDs)).
-			Exec(ctx)
 		return err
-	})
+	}
+
+	if len(records) == 0 {
+		return ErrNodeNotFound
+	}
+
+	nodeIDs := make([]uuid.UUID, 0, len(records))
+	blobKeys := make([]blob.Key, 0, len(records))
+	for _, r := range records {
+		nodeIDs = append(nodeIDs, r.ID)
+		if !r.BlobKey.IsNil() {
+			blobKeys = append(blobKeys, r.BlobKey)
+		}
+	}
+
+	plan, err := vfs.keyResolver.ResolveDeletionKeys(ctx, node, blobKeys)
 	if err != nil {
 		return err
 	}
 
-	// Delete blobs outside transaction (best effort)
-	for _, key := range blobKeys {
-		_ = vfs.blobStore.Delete(ctx, key)
+	_, err = tx.NewDelete().
+		Model((*Node)(nil)).
+		Where("id IN (?)", bun.In(nodeIDs)).
+		Exec(ctx)
+	if err != nil {
+		return err
 	}
 
-	return nil
+	if !plan.Prefix.IsNil() {
+		_ = vfs.blobStore.DeletePrefix(ctx, plan.Prefix)
+	} else {
+		for _, key := range plan.Keys {
+			_ = vfs.blobStore.Delete(ctx, key)
+		}
+	}
+
+	return tx.Commit()
 }
 
 func (vfs *VirtualFS) generatePublicID() (string, error) {
