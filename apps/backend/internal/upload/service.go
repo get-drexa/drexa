@@ -58,12 +58,17 @@ func (s *Service) CreateUpload(ctx context.Context, db bun.IDB, accountID uuid.U
 		return nil, err
 	}
 
-	uploadURL, err := s.blobStore.GenerateUploadURL(ctx, node.BlobKey, blob.UploadURLOptions{
-		Duration: 1 * time.Hour,
-	})
-	if err != nil {
-		_ = s.vfs.PermanentlyDeleteNode(ctx, db, node)
-		return nil, err
+	var uploadURL string
+	if s.blobStore.SupportsDirectUpload() {
+		uploadURL, err = s.blobStore.GenerateUploadURL(ctx, node.BlobKey, blob.UploadURLOptions{
+			Duration: 1 * time.Hour,
+		})
+		if err != nil {
+			_ = s.vfs.PermanentlyDeleteNode(ctx, db, node)
+			return nil, err
+		}
+	} else {
+		uploadURL = ""
 	}
 
 	upload := &Upload{

@@ -16,8 +16,7 @@ type FSStore struct {
 }
 
 type FSStoreConfig struct {
-	Root      string
-	UploadURL string
+	Root string
 }
 
 func NewFSStore(config FSStoreConfig) *FSStore {
@@ -26,10 +25,6 @@ func NewFSStore(config FSStoreConfig) *FSStore {
 
 func (s *FSStore) Initialize(ctx context.Context) error {
 	return os.MkdirAll(s.config.Root, 0755)
-}
-
-func (s *FSStore) GenerateUploadURL(ctx context.Context, key Key, opts UploadURLOptions) (string, error) {
-	return s.config.UploadURL, nil
 }
 
 func (s *FSStore) Put(ctx context.Context, key Key, reader io.Reader) error {
@@ -148,4 +143,12 @@ func (s *FSStore) Move(ctx context.Context, srcKey, dstKey Key) error {
 	}
 
 	return nil
+}
+
+func (s *FSStore) SupportsDirectUpload() bool {
+	return false
+}
+
+func (s *FSStore) GenerateUploadURL(ctx context.Context, key Key, opts UploadURLOptions) (string, error) {
+	return "", nil
 }
