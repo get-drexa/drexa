@@ -3,6 +3,7 @@ package blob
 import (
 	"context"
 	"io"
+	"log/slog"
 	"os"
 	"path/filepath"
 
@@ -23,12 +24,22 @@ func NewFSStore(config FSStoreConfig) *FSStore {
 	return &FSStore{config: config}
 }
 
+func (s *FSStore) SupportsDirectUpload() bool {
+	return false
+}
+
+func (s *FSStore) SupportsDirectDownload() bool {
+	return false
+}
+
 func (s *FSStore) Initialize(ctx context.Context) error {
 	return os.MkdirAll(s.config.Root, 0755)
 }
 
 func (s *FSStore) Put(ctx context.Context, key Key, reader io.Reader) error {
 	path := filepath.Join(s.config.Root, string(key))
+
+	slog.Info("fs store: putting file", "path", path)
 
 	err := os.MkdirAll(filepath.Dir(path), 0755)
 	if err != nil {
@@ -55,6 +66,9 @@ func (s *FSStore) Put(ctx context.Context, key Key, reader io.Reader) error {
 
 func (s *FSStore) Read(ctx context.Context, key Key) (io.ReadCloser, error) {
 	path := filepath.Join(s.config.Root, string(key))
+
+	slog.Info("fs store: reading file", "path", path)
+
 	f, err := os.Open(path)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -67,6 +81,8 @@ func (s *FSStore) Read(ctx context.Context, key Key) (io.ReadCloser, error) {
 
 func (s *FSStore) ReadRange(ctx context.Context, key Key, offset, length int64) (io.ReadCloser, error) {
 	path := filepath.Join(s.config.Root, string(key))
+
+	slog.Info("fs store: reading range", "path", path, "offset", offset, "length", length)
 
 	f, err := os.Open(path)
 	if err != nil {
@@ -86,6 +102,9 @@ func (s *FSStore) ReadRange(ctx context.Context, key Key, offset, length int64) 
 
 func (s *FSStore) ReadSize(ctx context.Context, key Key) (int64, error) {
 	path := filepath.Join(s.config.Root, string(key))
+
+	slog.Info("fs store: reading size", "path", path)
+
 	fi, err := os.Stat(path)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -97,7 +116,9 @@ func (s *FSStore) ReadSize(ctx context.Context, key Key) (int64, error) {
 }
 
 func (s *FSStore) Delete(ctx context.Context, key Key) error {
-	err := os.Remove(filepath.Join(s.config.Root, string(key)))
+	path := filepath.Join(s.config.Root, string(key))
+	slog.Info("fs store: deleting file", "path", path)
+	err := os.Remove(path)
 	// no op if file does not exist
 	// swallow error if file does not exist
 	if err != nil && !os.IsNotExist(err) {
@@ -145,10 +166,10 @@ func (s *FSStore) Move(ctx context.Context, srcKey, dstKey Key) error {
 	return nil
 }
 
-func (s *FSStore) SupportsDirectUpload() bool {
-	return false
+func (s *FSStore) GenerateUploadURL(ctx context.Context, key Key, opts UploadURLOptions) (string, error) {
+	return "", nil
 }
 
-func (s *FSStore) GenerateUploadURL(ctx context.Context, key Key, opts UploadURLOptions) (string, error) {
+func (s *FSStore) GenerateDownloadURL(ctx context.Context, key Key, opts DownloadURLOptions) (string, error) {
 	return "", nil
 }

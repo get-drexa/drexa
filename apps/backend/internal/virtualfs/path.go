@@ -6,7 +6,6 @@ import (
 	"errors"
 	"strings"
 
-	"github.com/google/uuid"
 	"github.com/uptrace/bun"
 )
 
@@ -19,7 +18,6 @@ const absolutePathQuery = `WITH RECURSIVE path AS (
     SELECT n.id, n.parent_id, n.name, p.depth + 1
     FROM vfs_nodes n
     JOIN path p ON n.id = p.parent_id
-    WHERE n.deleted_at IS NULL
 )
 SELECT name FROM path 
 WHERE EXISTS (SELECT 1 FROM path WHERE parent_id IS NULL)
@@ -29,9 +27,9 @@ func JoinPath(parts ...string) string {
 	return strings.Join(parts, "/")
 }
 
-func buildNodeAbsolutePath(ctx context.Context, db bun.IDB, nodeID uuid.UUID) (string, error) {
+func buildNodeAbsolutePath(ctx context.Context, db bun.IDB, node *Node) (string, error) {
 	var path []string
-	err := db.NewRaw(absolutePathQuery, nodeID).Scan(ctx, &path)
+	err := db.NewRaw(absolutePathQuery, node.ID).Scan(ctx, &path)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return "", ErrNodeNotFound

@@ -7,6 +7,7 @@ import (
 	"github.com/get-drexa/drexa/internal/account"
 	"github.com/get-drexa/drexa/internal/auth"
 	"github.com/get-drexa/drexa/internal/blob"
+	"github.com/get-drexa/drexa/internal/catalog"
 	"github.com/get-drexa/drexa/internal/database"
 	"github.com/get-drexa/drexa/internal/httperr"
 	"github.com/get-drexa/drexa/internal/upload"
@@ -54,7 +55,7 @@ func NewServer(c Config) (*Server, error) {
 		return nil, fmt.Errorf("unknown storage backend: %s", c.Storage.Backend)
 	}
 
-	err := blobStore.Initialize(context.Background())
+	err := blobStore.Initialize(context.TODO())
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize blob store: %w", err)
 	}
@@ -70,7 +71,7 @@ func NewServer(c Config) (*Server, error) {
 		return nil, fmt.Errorf("unknown storage mode: %s", c.Storage.Mode)
 	}
 
-	vfs, err := virtualfs.NewVirtualFS(blobStore, keyResolver)
+	vfs, err := virtualfs.New(blobStore, keyResolver)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create virtual file system: %w", err)
 	}
@@ -82,16 +83,16 @@ func NewServer(c Config) (*Server, error) {
 		SecretKey: c.JWT.SecretKey,
 	})
 	uploadService := upload.NewService(vfs, blobStore)
-	accountService := account.NewService(userService)
+	accountService := account.NewService(userService, vfs)
 
 	authMiddleware := auth.NewBearerAuthMiddleware(authService, db)
 
 	api := app.Group("/api")
-
-	accRouter := account.NewHTTPHandler(accountService, authService, db, authMiddleware).RegisterRoutes(api)
-
 	auth.NewHTTPHandler(authService, db).RegisterRoutes(api)
-	upload.NewHTTPHandler(uploadService, db).RegisterRoutes(accRouter)
+
+	accountRouter := account.NewHTTPHandler(accountService, authService, db, authMiddleware).RegisterRoutes(api)
+	upload.NewHTTPHandler(uploadService, db).RegisterRoutes(accountRouter)
+	catalog.NewHTTPHandler(vfs, db).RegisterRoutes(accountRouter)
 
 	s := &Server{
 		config:         c,

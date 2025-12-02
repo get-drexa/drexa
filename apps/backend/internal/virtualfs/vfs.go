@@ -8,6 +8,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"io"
+	"time"
 
 	"github.com/gabriel-vasile/mimetype"
 	"github.com/get-drexa/drexa/internal/blob"
@@ -36,22 +37,9 @@ type CreateFileOptions struct {
 	Name     string
 }
 
-type FileContent struct {
-	reader  io.Reader
-	blobKey blob.Key
-}
-
 const RootDirectoryName = "root"
 
-func FileContentFromReader(reader io.Reader) FileContent {
-	return FileContent{reader: reader}
-}
-
-func FileContentFromBlobKey(blobKey blob.Key) FileContent {
-	return FileContent{blobKey: blobKey}
-}
-
-func NewVirtualFS(blobStore blob.Store, keyResolver BlobKeyResolver) (*VirtualFS, error) {
+func New(blobStore blob.Store, keyResolver BlobKeyResolver) (*VirtualFS, error) {
 	sqid, err := sqids.New()
 	if err != nil {
 		return nil, err
@@ -86,7 +74,6 @@ func (vfs *VirtualFS) FindNodeByPublicID(ctx context.Context, db bun.IDB, accoun
 		Where("account_id = ?", accountID).
 		Where("public_id = ?", publicID).
 		Where("status = ?", NodeStatusReady).
-		Where("deleted_at IS NULL").
 		Scan(ctx)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -141,7 +128,7 @@ func (vfs *VirtualFS) CreateFile(ctx context.Context, db bun.IDB, accountID uuid
 	}
 
 	if vfs.keyResolver.ShouldPersistKey() {
-		node.BlobKey, err = vfs.keyResolver.Resolve(ctx, &node)
+		node.BlobKey, err = vfs.keyResolver.Resolve(ctx, db, &node)
 		if err != nil {
 			return nil, err
 		}
@@ -159,31 +146,31 @@ func (vfs *VirtualFS) CreateFile(ctx context.Context, db bun.IDB, accountID uuid
 }
 
 func (vfs *VirtualFS) WriteFile(ctx context.Context, db bun.IDB, node *Node, content FileContent) error {
-	if content.reader == nil && content.blobKey.IsNil() {
+	if content.Reader == nil && content.BlobKey.IsNil() {
 		return blob.ErrInvalidFileContent
 	}
 
-	if !node.DeletedAt.IsZero() {
+	if node.DeletedAt != nil {
 		return ErrNodeNotFound
 	}
 
 	setCols := make([]string, 0, 4)
 
-	if content.reader != nil {
-		key, err := vfs.keyResolver.Resolve(ctx, node)
+	if content.Reader != nil {
+		key, err := vfs.keyResolver.Resolve(ctx, db, node)
 		if err != nil {
 			return err
 		}
 
 		buf := make([]byte, 3072)
-		n, err := io.ReadFull(content.reader, buf)
+		n, err := io.ReadFull(content.Reader, buf)
 		if err != nil && err != io.EOF && err != io.ErrUnexpectedEOF {
 			return err
 		}
 		buf = buf[:n]
 
 		mt := mimetype.Detect(buf)
-		cr := ioext.NewCountingReader(io.MultiReader(bytes.NewReader(buf), content.reader))
+		cr := ioext.NewCountingReader(io.MultiReader(bytes.NewReader(buf), content.Reader))
 
 		err = vfs.blobStore.Put(ctx, key, cr)
 		if err != nil {
@@ -201,9 +188,9 @@ func (vfs *VirtualFS) WriteFile(ctx context.Context, db bun.IDB, node *Node, con
 
 		setCols = append(setCols, "mime_type", "size", "status")
 	} else {
-		node.BlobKey = content.blobKey
+		node.BlobKey = content.BlobKey
 
-		b, err := vfs.blobStore.ReadRange(ctx, content.blobKey, 0, 3072)
+		b, err := vfs.blobStore.ReadRange(ctx, content.BlobKey, 0, 3072)
 		if err != nil {
 			return err
 		}
@@ -219,7 +206,7 @@ func (vfs *VirtualFS) WriteFile(ctx context.Context, db bun.IDB, node *Node, con
 		node.MimeType = mt.String()
 		node.Status = NodeStatusReady
 
-		s, err := vfs.blobStore.ReadSize(ctx, content.blobKey)
+		s, err := vfs.blobStore.ReadSize(ctx, content.BlobKey)
 		if err != nil {
 			return err
 		}
@@ -237,6 +224,34 @@ func (vfs *VirtualFS) WriteFile(ctx context.Context, db bun.IDB, node *Node, con
 	}
 
 	return nil
+}
+
+func (vfs *VirtualFS) ReadFile(ctx context.Context, db bun.IDB, node *Node) (FileContent, error) {
+	if node.Kind != NodeKindFile {
+		return EmptyFileContent(), ErrUnsupportedOperation
+	}
+
+	key, err := vfs.keyResolver.Resolve(ctx, db, node)
+	if err != nil {
+		return EmptyFileContent(), err
+	}
+
+	if vfs.blobStore.SupportsDirectDownload() {
+		url, err := vfs.blobStore.GenerateDownloadURL(ctx, key, blob.DownloadURLOptions{
+			Duration: 1 * time.Hour,
+		})
+		if err != nil {
+			return EmptyFileContent(), err
+		}
+		return FileContentFromURL(url), nil
+	}
+
+	reader, err := vfs.blobStore.Read(ctx, key)
+	if err != nil {
+		return EmptyFileContent(), err
+	}
+
+	return FileContentFromReaderWithSize(reader, node.Size), nil
 }
 
 func (vfs *VirtualFS) CreateDirectory(ctx context.Context, db bun.IDB, accountID uuid.UUID, parentID uuid.UUID, name string) (*Node, error) {
@@ -319,7 +334,12 @@ func (vfs *VirtualFS) RenameNode(ctx context.Context, db bun.IDB, node *Node, na
 		return ErrNodeNotFound
 	}
 
-	_, err := db.NewUpdate().Model(node).
+	oldKey, err := vfs.keyResolver.Resolve(ctx, db, node)
+	if err != nil {
+		return err
+	}
+
+	_, err = db.NewUpdate().Model(node).
 		WherePK().
 		Where("status = ?", NodeStatusReady).
 		Where("deleted_at IS NULL").
@@ -332,6 +352,30 @@ func (vfs *VirtualFS) RenameNode(ctx context.Context, db bun.IDB, node *Node, na
 		}
 		return err
 	}
+
+	newKey, err := vfs.keyResolver.Resolve(ctx, db, node)
+	if err != nil {
+		return err
+	}
+
+	if oldKey != newKey {
+		err = vfs.blobStore.Move(ctx, oldKey, newKey)
+		if err != nil {
+			return err
+		}
+
+		if vfs.keyResolver.ShouldPersistKey() {
+			node.BlobKey = newKey
+			_, err = db.NewUpdate().Model(node).
+				WherePK().
+				Set("blob_key = ?", newKey).
+				Exec(ctx)
+			if err != nil {
+				return err
+			}
+		}
+	}
+
 	return nil
 }
 
@@ -340,7 +384,7 @@ func (vfs *VirtualFS) MoveNode(ctx context.Context, db bun.IDB, node *Node, pare
 		return ErrNodeNotFound
 	}
 
-	oldKey, err := vfs.keyResolver.Resolve(ctx, node)
+	oldKey, err := vfs.keyResolver.Resolve(ctx, db, node)
 	if err != nil {
 		return err
 	}
@@ -362,7 +406,7 @@ func (vfs *VirtualFS) MoveNode(ctx context.Context, db bun.IDB, node *Node, pare
 		return err
 	}
 
-	newKey, err := vfs.keyResolver.Resolve(ctx, node)
+	newKey, err := vfs.keyResolver.Resolve(ctx, db, node)
 	if err != nil {
 		return err
 	}
@@ -390,13 +434,10 @@ func (vfs *VirtualFS) AbsolutePath(ctx context.Context, db bun.IDB, node *Node) 
 	if !node.IsAccessible() {
 		return "", ErrNodeNotFound
 	}
-	return buildNodeAbsolutePath(ctx, db, node.ID)
+	return buildNodeAbsolutePath(ctx, db, node)
 }
 
 func (vfs *VirtualFS) PermanentlyDeleteNode(ctx context.Context, db bun.IDB, node *Node) error {
-	if !node.IsAccessible() {
-		return ErrNodeNotFound
-	}
 	switch node.Kind {
 	case NodeKindFile:
 		return vfs.permanentlyDeleteFileNode(ctx, db, node)
@@ -408,7 +449,12 @@ func (vfs *VirtualFS) PermanentlyDeleteNode(ctx context.Context, db bun.IDB, nod
 }
 
 func (vfs *VirtualFS) permanentlyDeleteFileNode(ctx context.Context, db bun.IDB, node *Node) error {
-	err := vfs.blobStore.Delete(ctx, node.BlobKey)
+	key, err := vfs.keyResolver.Resolve(ctx, db, node)
+	if err != nil {
+		return err
+	}
+
+	err = vfs.blobStore.Delete(ctx, key)
 	if err != nil {
 		return err
 	}

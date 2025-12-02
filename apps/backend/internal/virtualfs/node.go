@@ -37,9 +37,9 @@ type Node struct {
 	Size     int64    `bun:"size"`
 	MimeType string   `bun:"mime_type,nullzero"`
 
-	CreatedAt time.Time `bun:"created_at,notnull,nullzero"`
-	UpdatedAt time.Time `bun:"updated_at,notnull,nullzero"`
-	DeletedAt time.Time `bun:"deleted_at,nullzero"`
+	CreatedAt time.Time  `bun:"created_at,notnull,nullzero"`
+	UpdatedAt time.Time  `bun:"updated_at,notnull,nullzero"`
+	DeletedAt *time.Time `bun:"deleted_at,nullzero"`
 }
 
 func newNodeID() (uuid.UUID, error) {
@@ -49,5 +49,5 @@ func newNodeID() (uuid.UUID, error) {
 // IsAccessible returns true if the node can be accessed.
 // If the node is not ready or if it is soft deleted, it cannot be accessed.
 func (n *Node) IsAccessible() bool {
-	return n.DeletedAt.IsZero() && n.Status == NodeStatusReady
+	return n.DeletedAt == nil && n.Status == NodeStatusReady
 }

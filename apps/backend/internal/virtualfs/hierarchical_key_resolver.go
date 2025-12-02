@@ -22,8 +22,8 @@ func (r *HierarchicalKeyResolver) ShouldPersistKey() bool {
 	return false
 }
 
-func (r *HierarchicalKeyResolver) Resolve(ctx context.Context, node *Node) (blob.Key, error) {
-	path, err := buildNodeAbsolutePath(ctx, r.db, node.ID)
+func (r *HierarchicalKeyResolver) Resolve(ctx context.Context, db bun.IDB, node *Node) (blob.Key, error) {
+	path, err := buildNodeAbsolutePath(ctx, db, node)
 	if err != nil {
 		return "", err
 	}
@@ -32,7 +32,7 @@ func (r *HierarchicalKeyResolver) Resolve(ctx context.Context, node *Node) (blob
 }
 
 func (r *HierarchicalKeyResolver) ResolveDeletionKeys(ctx context.Context, node *Node, allKeys []blob.Key) (*DeletionPlan, error) {
-	path, err := buildNodeAbsolutePath(ctx, r.db, node.ID)
+	path, err := buildNodeAbsolutePath(ctx, r.db, node)
 	if err != nil {
 		return nil, err
 	}

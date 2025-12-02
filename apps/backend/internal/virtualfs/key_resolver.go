@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/get-drexa/drexa/internal/blob"
+	"github.com/uptrace/bun"
 )
 
 type BlobKeyResolver interface {
@@ -11,7 +12,7 @@ type BlobKeyResolver interface {
 	// Flat keys (e.g. UUIDs) return true - key is generated once and stored.
 	// Hierarchical keys return false - key is derived from path each time.
 	ShouldPersistKey() bool
-	Resolve(ctx context.Context, node *Node) (blob.Key, error)
+	Resolve(ctx context.Context, db bun.IDB, node *Node) (blob.Key, error)
 	ResolveDeletionKeys(ctx context.Context, node *Node, allKeys []blob.Key) (*DeletionPlan, error)
 }
 
