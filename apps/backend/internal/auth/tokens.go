@@ -28,12 +28,13 @@ type TokenConfig struct {
 type RefreshToken struct {
 	bun.BaseModel `bun:"refresh_tokens"`
 
-	ID        uuid.UUID `bun:",pk,type:uuid"`
-	UserID    uuid.UUID `bun:"user_id,notnull"`
-	Token     []byte    `bun:"-"`
-	TokenHash string    `bun:"token_hash,notnull"`
-	ExpiresAt time.Time `bun:"expires_at,notnull"`
-	CreatedAt time.Time `bun:"created_at,notnull,nullzero"`
+	ID         uuid.UUID  `bun:",pk,type:uuid"`
+	GrantID    uuid.UUID  `bun:"grant_id,notnull"`
+	Token      []byte     `bun:"-"`
+	TokenHash  string     `bun:"token_hash,notnull"`
+	ExpiresAt  time.Time  `bun:"expires_at,notnull"`
+	CreatedAt  time.Time  `bun:"created_at,notnull,nullzero"`
+	ConsumedAt *time.Time `bun:"consumed_at,nullzero"`
 }
 
 func newTokenID() (uuid.UUID, error) {
@@ -77,7 +78,6 @@ func GenerateRefreshToken(user *user.User, c *TokenConfig) (*RefreshToken, error
 
 	return &RefreshToken{
 		ID:        id,
-		UserID:    user.ID,
 		Token:     buf,
 		TokenHash: hex,
 		ExpiresAt: now.Add(refreshTokenValidFor),
@@ -95,4 +95,17 @@ func ParseAccessToken(token string, c *TokenConfig) (*jwt.RegisteredClaims, erro
 		return nil, newInvalidAccessTokenError(err)
 	}
 	return parsed.Claims.(*jwt.RegisteredClaims), nil
+}
+
+func EncodeRefreshToken(token []byte) string {
+	return hex.EncodeToString(token)
+}
+
+func DecodeRefreshToken(token string) ([]byte, error) {
+	return hex.DecodeString(token)
+}
+
+func HashRefreshToken(token []byte) string {
+	h := sha256.Sum256(token)
+	return hex.EncodeToString(h[:])
 }

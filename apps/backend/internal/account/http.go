@@ -113,7 +113,7 @@ func (h *HTTPHandler) registerAccount(c *fiber.Ctx) error {
 		return httperr.Internal(err)
 	}
 
-	result, err := h.authService.GenerateTokenForUser(c.Context(), tx, u)
+	result, err := h.authService.GrantForUser(c.Context(), tx, u)
 	if err != nil {
 		return httperr.Internal(err)
 	}

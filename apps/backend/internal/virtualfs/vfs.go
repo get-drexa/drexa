@@ -265,7 +265,7 @@ func (vfs *VirtualFS) CreateDirectory(ctx context.Context, db bun.IDB, accountID
 		return nil, err
 	}
 
-	node := Node{
+	node := &Node{
 		ID:        id,
 		PublicID:  pid,
 		AccountID: accountID,
@@ -283,7 +283,7 @@ func (vfs *VirtualFS) CreateDirectory(ctx context.Context, db bun.IDB, accountID
 		return nil, err
 	}
 
-	return &node, nil
+	return node, nil
 }
 
 func (vfs *VirtualFS) SoftDeleteNode(ctx context.Context, db bun.IDB, node *Node) error {
