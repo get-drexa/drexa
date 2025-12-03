@@ -2,11 +2,10 @@ package auth
 
 import (
 	"crypto/rand"
-	"crypto/sha256"
-	"encoding/hex"
 	"fmt"
 	"time"
 
+	"github.com/get-drexa/drexa/internal/password"
 	"github.com/get-drexa/drexa/internal/user"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
@@ -15,7 +14,9 @@ import (
 
 const (
 	accessTokenValidFor    = time.Minute * 15
-	refreshTokenByteLength = 32
+	refreshTokenKeyLength  = 16
+	refreshTokenDataLength = 32
+	refreshTokenLength     = refreshTokenKeyLength + refreshTokenDataLength
 	refreshTokenValidFor   = time.Hour * 24 * 30
 )
 
@@ -28,13 +29,19 @@ type TokenConfig struct {
 type RefreshToken struct {
 	bun.BaseModel `bun:"refresh_tokens"`
 
-	ID         uuid.UUID  `bun:",pk,type:uuid"`
-	GrantID    uuid.UUID  `bun:"grant_id,notnull"`
-	Token      []byte     `bun:"-"`
-	TokenHash  string     `bun:"token_hash,notnull"`
-	ExpiresAt  time.Time  `bun:"expires_at,notnull"`
-	CreatedAt  time.Time  `bun:"created_at,notnull,nullzero"`
-	ConsumedAt *time.Time `bun:"consumed_at,nullzero"`
+	ID         uuid.UUID       `bun:",pk,type:uuid"`
+	GrantID    uuid.UUID       `bun:"grant_id,notnull"`
+	Token      []byte          `bun:"-"`
+	Key        uuid.UUID       `bun:"key,notnull"`
+	TokenHash  password.Hashed `bun:"token_hash,notnull"`
+	ExpiresAt  time.Time       `bun:"expires_at,notnull"`
+	CreatedAt  time.Time       `bun:"created_at,notnull,nullzero"`
+	ConsumedAt *time.Time      `bun:"consumed_at,nullzero"`
+}
+
+type RefreshTokenParts struct {
+	Key   uuid.UUID
+	Token []byte
 }
 
 func newTokenID() (uuid.UUID, error) {
@@ -63,9 +70,14 @@ func GenerateAccessToken(user *user.User, c *TokenConfig) (string, error) {
 func GenerateRefreshToken(user *user.User, c *TokenConfig) (*RefreshToken, error) {
 	now := time.Now()
 
-	buf := make([]byte, refreshTokenByteLength)
+	buf := make([]byte, refreshTokenDataLength)
 	if _, err := rand.Read(buf); err != nil {
 		return nil, fmt.Errorf("failed to generate refresh token: %w", err)
+	}
+
+	key, err := uuid.NewRandom()
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate refresh token key: %w", err)
 	}
 
 	id, err := newTokenID()
@@ -73,13 +85,16 @@ func GenerateRefreshToken(user *user.User, c *TokenConfig) (*RefreshToken, error
 		return nil, fmt.Errorf("failed to generate token ID: %w", err)
 	}
 
-	h := sha256.Sum256(buf)
-	hex := hex.EncodeToString(h[:])
+	hashed, err := password.Hash(buf)
+	if err != nil {
+		return nil, fmt.Errorf("failed to hash refresh token: %w", err)
+	}
 
 	return &RefreshToken{
 		ID:        id,
 		Token:     buf,
-		TokenHash: hex,
+		Key:       key,
+		TokenHash: hashed,
 		ExpiresAt: now.Add(refreshTokenValidFor),
 		CreatedAt: now,
 	}, nil
@@ -97,15 +112,34 @@ func ParseAccessToken(token string, c *TokenConfig) (*jwt.RegisteredClaims, erro
 	return parsed.Claims.(*jwt.RegisteredClaims), nil
 }
 
-func EncodeRefreshToken(token []byte) string {
-	return hex.EncodeToString(token)
+func SerializeRefreshToken(token *RefreshToken) ([]byte, error) {
+	keyBytes, err := token.Key.MarshalBinary()
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal refresh token key: %w", err)
+	}
+
+	buf := make([]byte, 0, len(keyBytes)+len(token.Token))
+	buf = append(buf, keyBytes...)
+	buf = append(buf, token.Token...)
+
+	return buf, nil
 }
 
-func DecodeRefreshToken(token string) ([]byte, error) {
-	return hex.DecodeString(token)
-}
+func DeserializeRefreshToken(buf []byte) (*RefreshTokenParts, error) {
+	if len(buf) != refreshTokenLength {
+		return nil, fmt.Errorf("refresh token is too short")
+	}
 
-func HashRefreshToken(token []byte) string {
-	h := sha256.Sum256(token)
-	return hex.EncodeToString(h[:])
+	keyBytes := buf[:refreshTokenKeyLength]
+	token := buf[refreshTokenKeyLength:]
+
+	key, err := uuid.FromBytes(keyBytes)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshal refresh token key: %w", err)
+	}
+
+	return &RefreshTokenParts{
+		Key:   key,
+		Token: token,
+	}, nil
 }

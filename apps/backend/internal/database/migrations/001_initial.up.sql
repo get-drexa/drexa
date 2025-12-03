@@ -35,6 +35,7 @@ CREATE TABLE IF NOT EXISTS grants (
 CREATE TABLE IF NOT EXISTS refresh_tokens (
     id UUID PRIMARY KEY,
     grant_id UUID NOT NULL REFERENCES grants(id) ON DELETE CASCADE,
+    key UUID NOT NULL UNIQUE,
     token_hash TEXT NOT NULL UNIQUE,
     expires_at TIMESTAMPTZ NOT NULL,
     consumed_at TIMESTAMPTZ,
@@ -42,7 +43,6 @@ CREATE TABLE IF NOT EXISTS refresh_tokens (
 );
 
 CREATE INDEX idx_refresh_tokens_grant_id ON refresh_tokens(grant_id);
-CREATE INDEX idx_refresh_tokens_token_hash ON refresh_tokens(token_hash);
 CREATE INDEX idx_refresh_tokens_expires_at ON refresh_tokens(expires_at);
 
 -- Virtual filesystem nodes (unified files + directories)

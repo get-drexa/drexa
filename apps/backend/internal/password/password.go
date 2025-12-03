@@ -38,15 +38,21 @@ type argon2Hash struct {
 	hash        []byte
 }
 
-// Hash securely hashes a plaintext password using argon2id.
-func Hash(plain string) (Hashed, error) {
+// HashString hashes the given password string.
+// This is a convenience function that converts the password string to a byte slice and hashes it using Hash.
+func HashString(pw string) (Hashed, error) {
+	return Hash([]byte(pw))
+}
+
+// Hash hashes the provided bytes.
+func Hash(pw []byte) (Hashed, error) {
 	salt := make([]byte, saltLength)
 	if _, err := rand.Read(salt); err != nil {
 		return "", fmt.Errorf("failed to generate salt: %w", err)
 	}
 
 	hash := argon2.IDKey(
-		[]byte(plain),
+		pw,
 		salt,
 		iterations,
 		memory,
@@ -70,15 +76,19 @@ func Hash(plain string) (Hashed, error) {
 	return Hashed(encoded), nil
 }
 
+func VerifyString(plain string, hashed Hashed) (bool, error) {
+	return Verify([]byte(plain), hashed)
+}
+
 // Verify checks if a plaintext password matches a hashed password.
-func Verify(plain string, hashed Hashed) (bool, error) {
+func Verify(plain []byte, hashed Hashed) (bool, error) {
 	h, err := decodeHash(string(hashed))
 	if err != nil {
 		return false, err
 	}
 
 	otherHash := argon2.IDKey(
-		[]byte(plain),
+		plain,
 		h.salt,
 		h.iterations,
 		h.memory,

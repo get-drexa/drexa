@@ -37,7 +37,7 @@ func NewService(userService *user.Service, vfs *virtualfs.VirtualFS) *Service {
 }
 
 func (s *Service) Register(ctx context.Context, db bun.IDB, opts RegisterOptions) (*Account, *user.User, error) {
-	hashed, err := password.Hash(opts.Password)
+	hashed, err := password.HashString(opts.Password)
 	if err != nil {
 		return nil, nil, err
 	}

@@ -3,6 +3,7 @@ package auth
 import (
 	"context"
 	"database/sql"
+	"encoding/base64"
 	"errors"
 	"log/slog"
 	"time"
@@ -81,15 +82,18 @@ func (s *Service) AuthenticateWithAccessToken(ctx context.Context, db bun.IDB, t
 }
 
 func (s *Service) RefreshAccessToken(ctx context.Context, db bun.IDB, refreshToken string) (*AuthenticationTokens, error) {
-	rtBytes, err := DecodeRefreshToken(refreshToken)
+	t, err := base64.URLEncoding.DecodeString(refreshToken)
 	if err != nil {
-		return nil, err
+		return nil, ErrInvalidRefreshToken
 	}
 
-	rtHash := HashRefreshToken(rtBytes)
+	rtParts, err := DeserializeRefreshToken(t)
+	if err != nil {
+		return nil, ErrInvalidRefreshToken
+	}
 
 	rt := &RefreshToken{}
-	err = db.NewSelect().Model(rt).Where("token_hash = ?", rtHash).Scan(ctx)
+	err = db.NewSelect().Model(rt).Where("key = ?", rtParts.Key).Scan(ctx)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrInvalidRefreshToken
@@ -133,6 +137,14 @@ func (s *Service) RefreshAccessToken(ctx context.Context, db bun.IDB, refreshTok
 		return nil, ErrInvalidRefreshToken
 	}
 
+	ok, err := password.Verify(rtParts.Token, rt.TokenHash)
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		return nil, ErrInvalidRefreshToken
+	}
+
 	u, err := s.userService.UserByID(ctx, db, grant.UserID)
 	if err != nil {
 		var nf *user.NotFoundError
@@ -166,10 +178,15 @@ func (s *Service) RefreshAccessToken(ctx context.Context, db bun.IDB, refreshTok
 		return nil, err
 	}
 
+	srt, err := SerializeRefreshToken(newRT)
+	if err != nil {
+		return nil, err
+	}
+
 	return &AuthenticationTokens{
 		User:         u,
 		AccessToken:  at,
-		RefreshToken: EncodeRefreshToken(newRT.Token),
+		RefreshToken: base64.URLEncoding.EncodeToString(srt),
 	}, nil
 }
 
@@ -183,7 +200,6 @@ func (s *Service) generateTokens(ctx context.Context, db bun.IDB, user *user.Use
 	if err != nil {
 		return nil, err
 	}
-
 	rt.GrantID = grant.ID
 
 	_, err = db.NewInsert().Model(rt).Exec(ctx)
@@ -191,10 +207,15 @@ func (s *Service) generateTokens(ctx context.Context, db bun.IDB, user *user.Use
 		return nil, err
 	}
 
+	srt, err := SerializeRefreshToken(rt)
+	if err != nil {
+		return nil, err
+	}
+
 	return &AuthenticationTokens{
 		User:         user,
 		AccessToken:  at,
-		RefreshToken: EncodeRefreshToken(rt.Token),
+		RefreshToken: base64.URLEncoding.EncodeToString(srt),
 	}, nil
 }
 
@@ -208,7 +229,7 @@ func (s *Service) authenticateWithEmailAndPassword(ctx context.Context, db bun.I
 		return nil, err
 	}
 
-	ok, err := password.Verify(plain, u.Password)
+	ok, err := password.VerifyString(plain, u.Password)
 	if err != nil || !ok {
 		return nil, ErrInvalidCredentials
 	}
