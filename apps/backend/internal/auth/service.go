@@ -10,6 +10,7 @@ import (
 
 	"github.com/get-drexa/drexa/internal/password"
 	"github.com/get-drexa/drexa/internal/user"
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 	"github.com/uptrace/bun"
 )
@@ -18,6 +19,11 @@ type AuthenticationTokens struct {
 	User         *user.User
 	AccessToken  string
 	RefreshToken string
+}
+
+type AccessTokenAuthentication struct {
+	Claims *jwt.RegisteredClaims
+	User   *user.User
 }
 
 var ErrInvalidCredentials = errors.New("invalid credentials")
@@ -65,7 +71,7 @@ func (s *Service) GrantForUser(ctx context.Context, db bun.IDB, user *user.User)
 	return result, nil
 }
 
-func (s *Service) AuthenticateWithAccessToken(ctx context.Context, db bun.IDB, token string) (*user.User, error) {
+func (s *Service) AuthenticateWithAccessToken(ctx context.Context, db bun.IDB, token string) (*AccessTokenAuthentication, error) {
 	claims, err := ParseAccessToken(token, &s.tokenConfig)
 	if err != nil {
 		slog.Info("failed to parse access token", "error", err)
@@ -78,7 +84,19 @@ func (s *Service) AuthenticateWithAccessToken(ctx context.Context, db bun.IDB, t
 		return nil, newInvalidAccessTokenError(err)
 	}
 
-	return s.userService.UserByID(ctx, db, id)
+	u, err := s.userService.UserByID(ctx, db, id)
+	if err != nil {
+		var nf *user.NotFoundError
+		if errors.As(err, &nf) {
+			return nil, newInvalidAccessTokenError(err)
+		}
+		return nil, err
+	}
+
+	return &AccessTokenAuthentication{
+		Claims: claims,
+		User:   u,
+	}, nil
 }
 
 func (s *Service) RefreshAccessToken(ctx context.Context, db bun.IDB, refreshToken string) (*AuthenticationTokens, error) {

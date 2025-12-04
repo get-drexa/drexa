@@ -27,6 +27,7 @@ type Config struct {
 	Database DatabaseConfig `yaml:"database"`
 	JWT      JWTConfig      `yaml:"jwt"`
 	Storage  StorageConfig  `yaml:"storage"`
+	Cookie   CookieConfig   `yaml:"cookie"`
 }
 
 type ServerConfig struct {
@@ -50,6 +51,13 @@ type StorageConfig struct {
 	Backend  StorageBackend `yaml:"backend"`
 	RootPath string         `yaml:"root_path"`
 	Bucket   string         `yaml:"bucket"`
+}
+
+// CookieConfig controls auth cookie behavior.
+// Domain is optional - only needed for cross-subdomain setups (e.g., "app.com" for web.app.com + api.app.com).
+// Secure flag is derived from the request protocol automatically.
+type CookieConfig struct {
+	Domain string `yaml:"domain"`
 }
 
 // ConfigFromFile loads configuration from a YAML file.

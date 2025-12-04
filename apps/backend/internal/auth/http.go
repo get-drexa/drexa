@@ -10,15 +10,26 @@ import (
 	"github.com/uptrace/bun"
 )
 
+const (
+	tokenDeliveryCookie = "cookie"
+	tokenDeliveryBody   = "body"
+)
+
+const (
+	cookieKeyAccessToken  = "access_token"
+	cookieKeyRefreshToken = "refresh_token"
+)
+
 type loginRequest struct {
-	Email    string `json:"email"`
-	Password string `json:"password"`
+	Email         string `json:"email"`
+	Password      string `json:"password"`
+	TokenDelivery string `json:"tokenDelivery"`
 }
 
 type loginResponse struct {
 	User         user.User `json:"user"`
-	AccessToken  string    `json:"accessToken"`
-	RefreshToken string    `json:"refreshToken"`
+	AccessToken  string    `json:"accessToken,omitempty"`
+	RefreshToken string    `json:"refreshToken,omitempty"`
 }
 
 type refreshAccessTokenRequest struct {
@@ -31,12 +42,13 @@ type tokenResponse struct {
 }
 
 type HTTPHandler struct {
-	service *Service
-	db      *bun.DB
+	service      *Service
+	db           *bun.DB
+	cookieConfig CookieConfig
 }
 
-func NewHTTPHandler(s *Service, db *bun.DB) *HTTPHandler {
-	return &HTTPHandler{service: s, db: db}
+func NewHTTPHandler(s *Service, db *bun.DB, cookieConfig CookieConfig) *HTTPHandler {
+	return &HTTPHandler{service: s, db: db, cookieConfig: cookieConfig}
 }
 
 func (h *HTTPHandler) RegisterRoutes(api fiber.Router) {
@@ -69,11 +81,23 @@ func (h *HTTPHandler) Login(c *fiber.Ctx) error {
 		return httperr.Internal(err)
 	}
 
-	return c.JSON(loginResponse{
-		User:         *result.User,
-		AccessToken:  result.AccessToken,
-		RefreshToken: result.RefreshToken,
-	})
+	switch req.TokenDelivery {
+	default:
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid token delivery method"})
+
+	case tokenDeliveryCookie:
+		setAuthCookies(c, result.AccessToken, result.RefreshToken, h.cookieConfig)
+		return c.JSON(loginResponse{
+			User: *result.User,
+		})
+
+	case tokenDeliveryBody:
+		return c.JSON(loginResponse{
+			User:         *result.User,
+			AccessToken:  result.AccessToken,
+			RefreshToken: result.RefreshToken,
+		})
+	}
 }
 
 func (h *HTTPHandler) refreshAccessToken(c *fiber.Ctx) error {

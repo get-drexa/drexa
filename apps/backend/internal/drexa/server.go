@@ -36,6 +36,11 @@ func NewServer(c Config) (*Server, error) {
 	app := fiber.New(fiber.Config{
 		ErrorHandler:      httperr.ErrorHandler,
 		StreamRequestBody: true,
+		// Trust proxy headers (X-Forwarded-Proto, X-Forwarded-For) for proper
+		// protocol detection behind reverse proxies, tunnels (ngrok, cloudflare), etc.
+		EnableTrustedProxyCheck: true,
+		TrustedProxies:          []string{"127.0.0.1", "::1"},
+		ProxyHeader:             fiber.HeaderXForwardedFor,
 	})
 	app.Use(logger.New())
 
@@ -85,10 +90,14 @@ func NewServer(c Config) (*Server, error) {
 	uploadService := upload.NewService(vfs, blobStore)
 	accountService := account.NewService(userService, vfs)
 
-	authMiddleware := auth.NewBearerAuthMiddleware(authService, db)
+	cookieConfig := auth.CookieConfig{
+		Domain: c.Cookie.Domain,
+	}
+
+	authMiddleware := auth.NewAuthMiddleware(authService, db, cookieConfig)
 
 	api := app.Group("/api")
-	auth.NewHTTPHandler(authService, db).RegisterRoutes(api)
+	auth.NewHTTPHandler(authService, db, cookieConfig).RegisterRoutes(api)
 
 	accountRouter := account.NewHTTPHandler(accountService, authService, db, authMiddleware).RegisterRoutes(api)
 	upload.NewHTTPHandler(uploadService, db).RegisterRoutes(accountRouter)

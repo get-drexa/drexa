@@ -28,3 +28,8 @@ storage:
   # Required when backend is "s3"
   # bucket: my-drexa-bucket
 
+cookie:
+  # Domain for cross-subdomain auth cookies.
+  # Set this when frontend and API are on different subdomains (e.g., "app.com" for web.app.com + api.app.com).
+  # Leave empty for single-domain or localhost setups.
+  # domain: app.com

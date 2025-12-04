@@ -4,6 +4,7 @@ import (
 	"errors"
 	"log/slog"
 	"strings"
+	"time"
 
 	"github.com/get-drexa/drexa/internal/httperr"
 	"github.com/get-drexa/drexa/internal/user"
@@ -13,24 +14,35 @@ import (
 
 const authenticatedUserKey = "authenticatedUser"
 
-// NewBearerAuthMiddleware is a middleware that authenticates a request using a bearer token.
+// NewAuthMiddleware creates a middleware that authenticates requests via Bearer token or cookies.
 // To obtain the authenticated user in subsequent handlers, see AuthenticatedUser.
-func NewBearerAuthMiddleware(s *Service, db *bun.DB) fiber.Handler {
+func NewAuthMiddleware(s *Service, db *bun.DB, cookieConfig CookieConfig) fiber.Handler {
 	return func(c *fiber.Ctx) error {
+		var at string
+		var rt string
+		var setCookies bool
 		authHeader := c.Get("Authorization")
-		if authHeader == "" {
-			slog.Info("no auth header")
+		if authHeader != "" {
+			parts := strings.Split(authHeader, " ")
+			if len(parts) != 2 || parts[0] != "Bearer" {
+				slog.Info("invalid auth header")
+				return c.SendStatus(fiber.StatusUnauthorized)
+			}
+			at = parts[1]
+			setCookies = false
+		} else {
+			cookies := authCookies(c)
+			at = cookies[cookieKeyAccessToken]
+			rt = cookies[cookieKeyRefreshToken]
+			setCookies = true
+		}
+
+		if at == "" {
+			slog.Info("no access token")
 			return c.SendStatus(fiber.StatusUnauthorized)
 		}
 
-		parts := strings.Split(authHeader, " ")
-		if len(parts) != 2 || parts[0] != "Bearer" {
-			slog.Info("invalid auth header")
-			return c.SendStatus(fiber.StatusUnauthorized)
-		}
-
-		token := parts[1]
-		u, err := s.AuthenticateWithAccessToken(c.Context(), db, token)
+		authResult, err := s.AuthenticateWithAccessToken(c.Context(), db, at)
 		if err != nil {
 			var e *InvalidAccessTokenError
 			if errors.As(err, &e) {
@@ -47,7 +59,24 @@ func NewBearerAuthMiddleware(s *Service, db *bun.DB) fiber.Handler {
 			return httperr.Internal(err)
 		}
 
-		c.Locals(authenticatedUserKey, u)
+		c.Locals(authenticatedUserKey, authResult.User)
+
+		// if cookie based auth and access token is about to expire (within 5 minutes),
+		// attempt to refresh the access token. if there is any error, ignore it and let the request continue.
+		if setCookies && time.Until(authResult.Claims.ExpiresAt.Time) < 5*time.Minute && rt != "" {
+			tx, txErr := db.BeginTx(c.Context(), nil)
+			if txErr == nil {
+				newTokens, err := s.RefreshAccessToken(c.Context(), tx, rt)
+				if err == nil {
+					if commitErr := tx.Commit(); commitErr == nil {
+						setAuthCookies(c, newTokens.AccessToken, newTokens.RefreshToken, cookieConfig)
+					}
+				} else {
+					_ = tx.Rollback()
+					slog.Debug("auto-refresh failed", "error", err)
+				}
+			}
+		}
 
 		return c.Next()
 	}
