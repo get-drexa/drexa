@@ -5,7 +5,6 @@ import (
 	"fmt"
 )
 
-var ErrUnauthenticatedRequest = errors.New("unauthenticated request")
 var ErrInvalidRefreshToken = errors.New("invalid refresh token")
 var ErrRefreshTokenExpired = errors.New("refresh token expired")
 var ErrRefreshTokenReused = errors.New("refresh token reused")

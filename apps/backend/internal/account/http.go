@@ -5,6 +5,7 @@ import (
 
 	"github.com/get-drexa/drexa/internal/auth"
 	"github.com/get-drexa/drexa/internal/httperr"
+	"github.com/get-drexa/drexa/internal/reqctx"
 	"github.com/get-drexa/drexa/internal/user"
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
@@ -54,17 +55,14 @@ func (h *HTTPHandler) RegisterRoutes(api fiber.Router) fiber.Router {
 }
 
 func (h *HTTPHandler) accountMiddleware(c *fiber.Ctx) error {
-	user, err := auth.AuthenticatedUser(c)
-	if err != nil {
-		return c.SendStatus(fiber.StatusUnauthorized)
-	}
+	u := reqctx.AuthenticatedUser(c).(*user.User)
 
 	accountID, err := uuid.Parse(c.Params("accountID"))
 	if err != nil {
 		return c.SendStatus(fiber.StatusNotFound)
 	}
 
-	account, err := h.accountService.AccountByID(c.Context(), h.db, user.ID, accountID)
+	account, err := h.accountService.AccountByID(c.Context(), h.db, u.ID, accountID)
 	if err != nil {
 		if errors.Is(err, ErrAccountNotFound) {
 			return c.SendStatus(fiber.StatusNotFound)

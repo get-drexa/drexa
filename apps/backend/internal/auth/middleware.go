@@ -7,15 +7,14 @@ import (
 	"time"
 
 	"github.com/get-drexa/drexa/internal/httperr"
+	"github.com/get-drexa/drexa/internal/reqctx"
 	"github.com/get-drexa/drexa/internal/user"
 	"github.com/gofiber/fiber/v2"
 	"github.com/uptrace/bun"
 )
 
-const authenticatedUserKey = "authenticatedUser"
-
 // NewAuthMiddleware creates a middleware that authenticates requests via Bearer token or cookies.
-// To obtain the authenticated user in subsequent handlers, see AuthenticatedUser.
+// To obtain the authenticated user in subsequent handlers, see reqctx.AuthenticatedUser.
 func NewAuthMiddleware(s *Service, db *bun.DB, cookieConfig CookieConfig) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		var at string
@@ -59,7 +58,7 @@ func NewAuthMiddleware(s *Service, db *bun.DB, cookieConfig CookieConfig) fiber.
 			return httperr.Internal(err)
 		}
 
-		c.Locals(authenticatedUserKey, authResult.User)
+		reqctx.SetAuthenticatedUser(c, authResult.User)
 
 		// if cookie based auth and access token is about to expire (within 5 minutes),
 		// attempt to refresh the access token. if there is any error, ignore it and let the request continue.
@@ -80,13 +79,4 @@ func NewAuthMiddleware(s *Service, db *bun.DB, cookieConfig CookieConfig) fiber.
 
 		return c.Next()
 	}
-}
-
-// AuthenticatedUser returns the authenticated user from the given fiber context.
-// Returns ErrUnauthenticatedRequest if not authenticated.
-func AuthenticatedUser(c *fiber.Ctx) (*user.User, error) {
-	if u, ok := c.Locals(authenticatedUserKey).(*user.User); ok {
-		return u, nil
-	}
-	return nil, ErrUnauthenticatedRequest
 }
