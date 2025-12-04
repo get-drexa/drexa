@@ -98,6 +98,7 @@ func NewServer(c Config) (*Server, error) {
 
 	api := app.Group("/api")
 	auth.NewHTTPHandler(authService, db, cookieConfig).RegisterRoutes(api)
+	user.NewHTTPHandler(userService, db, authMiddleware).RegisterRoutes(api)
 
 	accountRouter := account.NewHTTPHandler(accountService, authService, db, authMiddleware).RegisterRoutes(api)
 	upload.NewHTTPHandler(uploadService, db).RegisterRoutes(accountRouter)

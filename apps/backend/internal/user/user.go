@@ -15,8 +15,8 @@ type User struct {
 	DisplayName string          `bun:"display_name" json:"displayName"`
 	Email       string          `bun:"email,unique,notnull" json:"email"`
 	Password    password.Hashed `bun:"password,notnull" json:"-"`
-	CreatedAt   time.Time       `bun:"created_at,notnull,nullzero" json:"createdAt"`
-	UpdatedAt   time.Time       `bun:"updated_at,notnull,nullzero" json:"updatedAt"`
+	CreatedAt   time.Time       `bun:"created_at,notnull,nullzero" json:"-"`
+	UpdatedAt   time.Time       `bun:"updated_at,notnull,nullzero" json:"-"`
 }
 
 func newUserID() (uuid.UUID, error) {
