@@ -79,6 +79,9 @@ func (h *HTTPHandler) createDirectory(c *fiber.Ctx) error {
 
 	node, err := h.vfs.CreateDirectory(c.Context(), h.db, account.ID, parent.ID, req.Name)
 	if err != nil {
+		if errors.Is(err, virtualfs.ErrNodeConflict) {
+			return c.Status(fiber.StatusConflict).JSON(fiber.Map{"error": "Directory already exists"})
+		}
 		return httperr.Internal(err)
 	}
 
