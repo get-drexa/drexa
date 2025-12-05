@@ -434,7 +434,7 @@ func (vfs *VirtualFS) AbsolutePath(ctx context.Context, db bun.IDB, node *Node) 
 	if !node.IsAccessible() {
 		return "", ErrNodeNotFound
 	}
-	return buildNodeAbsolutePath(ctx, db, node)
+	return buildNodeAbsolutePathString(ctx, db, node)
 }
 
 func (vfs *VirtualFS) PermanentlyDeleteNode(ctx context.Context, db bun.IDB, node *Node) error {
@@ -563,4 +563,11 @@ func (vfs *VirtualFS) generatePublicID() (string, error) {
 	}
 	n := binary.BigEndian.Uint64(b[:])
 	return vfs.sqid.Encode([]uint64{n})
+}
+
+func (vfs *VirtualFS) RealPath(ctx context.Context, db bun.IDB, node *Node) (Path, error) {
+	if !node.IsAccessible() {
+		return nil, ErrNodeNotFound
+	}
+	return buildNoteAbsolutePath(ctx, db, node)
 }

@@ -16,12 +16,13 @@ const (
 )
 
 type DirectoryInfo struct {
-	Kind      string     `json:"kind"`
-	ID        string     `json:"id"`
-	Name      string     `json:"name"`
-	CreatedAt time.Time  `json:"createdAt"`
-	UpdatedAt time.Time  `json:"updatedAt"`
-	DeletedAt *time.Time `json:"deletedAt,omitempty"`
+	Kind      string         `json:"kind"`
+	ID        string         `json:"id"`
+	Path      virtualfs.Path `json:"path,omitempty"`
+	Name      string         `json:"name"`
+	CreatedAt time.Time      `json:"createdAt"`
+	UpdatedAt time.Time      `json:"updatedAt"`
+	DeletedAt *time.Time     `json:"deletedAt,omitempty"`
 }
 
 type createDirectoryRequest struct {
@@ -93,6 +94,7 @@ func (h *HTTPHandler) createDirectory(c *fiber.Ctx) error {
 
 func (h *HTTPHandler) fetchDirectory(c *fiber.Ctx) error {
 	node := mustCurrentDirectoryNode(c)
+
 	i := DirectoryInfo{
 		Kind:      DirItemKindDirectory,
 		ID:        node.PublicID,
@@ -101,6 +103,16 @@ func (h *HTTPHandler) fetchDirectory(c *fiber.Ctx) error {
 		UpdatedAt: node.UpdatedAt,
 		DeletedAt: node.DeletedAt,
 	}
+
+	include := c.Query("include")
+	if include == "path" {
+		p, err := h.vfs.RealPath(c.Context(), h.db, node)
+		if err != nil {
+			return httperr.Internal(err)
+		}
+		i.Path = p
+	}
+
 	return c.JSON(i)
 }
 
