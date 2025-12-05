@@ -65,7 +65,13 @@ func (h *HTTPHandler) createDirectory(c *fiber.Ctx) error {
 		return c.SendStatus(fiber.StatusBadRequest)
 	}
 
-	parent, err := h.vfs.FindNodeByPublicID(c.Context(), h.db, account.ID, req.ParentID)
+	tx, err := h.db.BeginTx(c.Context(), nil)
+	if err != nil {
+		return httperr.Internal(err)
+	}
+	defer tx.Rollback()
+
+	parent, err := h.vfs.FindNodeByPublicID(c.Context(), tx, account.ID, req.ParentID)
 	if err != nil {
 		if errors.Is(err, virtualfs.ErrNodeNotFound) {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Parent not found"})
@@ -77,11 +83,16 @@ func (h *HTTPHandler) createDirectory(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Parent is not a directory"})
 	}
 
-	node, err := h.vfs.CreateDirectory(c.Context(), h.db, account.ID, parent.ID, req.Name)
+	node, err := h.vfs.CreateDirectory(c.Context(), tx, account.ID, parent.ID, req.Name)
 	if err != nil {
 		if errors.Is(err, virtualfs.ErrNodeConflict) {
 			return c.Status(fiber.StatusConflict).JSON(fiber.Map{"error": "Directory already exists"})
 		}
+		return httperr.Internal(err)
+	}
+
+	err = tx.Commit()
+	if err != nil {
 		return httperr.Internal(err)
 	}
 
