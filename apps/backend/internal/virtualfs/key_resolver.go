@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/get-drexa/drexa/internal/blob"
+	"github.com/google/uuid"
 	"github.com/uptrace/bun"
 )
 
@@ -14,9 +15,20 @@ type BlobKeyResolver interface {
 	ShouldPersistKey() bool
 	Resolve(ctx context.Context, db bun.IDB, node *Node) (blob.Key, error)
 	ResolveDeletionKeys(ctx context.Context, node *Node, allKeys []blob.Key) (*DeletionPlan, error)
+
+	// ResolveBulkMoveOps returns blob move operations for nodes being moved to a new parent.
+	// Returns ErrBulkMoveRequiresSameParent if nodes don't all share the same parent.
+	// Returns nil, nil if no blob moves are needed (e.g., flat key storage where keys are UUIDs).
+	ResolveBulkMoveOps(ctx context.Context, db bun.IDB, nodes []*Node, newParentID uuid.UUID) ([]BlobMoveOp, error)
 }
 
 type DeletionPlan struct {
 	Prefix blob.Key
 	Keys   []blob.Key
+}
+
+// BlobMoveOp represents a blob move operation from OldKey to NewKey.
+type BlobMoveOp struct {
+	OldKey blob.Key
+	NewKey blob.Key
 }

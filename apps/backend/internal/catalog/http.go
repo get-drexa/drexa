@@ -36,6 +36,7 @@ func (h *HTTPHandler) RegisterRoutes(api fiber.Router) {
 	dg := api.Group("/directories/:directoryID")
 	dg.Use(h.currentDirectoryMiddleware)
 	dg.Get("/", h.fetchDirectory)
+	dg.Post("/content", h.moveItemsToDirectory)
 	dg.Get("/content", h.listDirectory)
 	dg.Patch("/", h.patchDirectory)
 	dg.Delete("/", h.deleteDirectory)

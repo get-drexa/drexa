@@ -2,6 +2,8 @@ package catalog
 
 import (
 	"errors"
+	"slices"
+	"strings"
 	"time"
 
 	"github.com/get-drexa/drexa/internal/account"
@@ -30,6 +32,10 @@ type createDirectoryRequest struct {
 	Name     string `json:"name"`
 }
 
+type postDirectoryContentRequest struct {
+	Items []string `json:"items"`
+}
+
 func (h *HTTPHandler) currentDirectoryMiddleware(c *fiber.Ctx) error {
 	account := account.CurrentAccount(c)
 	if account == nil {
@@ -52,6 +58,10 @@ func (h *HTTPHandler) currentDirectoryMiddleware(c *fiber.Ctx) error {
 
 func mustCurrentDirectoryNode(c *fiber.Ctx) *virtualfs.Node {
 	return c.Locals("directory").(*virtualfs.Node)
+}
+
+func includeParam(c *fiber.Ctx) []string {
+	return strings.Split(c.Query("include"), ",")
 }
 
 func (h *HTTPHandler) createDirectory(c *fiber.Ctx) error {
@@ -91,19 +101,30 @@ func (h *HTTPHandler) createDirectory(c *fiber.Ctx) error {
 		return httperr.Internal(err)
 	}
 
-	err = tx.Commit()
-	if err != nil {
-		return httperr.Internal(err)
-	}
-
-	return c.JSON(DirectoryInfo{
+	i := DirectoryInfo{
 		Kind:      DirItemKindDirectory,
 		ID:        node.PublicID,
 		Name:      node.Name,
 		CreatedAt: node.CreatedAt,
 		UpdatedAt: node.UpdatedAt,
 		DeletedAt: node.DeletedAt,
-	})
+	}
+
+	include := includeParam(c)
+	if slices.Contains(include, "path") {
+		p, err := h.vfs.RealPath(c.Context(), tx, node)
+		if err != nil {
+			return httperr.Internal(err)
+		}
+		i.Path = p
+	}
+
+	err = tx.Commit()
+	if err != nil {
+		return httperr.Internal(err)
+	}
+
+	return c.JSON(i)
 }
 
 func (h *HTTPHandler) fetchDirectory(c *fiber.Ctx) error {
@@ -118,8 +139,8 @@ func (h *HTTPHandler) fetchDirectory(c *fiber.Ctx) error {
 		DeletedAt: node.DeletedAt,
 	}
 
-	include := c.Query("include")
-	if include == "path" {
+	include := includeParam(c)
+	if slices.Contains(include, "path") {
 		p, err := h.vfs.RealPath(c.Context(), h.db, node)
 		if err != nil {
 			return httperr.Internal(err)
@@ -228,6 +249,57 @@ func (h *HTTPHandler) deleteDirectory(c *fiber.Ctx) error {
 		if err != nil {
 			return httperr.Internal(err)
 		}
+	}
+
+	err = tx.Commit()
+	if err != nil {
+		return httperr.Internal(err)
+	}
+
+	return c.SendStatus(fiber.StatusNoContent)
+}
+
+func (h *HTTPHandler) moveItemsToDirectory(c *fiber.Ctx) error {
+	acc := account.CurrentAccount(c)
+	if acc == nil {
+		return c.SendStatus(fiber.StatusUnauthorized)
+	}
+
+	targetDir := mustCurrentDirectoryNode(c)
+
+	req := new(postDirectoryContentRequest)
+	if err := c.BodyParser(req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid request"})
+	}
+
+	if len(req.Items) == 0 {
+		return c.SendStatus(fiber.StatusNoContent)
+	}
+
+	tx, err := h.db.BeginTx(c.Context(), nil)
+	if err != nil {
+		return httperr.Internal(err)
+	}
+	defer tx.Rollback()
+
+	nodes, err := h.vfs.FindNodesByPublicID(c.Context(), tx, acc.ID, req.Items)
+	if err != nil {
+		return httperr.Internal(err)
+	}
+	if len(nodes) != len(req.Items) {
+		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "One or more items not found"})
+	}
+
+	// Move all nodes to the target directory
+	err = h.vfs.MoveNodesInSameDirectory(c.Context(), tx, nodes, targetDir.ID)
+	if err != nil {
+		if errors.Is(err, virtualfs.ErrUnsupportedOperation) {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "All items must be in the same directory"})
+		}
+		if errors.Is(err, virtualfs.ErrNodeConflict) {
+			return c.Status(fiber.StatusConflict).JSON(fiber.Map{"error": "Name conflict in target directory"})
+		}
+		return httperr.Internal(err)
 	}
 
 	err = tx.Commit()

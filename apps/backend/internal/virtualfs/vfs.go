@@ -69,19 +69,32 @@ func (vfs *VirtualFS) FindNode(ctx context.Context, db bun.IDB, accountID, fileI
 }
 
 func (vfs *VirtualFS) FindNodeByPublicID(ctx context.Context, db bun.IDB, accountID uuid.UUID, publicID string) (*Node, error) {
-	var node Node
-	err := db.NewSelect().Model(&node).
+	nodes, err := vfs.FindNodesByPublicID(ctx, db, accountID, []string{publicID})
+	if err != nil {
+		return nil, err
+	}
+	if len(nodes) == 0 {
+		return nil, ErrNodeNotFound
+	}
+	return nodes[0], nil
+}
+
+func (vfs *VirtualFS) FindNodesByPublicID(ctx context.Context, db bun.IDB, accountID uuid.UUID, publicIDs []string) ([]*Node, error) {
+	if len(publicIDs) == 0 {
+		return nil, nil
+	}
+
+	var nodes []*Node
+	err := db.NewSelect().Model(&nodes).
 		Where("account_id = ?", accountID).
-		Where("public_id = ?", publicID).
+		Where("public_id IN (?)", bun.In(publicIDs)).
 		Where("status = ?", NodeStatusReady).
 		Scan(ctx)
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return nil, ErrNodeNotFound
-		}
 		return nil, err
 	}
-	return &node, nil
+
+	return nodes, nil
 }
 
 func (vfs *VirtualFS) ListChildren(ctx context.Context, db bun.IDB, node *Node) ([]*Node, error) {
@@ -430,11 +443,64 @@ func (vfs *VirtualFS) MoveNode(ctx context.Context, db bun.IDB, node *Node, pare
 	return nil
 }
 
-func (vfs *VirtualFS) AbsolutePath(ctx context.Context, db bun.IDB, node *Node) (string, error) {
-	if !node.IsAccessible() {
-		return "", ErrNodeNotFound
+// MoveNodesInSameDirectory moves multiple nodes to a new parent directory in a single operation.
+// All nodes MUST have the same current parent directory; this constraint enables an
+// optimization where parent paths are computed only once (2 recursive queries total)
+// rather than computing full paths for each node individually (N queries).
+func (vfs *VirtualFS) MoveNodesInSameDirectory(ctx context.Context, db bun.IDB, nodes []*Node, newParentID uuid.UUID) error {
+	if len(nodes) == 0 {
+		return nil
 	}
-	return buildNodeAbsolutePathString(ctx, db, node)
+
+	// Validate all nodes are accessible
+	nodeIDs := make([]uuid.UUID, len(nodes))
+	for i, node := range nodes {
+		if !node.IsAccessible() {
+			return ErrNodeNotFound
+		}
+		nodeIDs[i] = node.ID
+	}
+
+	moveOps, err := vfs.keyResolver.ResolveBulkMoveOps(ctx, db, nodes, newParentID)
+	if err != nil {
+		return err
+	}
+
+	_, err = db.NewUpdate().
+		Model((*Node)(nil)).
+		Where("id IN (?)", bun.In(nodeIDs)).
+		Where("status = ?", NodeStatusReady).
+		Where("deleted_at IS NULL").
+		Set("parent_id = ?", newParentID).
+		Exec(ctx)
+	if err != nil {
+		if database.IsUniqueViolation(err) {
+			return ErrNodeConflict
+		}
+		return err
+	}
+
+	for _, op := range moveOps {
+		if op.OldKey != op.NewKey {
+			err = vfs.blobStore.Move(ctx, op.OldKey, op.NewKey)
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	for _, node := range nodes {
+		node.ParentID = newParentID
+	}
+
+	return nil
+}
+
+func (vfs *VirtualFS) RealPath(ctx context.Context, db bun.IDB, node *Node) (Path, error) {
+	if !node.IsAccessible() {
+		return nil, ErrNodeNotFound
+	}
+	return buildNoteAbsolutePath(ctx, db, node)
 }
 
 func (vfs *VirtualFS) PermanentlyDeleteNode(ctx context.Context, db bun.IDB, node *Node) error {
@@ -563,11 +629,4 @@ func (vfs *VirtualFS) generatePublicID() (string, error) {
 	}
 	n := binary.BigEndian.Uint64(b[:])
 	return vfs.sqid.Encode([]uint64{n})
-}
-
-func (vfs *VirtualFS) RealPath(ctx context.Context, db bun.IDB, node *Node) (Path, error) {
-	if !node.IsAccessible() {
-		return nil, ErrNodeNotFound
-	}
-	return buildNoteAbsolutePath(ctx, db, node)
 }

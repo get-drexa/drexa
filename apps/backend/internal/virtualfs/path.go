@@ -6,6 +6,7 @@ import (
 	"errors"
 	"strings"
 
+	"github.com/google/uuid"
 	"github.com/uptrace/bun"
 )
 
@@ -51,8 +52,12 @@ func JoinPath(parts ...string) string {
 }
 
 func buildNodeAbsolutePathString(ctx context.Context, db bun.IDB, node *Node) (string, error) {
+	return buildPathFromNodeID(ctx, db, node.ID)
+}
+
+func buildPathFromNodeID(ctx context.Context, db bun.IDB, nodeID uuid.UUID) (string, error) {
 	var path []string
-	err := db.NewRaw(absolutePathQuery, node.ID).Scan(ctx, &path)
+	err := db.NewRaw(absolutePathQuery, nodeID).Scan(ctx, &path)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return "", ErrNodeNotFound

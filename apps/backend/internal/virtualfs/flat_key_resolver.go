@@ -34,3 +34,14 @@ func (r *FlatKeyResolver) Resolve(ctx context.Context, db bun.IDB, node *Node) (
 func (r *FlatKeyResolver) ResolveDeletionKeys(ctx context.Context, node *Node, allKeys []blob.Key) (*DeletionPlan, error) {
 	return &DeletionPlan{Keys: allKeys}, nil
 }
+
+// ResolveBulkMoveOps returns nil for flat key storage since blob keys are UUIDs
+// and don't change when nodes are moved to a different parent.
+func (r *FlatKeyResolver) ResolveBulkMoveOps(ctx context.Context, db bun.IDB, nodes []*Node, newParentID uuid.UUID) ([]BlobMoveOp, error) {
+	for _, node := range nodes[1:] {
+		if node.ParentID != nodes[0].ParentID {
+			return nil, ErrUnsupportedOperation
+		}
+	}
+	return nil, nil
+}
