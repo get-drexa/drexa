@@ -11,15 +11,25 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
+// FileInfo represents file metadata
+// @Description File information including name, size, and timestamps
 type FileInfo struct {
-	Kind      string     `json:"kind"`
-	ID        string     `json:"id"`
-	Name      string     `json:"name"`
-	Size      int64      `json:"size"`
-	MimeType  string     `json:"mimeType"`
-	CreatedAt time.Time  `json:"createdAt"`
-	UpdatedAt time.Time  `json:"updatedAt"`
-	DeletedAt *time.Time `json:"deletedAt,omitempty"`
+	// Item type, always "file"
+	Kind string `json:"kind" example:"file"`
+	// Unique file identifier
+	ID string `json:"id" example:"mElnUNCm8F22"`
+	// File name
+	Name string `json:"name" example:"document.pdf"`
+	// File size in bytes
+	Size int64 `json:"size" example:"1048576"`
+	// MIME type of the file
+	MimeType string `json:"mimeType" example:"application/pdf"`
+	// When the file was created (ISO 8601)
+	CreatedAt time.Time `json:"createdAt" example:"2024-12-13T15:04:05Z"`
+	// When the file was last updated (ISO 8601)
+	UpdatedAt time.Time `json:"updatedAt" example:"2024-12-13T16:30:00Z"`
+	// When the file was trashed, null if not trashed (ISO 8601)
+	DeletedAt *time.Time `json:"deletedAt,omitempty" example:"2024-12-14T10:00:00Z"`
 }
 
 func mustCurrentFileNode(c *fiber.Ctx) *virtualfs.Node {
@@ -46,6 +56,18 @@ func (h *HTTPHandler) currentFileMiddleware(c *fiber.Ctx) error {
 	return c.Next()
 }
 
+// fetchFile returns file metadata
+// @Summary Get file info
+// @Description Retrieve metadata for a specific file
+// @Tags files
+// @Produce json
+// @Security BearerAuth
+// @Param accountID path string true "Account ID" format(uuid)
+// @Param fileID path string true "File ID"
+// @Success 200 {object} FileInfo "File metadata"
+// @Failure 401 {string} string "Not authenticated"
+// @Failure 404 {string} string "File not found"
+// @Router /accounts/{accountID}/files/{fileID} [get]
 func (h *HTTPHandler) fetchFile(c *fiber.Ctx) error {
 	node := mustCurrentFileNode(c)
 	i := FileInfo{
@@ -61,6 +83,19 @@ func (h *HTTPHandler) fetchFile(c *fiber.Ctx) error {
 	return c.JSON(i)
 }
 
+// downloadFile streams file content
+// @Summary Download file
+// @Description Download the file content. May redirect to a signed URL for external storage.
+// @Tags files
+// @Produce application/octet-stream
+// @Security BearerAuth
+// @Param accountID path string true "Account ID" format(uuid)
+// @Param fileID path string true "File ID"
+// @Success 200 {file} binary "File content stream"
+// @Success 307 {string} string "Redirect to download URL"
+// @Failure 401 {string} string "Not authenticated"
+// @Failure 404 {string} string "File not found"
+// @Router /accounts/{accountID}/files/{fileID}/content [get]
 func (h *HTTPHandler) downloadFile(c *fiber.Ctx) error {
 	node := mustCurrentFileNode(c)
 
@@ -89,6 +124,21 @@ func (h *HTTPHandler) downloadFile(c *fiber.Ctx) error {
 	return httperr.Internal(errors.New("vfs returned neither a reader nor a URL"))
 }
 
+// patchFile updates file properties
+// @Summary Update file
+// @Description Update file properties such as name (rename)
+// @Tags files
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param accountID path string true "Account ID" format(uuid)
+// @Param fileID path string true "File ID"
+// @Param request body patchFileRequest true "File update"
+// @Success 200 {object} FileInfo "Updated file metadata"
+// @Failure 400 {object} map[string]string "Invalid request"
+// @Failure 401 {string} string "Not authenticated"
+// @Failure 404 {string} string "File not found"
+// @Router /accounts/{accountID}/files/{fileID} [patch]
 func (h *HTTPHandler) patchFile(c *fiber.Ctx) error {
 	node := mustCurrentFileNode(c)
 
@@ -131,6 +181,20 @@ func (h *HTTPHandler) patchFile(c *fiber.Ctx) error {
 	})
 }
 
+// deleteFile removes a file
+// @Summary Delete file
+// @Description Delete a file permanently or move it to trash
+// @Tags files
+// @Produce json
+// @Security BearerAuth
+// @Param accountID path string true "Account ID" format(uuid)
+// @Param fileID path string true "File ID"
+// @Param trash query bool false "Move to trash instead of permanent delete" default(false)
+// @Success 200 {object} FileInfo "Trashed file info (when trash=true)"
+// @Success 204 {string} string "Permanently deleted (when trash=false)"
+// @Failure 401 {string} string "Not authenticated"
+// @Failure 404 {string} string "File not found"
+// @Router /accounts/{accountID}/files/{fileID} [delete]
 func (h *HTTPHandler) deleteFile(c *fiber.Ctx) error {
 	node := mustCurrentFileNode(c)
 

@@ -11,12 +11,18 @@ type HTTPHandler struct {
 	db  *bun.DB
 }
 
+// patchFileRequest represents a file update request
+// @Description Request to update file properties
 type patchFileRequest struct {
-	Name string `json:"name"`
+	// New name for the file
+	Name string `json:"name" example:"renamed-document.pdf"`
 }
 
+// patchDirectoryRequest represents a directory update request
+// @Description Request to update directory properties
 type patchDirectoryRequest struct {
-	Name string `json:"name"`
+	// New name for the directory
+	Name string `json:"name" example:"My Documents"`
 }
 
 func NewHTTPHandler(vfs *virtualfs.VirtualFS, db *bun.DB) *HTTPHandler {

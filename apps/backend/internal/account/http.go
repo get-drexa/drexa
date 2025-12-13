@@ -19,17 +19,28 @@ type HTTPHandler struct {
 	authMiddleware fiber.Handler
 }
 
+// registerAccountRequest represents a new account registration
+// @Description Request to create a new account and user
 type registerAccountRequest struct {
-	Email       string `json:"email"`
-	Password    string `json:"password"`
-	DisplayName string `json:"displayName"`
+	// Email address for the new account
+	Email string `json:"email" example:"newuser@example.com"`
+	// Password for the new account (min 8 characters)
+	Password string `json:"password" example:"securepassword123"`
+	// Display name for the user
+	DisplayName string `json:"displayName" example:"Jane Doe"`
 }
 
+// registerAccountResponse represents a successful registration
+// @Description Response after successful account registration
 type registerAccountResponse struct {
-	Account      *Account   `json:"account"`
-	User         *user.User `json:"user"`
-	AccessToken  string     `json:"accessToken"`
-	RefreshToken string     `json:"refreshToken"`
+	// The created account
+	Account *Account `json:"account"`
+	// The created user
+	User *user.User `json:"user"`
+	// JWT access token for immediate authentication
+	AccessToken string `json:"accessToken" example:"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI1NTBlODQwMC1lMjliLTQxZDQtYTcxNi00NDY2NTU0NDAwMDAifQ.signature"`
+	// Base64 URL encoded refresh token
+	RefreshToken string `json:"refreshToken" example:"dR4nD0mUu1DkZXlCeXRlc0FuZFJhbmRvbURhdGFIZXJlMTIzNDU2Nzg5MGFi"`
 }
 
 const currentAccountKey = "currentAccount"
@@ -75,6 +86,17 @@ func (h *HTTPHandler) accountMiddleware(c *fiber.Ctx) error {
 	return c.Next()
 }
 
+// getAccount retrieves account information
+// @Summary Get account
+// @Description Retrieve account details including storage usage and quota
+// @Tags accounts
+// @Produce json
+// @Security BearerAuth
+// @Param accountID path string true "Account ID" format(uuid)
+// @Success 200 {object} Account "Account details"
+// @Failure 401 {string} string "Not authenticated"
+// @Failure 404 {string} string "Account not found"
+// @Router /accounts/{accountID} [get]
 func (h *HTTPHandler) getAccount(c *fiber.Ctx) error {
 	account := CurrentAccount(c)
 	if account == nil {
@@ -83,6 +105,17 @@ func (h *HTTPHandler) getAccount(c *fiber.Ctx) error {
 	return c.JSON(account)
 }
 
+// registerAccount creates a new account and user
+// @Summary Register new account
+// @Description Create a new user account with email and password. Returns the account, user, and authentication tokens.
+// @Tags accounts
+// @Accept json
+// @Produce json
+// @Param request body registerAccountRequest true "Registration details"
+// @Success 200 {object} registerAccountResponse "Account created successfully"
+// @Failure 400 {string} string "Invalid request body"
+// @Failure 409 {string} string "Email already registered"
+// @Router /accounts [post]
 func (h *HTTPHandler) registerAccount(c *fiber.Ctx) error {
 	req := new(registerAccountRequest)
 	if err := c.BodyParser(req); err != nil {
