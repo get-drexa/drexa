@@ -1,17 +1,19 @@
 package main
 
 import (
+	"embed"
 	"flag"
 	"fmt"
 	"log"
 	"os"
 
-	_ "github.com/get-drexa/drexa/docs"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/gofiber/fiber/v2/middleware/logger"
-	"github.com/swaggo/swag"
 )
+
+//go:embed openapi.json
+var openapiSpec embed.FS
 
 func main() {
 	port := flag.Int("port", 8081, "port to listen on")
@@ -64,11 +66,11 @@ func main() {
 	app.Get("/openapi.json", func(c *fiber.Ctx) error {
 		c.Set("Content-Type", "application/json")
 		c.Set("Access-Control-Allow-Origin", "*")
-		doc, err := swag.ReadDoc()
+		doc, err := openapiSpec.ReadFile("openapi.json")
 		if err != nil {
 			return c.Status(fiber.StatusInternalServerError).SendString(err.Error())
 		}
-		return c.SendString(doc)
+		return c.Send(doc)
 	})
 
 	// Health check
@@ -81,4 +83,3 @@ func main() {
 
 	log.Fatal(app.Listen(fmt.Sprintf(":%d", *port)))
 }
-

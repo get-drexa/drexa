@@ -52,6 +52,32 @@ type postDirectoryContentRequest struct {
 	Items []string `json:"items" example:"mElnUNCm8F22,kRp2XYTq9A55"`
 }
 
+// moveItemsToDirectoryResponse represents the response to a request
+// to move items into a directory.
+// @Description Response from moving items to a directory with status for each item
+type moveItemsToDirectoryResponse struct {
+	// Array of items included in the request (FileInfo or DirectoryInfo objects)
+	Items []any `json:"items"`
+
+	// Array of IDs of successfully moved items
+	Moved []string `json:"moved" example:"mElnUNCm8F22,kRp2XYTq9A55"`
+
+	// Array of IDs of items that conflicted with existing items in the target directory
+	Conflicts []string `json:"conflicts" example:"xYz123AbC456"`
+
+	// Array of errors that occurred during the move operation
+	Errors []moveItemError `json:"errors"`
+}
+
+// moveItemError represents an error that occurred while moving a specific item
+// @Description Error details for a failed item move
+type moveItemError struct {
+	// ID of the item that failed to move
+	ID string `json:"id" example:"mElnUNCm8F22"`
+	// Error message describing what went wrong
+	Error string `json:"error" example:"permission denied"`
+}
+
 func (h *HTTPHandler) currentDirectoryMiddleware(c *fiber.Ctx) error {
 	account := account.CurrentAccount(c)
 	if account == nil {
@@ -344,18 +370,18 @@ func (h *HTTPHandler) deleteDirectory(c *fiber.Ctx) error {
 
 // moveItemsToDirectory moves files and directories into this directory
 // @Summary Move items to directory
-// @Description Move one or more files or directories into this directory. All items must currently be in the same source directory.
+// @Description Move one or more files or directories into this directory. Returns detailed status for each item including which were successfully moved, which had conflicts, and which encountered errors.
 // @Tags directories
 // @Accept json
+// @Produce json
 // @Security BearerAuth
 // @Param accountID path string true "Account ID" format(uuid)
 // @Param directoryID path string true "Target directory ID"
 // @Param request body postDirectoryContentRequest true "Items to move"
-// @Success 204 {string} string "Items moved successfully"
+// @Success 200 {object} moveItemsToDirectoryResponse "Move operation results with moved, conflict, and error states"
 // @Failure 400 {object} map[string]string "Invalid request or items not in same directory"
 // @Failure 401 {string} string "Not authenticated"
 // @Failure 404 {object} map[string]string "One or more items not found"
-// @Failure 409 {object} map[string]string "Name conflict in target directory"
 // @Router /accounts/{accountID}/directories/{directoryID}/content [post]
 func (h *HTTPHandler) moveItemsToDirectory(c *fiber.Ctx) error {
 	acc := account.CurrentAccount(c)
@@ -389,7 +415,7 @@ func (h *HTTPHandler) moveItemsToDirectory(c *fiber.Ctx) error {
 	}
 
 	// Move all nodes to the target directory
-	err = h.vfs.MoveNodesInSameDirectory(c.Context(), tx, nodes, targetDir.ID)
+	result, err := h.vfs.MoveNodesInSameDirectory(c.Context(), tx, nodes, targetDir.ID)
 	if err != nil {
 		if errors.Is(err, virtualfs.ErrUnsupportedOperation) {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "All items must be in the same directory"})
@@ -405,5 +431,22 @@ func (h *HTTPHandler) moveItemsToDirectory(c *fiber.Ctx) error {
 		return httperr.Internal(err)
 	}
 
-	return c.SendStatus(fiber.StatusNoContent)
+	res := moveItemsToDirectoryResponse{}
+
+	for _, node := range result.Moved {
+		res.Items = append(res.Items, toDirectoryItem(node))
+		res.Moved = append(res.Moved, node.PublicID)
+	}
+	for _, node := range result.Conflicts {
+		res.Items = append(res.Items, toDirectoryItem(node))
+		res.Conflicts = append(res.Conflicts, node.PublicID)
+	}
+	for _, err := range result.Errors {
+		res.Errors = append(res.Errors, moveItemError{
+			ID:    err.Node.PublicID,
+			Error: err.Error.Error(),
+		})
+	}
+
+	return c.JSON(res)
 }
