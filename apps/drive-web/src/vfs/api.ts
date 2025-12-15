@@ -81,8 +81,6 @@ export const directoryContentQueryAtom = atomFamily((directoryId: string) =>
 	}),
 )
 
-// Directory Mutations
-
 export const createDirectoryMutationAtom = atom((get) => {
 	const account = get(currentAccountAtom)
 	return mutationOptions({
@@ -105,6 +103,13 @@ export const createDirectoryMutationAtom = atom((get) => {
 				get(directoryInfoQueryAtom(data.id)).queryKey,
 				data,
 			)
+			const parent = data.path.at(-2)
+			if (parent) {
+				client.setQueryData(
+					get(directoryContentQueryAtom(parent.id)).queryKey,
+					(prev) => (prev ? [...prev, data] : [data]),
+				)
+			}
 		},
 	})
 })
