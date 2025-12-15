@@ -3,7 +3,7 @@ import { CircleAlertIcon, XIcon } from "lucide-react"
 import type React from "react"
 import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
-import { Tooltip } from "@/components/ui/tooltip"
+import { Tooltip, TooltipTrigger } from "@/components/ui/tooltip"
 import { FileUploadStatusKind, fileUploadStatusAtomFamily } from "./store"
 import type { PickedFile } from "./upload-file-dialog"
 
@@ -16,7 +16,6 @@ export function PickedFileItem({
 }) {
 	const fileUploadAtom = fileUploadStatusAtomFamily(pickedFile.id)
 	const fileUpload = useAtomValue(fileUploadAtom)
-	console.log("fileUpload", fileUpload)
 	const { file, id } = pickedFile
 
 	let statusIndicator: React.ReactNode
@@ -52,20 +51,7 @@ export function PickedFileItem({
 			key={id}
 		>
 			<span>{file.name}</span>
-			{fileUpload ? (
-				<Progress
-					className="max-w-20"
-					value={fileUpload.progress * 100}
-				/>
-			) : (
-				<Button
-					variant="ghost"
-					size="icon"
-					onClick={() => onRemove(pickedFile)}
-				>
-					<XIcon className="size-4" />
-				</Button>
-			)}
+			{statusIndicator}
 		</li>
 	)
 }

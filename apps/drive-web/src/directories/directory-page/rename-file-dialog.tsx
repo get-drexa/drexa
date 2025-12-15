@@ -1,7 +1,5 @@
-import { api } from "@fileone/convex/api"
-import { type FileSystemItem, FileType } from "@fileone/convex/filesystem"
 import { useMutation } from "@tanstack/react-query"
-import { useMutation as useContextMutation } from "convex/react"
+import { useAtomValue } from "jotai"
 import { useId } from "react"
 import { Button } from "@/components/ui/button"
 import {
@@ -13,9 +11,11 @@ import {
 	DialogTitle,
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
+import { renameDirectoryMutationAtom, renameFileMutationAtom } from "@/vfs/api"
+import type { DirectoryItem } from "@/vfs/vfs"
 
 type RenameFileDialogProps = {
-	item: FileSystemItem
+	item: DirectoryItem
 	onRenameSuccess: () => void
 	onClose: () => void
 }
@@ -27,12 +27,21 @@ export function RenameFileDialog({
 }: RenameFileDialogProps) {
 	const formId = useId()
 
-	const { mutate: renameFile, isPending: isRenaming } = useMutation({
-		mutationFn: useContextMutation(api.files.renameFile),
-		onSuccess: () => {
-			onRenameSuccess()
-		},
+	const renameFileMutation = useAtomValue(renameFileMutationAtom)
+	const renameDirectoryMutation = useAtomValue(renameDirectoryMutationAtom)
+
+	const { mutate: renameFile, isPending: isRenamingFile } = useMutation({
+		...renameFileMutation,
+		onSuccess: onRenameSuccess,
 	})
+
+	const { mutate: renameDirectory, isPending: isRenamingDirectory } =
+		useMutation({
+			...renameDirectoryMutation,
+			onSuccess: onRenameSuccess,
+		})
+
+	const isRenaming = isRenamingFile || isRenamingDirectory
 
 	const onSubmit = (event: React.FormEvent<HTMLFormElement>) => {
 		event.preventDefault()
@@ -42,14 +51,11 @@ export function RenameFileDialog({
 
 		if (newName) {
 			switch (item.kind) {
-				case FileType.File:
-					renameFile({
-						directoryId: item.doc.directoryId,
-						itemId: item.doc._id,
-						newName,
-					})
+				case "file":
+					renameFile(item)
 					break
-				default:
+				case "directory":
+					renameDirectory(item)
 					break
 			}
 		}
@@ -70,7 +76,7 @@ export function RenameFileDialog({
 				</DialogHeader>
 
 				<form id={formId} onSubmit={onSubmit}>
-					<RenameFileInput initialValue={item.doc.name} />
+					<RenameFileInput initialValue={item.name} />
 				</form>
 
 				<DialogFooter>

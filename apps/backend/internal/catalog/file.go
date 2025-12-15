@@ -2,7 +2,7 @@ package catalog
 
 import (
 	"errors"
-	"fmt"
+	"strings"
 	"time"
 
 	"github.com/get-drexa/drexa/internal/account"
@@ -168,8 +168,6 @@ func (h *HTTPHandler) patchFile(c *fiber.Ctx) error {
 		return httperr.Internal(err)
 	}
 
-	fmt.Printf("node deleted at: %v\n", node.DeletedAt)
-
 	return c.JSON(FileInfo{
 		ID:        node.PublicID,
 		Name:      node.Name,
@@ -206,19 +204,20 @@ func (h *HTTPHandler) deleteFile(c *fiber.Ctx) error {
 
 	shouldTrash := c.Query("trash") == "true"
 	if shouldTrash {
-		err = h.vfs.SoftDeleteNode(c.Context(), tx, node)
+		deleted, err := h.vfs.SoftDeleteNode(c.Context(), tx, node)
+		if err != nil {
+			if errors.Is(err, virtualfs.ErrNodeNotFound) {
+				return c.SendStatus(fiber.StatusNotFound)
+			}
+			return httperr.Internal(err)
+		}
+
+		err = tx.Commit()
 		if err != nil {
 			return httperr.Internal(err)
 		}
-		return c.JSON(FileInfo{
-			ID:        node.PublicID,
-			Name:      node.Name,
-			Size:      node.Size,
-			MimeType:  node.MimeType,
-			CreatedAt: node.CreatedAt,
-			UpdatedAt: node.UpdatedAt,
-			DeletedAt: node.DeletedAt,
-		})
+
+		return c.JSON(fileInfoFromNode(deleted))
 	} else {
 		err = h.vfs.PermanentlyDeleteNode(c.Context(), tx, node)
 		if err != nil {
@@ -232,4 +231,86 @@ func (h *HTTPHandler) deleteFile(c *fiber.Ctx) error {
 
 		return c.SendStatus(fiber.StatusNoContent)
 	}
+}
+
+// deleteFiles removes multiple files
+// @Summary Bulk delete files
+// @Description Delete multiple files permanently or move them to trash. All items must be files.
+// @Tags files
+// @Security BearerAuth
+// @Param accountID path string true "Account ID" format(uuid)
+// @Param id query string true "Comma-separated list of file IDs to delete" example:"mElnUNCm8F22,kRp2XYTq9A55"
+// @Param trash query bool false "Move to trash instead of permanent delete" default(false)
+// @Success 204 {string} string "Files deleted"
+// @Failure 400 {object} map[string]string "All items must be files"
+// @Failure 401 {string} string "Not authenticated"
+// @Router /accounts/{accountID}/files [delete]
+func (h *HTTPHandler) deleteFiles(c *fiber.Ctx) error {
+	account := account.CurrentAccount(c)
+	if account == nil {
+		return c.SendStatus(fiber.StatusUnauthorized)
+	}
+
+	idq := c.Query("id", "")
+	if idq == "" {
+		return c.SendStatus(fiber.StatusNoContent)
+	}
+
+	ids := strings.Split(idq, ",")
+	if len(ids) == 0 {
+		return c.SendStatus(fiber.StatusNoContent)
+	}
+
+	shouldTrash := c.Query("trash") == "true"
+
+	tx, err := h.db.BeginTx(c.Context(), nil)
+	if err != nil {
+		return httperr.Internal(err)
+	}
+	defer tx.Rollback()
+
+	nodes, err := h.vfs.FindNodesByPublicID(c.Context(), tx, account.ID, ids)
+	if err != nil {
+		return httperr.Internal(err)
+	}
+
+	if len(nodes) == 0 {
+		return c.SendStatus(fiber.StatusNoContent)
+	}
+
+	if shouldTrash {
+		deleted, err := h.vfs.SoftDeleteNodes(c.Context(), tx, nodes)
+		if err != nil {
+			return httperr.Internal(err)
+		}
+
+		err = tx.Commit()
+		if err != nil {
+			return httperr.Internal(err)
+		}
+
+		res := make([]FileInfo, 0, len(deleted))
+		for _, node := range deleted {
+			res = append(res, fileInfoFromNode(node))
+		}
+
+		return c.JSON(res)
+
+	} else {
+		err = h.vfs.PermanentlyDeleteFiles(c.Context(), tx, nodes)
+		if err != nil {
+			if errors.Is(err, virtualfs.ErrUnsupportedOperation) {
+				return httperr.NewHTTPError(fiber.StatusBadRequest, "all items must be files", err)
+			}
+			return httperr.Internal(err)
+		}
+
+		err = tx.Commit()
+		if err != nil {
+			return httperr.Internal(err)
+		}
+
+		return c.SendStatus(fiber.StatusNoContent)
+	}
+
 }

@@ -15,10 +15,8 @@ import { Route as AuthenticatedRouteImport } from './routes/_authenticated'
 import { Route as AuthenticatedIndexRouteImport } from './routes/_authenticated/index'
 import { Route as LoginCallbackRouteImport } from './routes/login_.callback'
 import { Route as AuthenticatedSidebarLayoutRouteImport } from './routes/_authenticated/_sidebar-layout'
-import { Route as AuthenticatedSidebarLayoutRecentRouteImport } from './routes/_authenticated/_sidebar-layout/recent'
 import { Route as AuthenticatedSidebarLayoutHomeRouteImport } from './routes/_authenticated/_sidebar-layout/home'
 import { Route as AuthenticatedSidebarLayoutDirectoriesDirectoryIdRouteImport } from './routes/_authenticated/_sidebar-layout/directories.$directoryId'
-import { Route as AuthenticatedSidebarLayoutTrashDirectoriesDirectoryIdRouteImport } from './routes/_authenticated/_sidebar-layout/trash.directories.$directoryId'
 
 const SignUpRoute = SignUpRouteImport.update({
   id: '/sign-up',
@@ -49,12 +47,6 @@ const AuthenticatedSidebarLayoutRoute =
     id: '/_sidebar-layout',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
-const AuthenticatedSidebarLayoutRecentRoute =
-  AuthenticatedSidebarLayoutRecentRouteImport.update({
-    id: '/recent',
-    path: '/recent',
-    getParentRoute: () => AuthenticatedSidebarLayoutRoute,
-  } as any)
 const AuthenticatedSidebarLayoutHomeRoute =
   AuthenticatedSidebarLayoutHomeRouteImport.update({
     id: '/home',
@@ -67,12 +59,6 @@ const AuthenticatedSidebarLayoutDirectoriesDirectoryIdRoute =
     path: '/directories/$directoryId',
     getParentRoute: () => AuthenticatedSidebarLayoutRoute,
   } as any)
-const AuthenticatedSidebarLayoutTrashDirectoriesDirectoryIdRoute =
-  AuthenticatedSidebarLayoutTrashDirectoriesDirectoryIdRouteImport.update({
-    id: '/trash/directories/$directoryId',
-    path: '/trash/directories/$directoryId',
-    getParentRoute: () => AuthenticatedSidebarLayoutRoute,
-  } as any)
 
 export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
@@ -80,9 +66,7 @@ export interface FileRoutesByFullPath {
   '/login/callback': typeof LoginCallbackRoute
   '/': typeof AuthenticatedIndexRoute
   '/home': typeof AuthenticatedSidebarLayoutHomeRoute
-  '/recent': typeof AuthenticatedSidebarLayoutRecentRoute
   '/directories/$directoryId': typeof AuthenticatedSidebarLayoutDirectoriesDirectoryIdRoute
-  '/trash/directories/$directoryId': typeof AuthenticatedSidebarLayoutTrashDirectoriesDirectoryIdRoute
 }
 export interface FileRoutesByTo {
   '/login': typeof LoginRoute
@@ -90,9 +74,7 @@ export interface FileRoutesByTo {
   '/login/callback': typeof LoginCallbackRoute
   '/': typeof AuthenticatedIndexRoute
   '/home': typeof AuthenticatedSidebarLayoutHomeRoute
-  '/recent': typeof AuthenticatedSidebarLayoutRecentRoute
   '/directories/$directoryId': typeof AuthenticatedSidebarLayoutDirectoriesDirectoryIdRoute
-  '/trash/directories/$directoryId': typeof AuthenticatedSidebarLayoutTrashDirectoriesDirectoryIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -103,9 +85,7 @@ export interface FileRoutesById {
   '/login_/callback': typeof LoginCallbackRoute
   '/_authenticated/': typeof AuthenticatedIndexRoute
   '/_authenticated/_sidebar-layout/home': typeof AuthenticatedSidebarLayoutHomeRoute
-  '/_authenticated/_sidebar-layout/recent': typeof AuthenticatedSidebarLayoutRecentRoute
   '/_authenticated/_sidebar-layout/directories/$directoryId': typeof AuthenticatedSidebarLayoutDirectoriesDirectoryIdRoute
-  '/_authenticated/_sidebar-layout/trash/directories/$directoryId': typeof AuthenticatedSidebarLayoutTrashDirectoriesDirectoryIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -115,9 +95,7 @@ export interface FileRouteTypes {
     | '/login/callback'
     | '/'
     | '/home'
-    | '/recent'
     | '/directories/$directoryId'
-    | '/trash/directories/$directoryId'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/login'
@@ -125,9 +103,7 @@ export interface FileRouteTypes {
     | '/login/callback'
     | '/'
     | '/home'
-    | '/recent'
     | '/directories/$directoryId'
-    | '/trash/directories/$directoryId'
   id:
     | '__root__'
     | '/_authenticated'
@@ -137,9 +113,7 @@ export interface FileRouteTypes {
     | '/login_/callback'
     | '/_authenticated/'
     | '/_authenticated/_sidebar-layout/home'
-    | '/_authenticated/_sidebar-layout/recent'
     | '/_authenticated/_sidebar-layout/directories/$directoryId'
-    | '/_authenticated/_sidebar-layout/trash/directories/$directoryId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -193,13 +167,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedSidebarLayoutRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
-    '/_authenticated/_sidebar-layout/recent': {
-      id: '/_authenticated/_sidebar-layout/recent'
-      path: '/recent'
-      fullPath: '/recent'
-      preLoaderRoute: typeof AuthenticatedSidebarLayoutRecentRouteImport
-      parentRoute: typeof AuthenticatedSidebarLayoutRoute
-    }
     '/_authenticated/_sidebar-layout/home': {
       id: '/_authenticated/_sidebar-layout/home'
       path: '/home'
@@ -214,32 +181,19 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedSidebarLayoutDirectoriesDirectoryIdRouteImport
       parentRoute: typeof AuthenticatedSidebarLayoutRoute
     }
-    '/_authenticated/_sidebar-layout/trash/directories/$directoryId': {
-      id: '/_authenticated/_sidebar-layout/trash/directories/$directoryId'
-      path: '/trash/directories/$directoryId'
-      fullPath: '/trash/directories/$directoryId'
-      preLoaderRoute: typeof AuthenticatedSidebarLayoutTrashDirectoriesDirectoryIdRouteImport
-      parentRoute: typeof AuthenticatedSidebarLayoutRoute
-    }
   }
 }
 
 interface AuthenticatedSidebarLayoutRouteChildren {
   AuthenticatedSidebarLayoutHomeRoute: typeof AuthenticatedSidebarLayoutHomeRoute
-  AuthenticatedSidebarLayoutRecentRoute: typeof AuthenticatedSidebarLayoutRecentRoute
   AuthenticatedSidebarLayoutDirectoriesDirectoryIdRoute: typeof AuthenticatedSidebarLayoutDirectoriesDirectoryIdRoute
-  AuthenticatedSidebarLayoutTrashDirectoriesDirectoryIdRoute: typeof AuthenticatedSidebarLayoutTrashDirectoriesDirectoryIdRoute
 }
 
 const AuthenticatedSidebarLayoutRouteChildren: AuthenticatedSidebarLayoutRouteChildren =
   {
     AuthenticatedSidebarLayoutHomeRoute: AuthenticatedSidebarLayoutHomeRoute,
-    AuthenticatedSidebarLayoutRecentRoute:
-      AuthenticatedSidebarLayoutRecentRoute,
     AuthenticatedSidebarLayoutDirectoriesDirectoryIdRoute:
       AuthenticatedSidebarLayoutDirectoriesDirectoryIdRoute,
-    AuthenticatedSidebarLayoutTrashDirectoriesDirectoryIdRoute:
-      AuthenticatedSidebarLayoutTrashDirectoriesDirectoryIdRoute,
   }
 
 const AuthenticatedSidebarLayoutRouteWithChildren =

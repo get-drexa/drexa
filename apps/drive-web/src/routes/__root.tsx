@@ -1,46 +1,46 @@
 import "@/styles/globals.css"
-import { ConvexBetterAuthProvider } from "@convex-dev/better-auth/react"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { createRootRoute, Outlet } from "@tanstack/react-router"
-import { ConvexReactClient } from "convex/react"
-import { toast } from "sonner"
+import { Provider } from "jotai"
+import { useHydrateAtoms } from "jotai/utils"
+import { queryClientAtom } from "jotai-tanstack-query"
+import type React from "react"
 import { Toaster } from "@/components/ui/sonner"
-import { formatError } from "@/lib/error"
+import { defaultOnError } from "@/lib/error"
 import { useKeyboardModifierListener } from "@/lib/keyboard"
-import { authClient } from "../auth"
 
 export const Route = createRootRoute({
 	component: RootLayout,
 })
 
-const convexClient = new ConvexReactClient(import.meta.env.VITE_CONVEX_URL, {
-	verbose: true,
-	expectAuth: true,
-})
 const queryClient = new QueryClient({
 	defaultOptions: {
+		queries: {
+			throwOnError: false,
+		},
 		mutations: {
-			onError: (error) => {
-				console.log(error)
-				toast.error(formatError(error))
-			},
+			onError: defaultOnError,
 			throwOnError: false,
 		},
 	},
 })
+
+function HydrateAtoms({ children }: React.PropsWithChildren) {
+	useHydrateAtoms(new Map([[queryClientAtom, queryClient]]))
+	return children
+}
 
 function RootLayout() {
 	useKeyboardModifierListener()
 
 	return (
 		<QueryClientProvider client={queryClient}>
-			<ConvexBetterAuthProvider
-				client={convexClient}
-				authClient={authClient}
-			>
-				<Outlet />
-				<Toaster />
-			</ConvexBetterAuthProvider>
+			<Provider>
+				<HydrateAtoms>
+					<Outlet />
+					<Toaster />
+				</HydrateAtoms>
+			</Provider>
 		</QueryClientProvider>
 	)
 }

@@ -447,8 +447,11 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "Move one or more files or directories into this directory. All items must currently be in the same source directory.",
+                "description": "Move one or more files or directories into this directory. Returns detailed status for each item including which were successfully moved, which had conflicts, and which encountered errors.",
                 "consumes": [
+                    "application/json"
+                ],
+                "produces": [
                     "application/json"
                 ],
                 "tags": [
@@ -482,10 +485,10 @@ const docTemplate = `{
                     }
                 ],
                 "responses": {
-                    "204": {
-                        "description": "Items moved successfully",
+                    "200": {
+                        "description": "Move operation results with moved, conflict, and error states",
                         "schema": {
-                            "type": "string"
+                            "$ref": "#/definitions/internal_catalog.moveItemsToDirectoryResponse"
                         }
                     },
                     "400": {
@@ -505,15 +508,6 @@ const docTemplate = `{
                     },
                     "404": {
                         "description": "One or more items not found",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    },
-                    "409": {
-                        "description": "Name conflict in target directory",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
@@ -1430,6 +1424,109 @@ const docTemplate = `{
                     "description": "ID of the parent directory",
                     "type": "string",
                     "example": "kRp2XYTq9A55"
+                }
+            }
+        },
+        "internal_catalog.moveItemError": {
+            "description": "Error details for a failed item move",
+            "type": "object",
+            "properties": {
+                "error": {
+                    "description": "Error message describing what went wrong",
+                    "type": "string",
+                    "example": "permission denied"
+                },
+                "id": {
+                    "description": "ID of the item that failed to move",
+                    "type": "string",
+                    "example": "mElnUNCm8F22"
+                }
+            }
+        },
+        "internal_catalog.moveItemsToDirectoryResponse": {
+            "description": "Response from moving items to a directory with status for each item",
+            "type": "object",
+            "properties": {
+                "conflicts": {
+                    "description": "Array of IDs of items that conflicted with existing items in the target directory",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    },
+                    "example": [
+                        "xYz123AbC456"
+                    ]
+                },
+                "errors": {
+                    "description": "Array of errors that occurred during the move operation",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/internal_catalog.moveItemError"
+                    }
+                },
+                "items": {
+                    "description": "Array of items included in the request (files and directories)",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/internal_catalog.moveResponseItem"
+                    }
+                },
+                "moved": {
+                    "description": "Array of IDs of successfully moved items",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    },
+                    "example": [
+                        "mElnUNCm8F22",
+                        "kRp2XYTq9A55"
+                    ]
+                }
+            }
+        },
+        "internal_catalog.moveResponseItem": {
+            "description": "Item included in the move operation. Check \"kind\" field to determine type: \"file\" (has size, mimeType) or \"directory\"",
+            "type": "object",
+            "properties": {
+                "createdAt": {
+                    "description": "When the item was created (ISO 8601)",
+                    "type": "string",
+                    "example": "2024-12-13T15:04:05Z"
+                },
+                "deletedAt": {
+                    "description": "When the item was trashed, null if not trashed (ISO 8601)",
+                    "type": "string",
+                    "example": "2024-12-14T10:00:00Z"
+                },
+                "id": {
+                    "description": "Unique item identifier",
+                    "type": "string",
+                    "example": "mElnUNCm8F22"
+                },
+                "kind": {
+                    "description": "Item type: \"file\" or \"directory\"",
+                    "type": "string",
+                    "example": "file"
+                },
+                "mimeType": {
+                    "description": "MIME type (only for files)",
+                    "type": "string",
+                    "example": "application/pdf"
+                },
+                "name": {
+                    "description": "Item name",
+                    "type": "string",
+                    "example": "document.pdf"
+                },
+                "size": {
+                    "description": "File size in bytes (only for files)",
+                    "type": "integer",
+                    "example": 1048576
+                },
+                "updatedAt": {
+                    "description": "When the item was last updated (ISO 8601)",
+                    "type": "string",
+                    "example": "2024-12-13T16:30:00Z"
                 }
             }
         },

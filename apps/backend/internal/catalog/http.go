@@ -30,6 +30,8 @@ func NewHTTPHandler(vfs *virtualfs.VirtualFS, db *bun.DB) *HTTPHandler {
 }
 
 func (h *HTTPHandler) RegisterRoutes(api fiber.Router) {
+	api.Delete("/files", h.deleteFiles)
+
 	fg := api.Group("/files/:fileID")
 	fg.Use(h.currentFileMiddleware)
 	fg.Get("/", h.fetchFile)
@@ -38,6 +40,7 @@ func (h *HTTPHandler) RegisterRoutes(api fiber.Router) {
 	fg.Delete("/", h.deleteFile)
 
 	api.Post("/directories", h.createDirectory)
+	api.Delete("/directories", h.deleteDirectories)
 
 	dg := api.Group("/directories/:directoryID")
 	dg.Use(h.currentDirectoryMiddleware)
@@ -46,4 +49,36 @@ func (h *HTTPHandler) RegisterRoutes(api fiber.Router) {
 	dg.Get("/content", h.listDirectory)
 	dg.Patch("/", h.patchDirectory)
 	dg.Delete("/", h.deleteDirectory)
+}
+
+func fileInfoFromNode(node *virtualfs.Node) FileInfo {
+	return FileInfo{
+		Kind:     DirItemKindFile,
+		ID:       node.PublicID,
+		Name:     node.Name,
+		Size:     node.Size,
+		MimeType: node.MimeType,
+	}
+}
+
+func directoryInfoFromNode(node *virtualfs.Node) DirectoryInfo {
+	return DirectoryInfo{
+		Kind:      DirItemKindDirectory,
+		ID:        node.PublicID,
+		Name:      node.Name,
+		CreatedAt: node.CreatedAt,
+		UpdatedAt: node.UpdatedAt,
+		DeletedAt: node.DeletedAt,
+	}
+}
+
+func toDirectoryItem(node *virtualfs.Node) any {
+	switch node.Kind {
+	default:
+		return FileInfo{}
+	case virtualfs.NodeKindDirectory:
+		return directoryInfoFromNode(node)
+	case virtualfs.NodeKindFile:
+		return fileInfoFromNode(node)
+	}
 }

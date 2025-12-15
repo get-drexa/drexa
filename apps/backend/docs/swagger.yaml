@@ -225,6 +225,85 @@ definitions:
         example: kRp2XYTq9A55
         type: string
     type: object
+  internal_catalog.moveItemError:
+    description: Error details for a failed item move
+    properties:
+      error:
+        description: Error message describing what went wrong
+        example: permission denied
+        type: string
+      id:
+        description: ID of the item that failed to move
+        example: mElnUNCm8F22
+        type: string
+    type: object
+  internal_catalog.moveItemsToDirectoryResponse:
+    description: Response from moving items to a directory with status for each item
+    properties:
+      conflicts:
+        description: Array of IDs of items that conflicted with existing items in
+          the target directory
+        example:
+        - xYz123AbC456
+        items:
+          type: string
+        type: array
+      errors:
+        description: Array of errors that occurred during the move operation
+        items:
+          $ref: '#/definitions/internal_catalog.moveItemError'
+        type: array
+      items:
+        description: Array of items included in the request (files and directories)
+        items:
+          $ref: '#/definitions/internal_catalog.moveResponseItem'
+        type: array
+      moved:
+        description: Array of IDs of successfully moved items
+        example:
+        - mElnUNCm8F22
+        - kRp2XYTq9A55
+        items:
+          type: string
+        type: array
+    type: object
+  internal_catalog.moveResponseItem:
+    description: 'Item included in the move operation. Check "kind" field to determine
+      type: "file" (has size, mimeType) or "directory"'
+    properties:
+      createdAt:
+        description: When the item was created (ISO 8601)
+        example: "2024-12-13T15:04:05Z"
+        type: string
+      deletedAt:
+        description: When the item was trashed, null if not trashed (ISO 8601)
+        example: "2024-12-14T10:00:00Z"
+        type: string
+      id:
+        description: Unique item identifier
+        example: mElnUNCm8F22
+        type: string
+      kind:
+        description: 'Item type: "file" or "directory"'
+        example: file
+        type: string
+      mimeType:
+        description: MIME type (only for files)
+        example: application/pdf
+        type: string
+      name:
+        description: Item name
+        example: document.pdf
+        type: string
+      size:
+        description: File size in bytes (only for files)
+        example: 1048576
+        type: integer
+      updatedAt:
+        description: When the item was last updated (ISO 8601)
+        example: "2024-12-13T16:30:00Z"
+        type: string
+    type: object
   internal_catalog.patchDirectoryRequest:
     description: Request to update directory properties
     properties:
@@ -616,8 +695,9 @@ paths:
     post:
       consumes:
       - application/json
-      description: Move one or more files or directories into this directory. All
-        items must currently be in the same source directory.
+      description: Move one or more files or directories into this directory. Returns
+        detailed status for each item including which were successfully moved, which
+        had conflicts, and which encountered errors.
       parameters:
       - description: Account ID
         format: uuid
@@ -636,11 +716,13 @@ paths:
         required: true
         schema:
           $ref: '#/definitions/internal_catalog.postDirectoryContentRequest'
+      produces:
+      - application/json
       responses:
-        "204":
-          description: Items moved successfully
+        "200":
+          description: Move operation results with moved, conflict, and error states
           schema:
-            type: string
+            $ref: '#/definitions/internal_catalog.moveItemsToDirectoryResponse'
         "400":
           description: Invalid request or items not in same directory
           schema:
@@ -653,12 +735,6 @@ paths:
             type: string
         "404":
           description: One or more items not found
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "409":
-          description: Name conflict in target directory
           schema:
             additionalProperties:
               type: string

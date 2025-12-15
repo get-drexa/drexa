@@ -54,6 +54,7 @@ func NewHTTPHandler(accountService *Service, authService *auth.Service, db *bun.
 }
 
 func (h *HTTPHandler) RegisterRoutes(api fiber.Router) fiber.Router {
+	api.Get("/accounts", h.authMiddleware, h.listAccounts)
 	api.Post("/accounts", h.registerAccount)
 
 	account := api.Group("/accounts/:accountID")
@@ -84,6 +85,24 @@ func (h *HTTPHandler) accountMiddleware(c *fiber.Ctx) error {
 	c.Locals(currentAccountKey, account)
 
 	return c.Next()
+}
+
+// listAccounts lists all accounts for the authenticated user
+// @Summary List accounts
+// @Description Retrieve all accounts for the authenticated user
+// @Tags accounts
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {array} Account "List of accounts for the authenticated user"
+// @Failure 401 {string} string "Not authenticated"
+// @Router /accounts [get]
+func (h *HTTPHandler) listAccounts(c *fiber.Ctx) error {
+	u := reqctx.AuthenticatedUser(c).(*user.User)
+	accounts, err := h.accountService.ListAccounts(c.Context(), h.db, u.ID)
+	if err != nil {
+		return httperr.Internal(err)
+	}
+	return c.JSON(accounts)
 }
 
 // getAccount retrieves account information

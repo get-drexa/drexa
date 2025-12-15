@@ -1,6 +1,8 @@
 import { useMutation } from "@tanstack/react-query"
-import { createFileRoute } from "@tanstack/react-router"
+import { createFileRoute, useNavigate } from "@tanstack/react-router"
+import { useSetAtom } from "jotai"
 import { GalleryVerticalEnd } from "lucide-react"
+import { loginMutation } from "@/auth/api"
 import { Button } from "@/components/ui/button"
 import {
 	Card,
@@ -18,7 +20,7 @@ import {
 } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { cn } from "@/lib/utils"
-import { type AuthErrorCode, authClient, BetterAuthError } from "../auth"
+import { currentAccountAtom } from "../account/account"
 
 export const Route = createFileRoute("/login")({
 	component: RouteComponent,
@@ -67,28 +69,16 @@ function LoginFormCard({ className, ...props }: React.ComponentProps<"div">) {
 }
 
 function LoginForm() {
-	const {
-		mutate: signIn,
-		isPending,
-		error: signInError,
-	} = useMutation({
-		mutationFn: async ({
-			email,
-			password,
-		}: {
-			email: string
-			password: string
-		}) => {
-			const { data: signInData, error } = await authClient.signIn.email({
-				email,
-				password,
-				callbackURL: "/home",
-				rememberMe: true,
+	const navigate = useNavigate()
+
+	const { mutate: signIn, isPending } = useMutation({
+		...loginMutation,
+		onSuccess: (data, vars, result, context) => {
+			loginMutation.onSuccess?.(data, vars, result, context)
+			navigate({
+				to: "/",
+				replace: true,
 			})
-			if (error) {
-				throw new BetterAuthError(error.code as AuthErrorCode)
-			}
-			return signInData
 		},
 	})
 

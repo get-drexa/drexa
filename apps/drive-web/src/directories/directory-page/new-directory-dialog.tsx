@@ -1,7 +1,5 @@
-import { api } from "@fileone/convex/api"
-import type { Id } from "@fileone/convex/dataModel"
 import { useMutation } from "@tanstack/react-query"
-import { useMutation as useContextMutation } from "convex/react"
+import { useAtomValue } from "jotai"
 import { useId } from "react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
@@ -14,21 +12,26 @@ import {
 	DialogTitle,
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
+import { createDirectoryMutationAtom } from "@/vfs/api"
+import type { DirectoryInfo } from "@/vfs/vfs"
 
 export function NewDirectoryDialog({
 	open,
 	onOpenChange,
-	directoryId,
+	parentDirectory,
 }: {
 	open: boolean
 	onOpenChange: (open: boolean) => void
-	directoryId: Id<"directories">
+	parentDirectory: DirectoryInfo
 }) {
 	const formId = useId()
 
+	const createDirectoryMutation = useAtomValue(createDirectoryMutationAtom)
+
 	const { mutate: createDirectory, isPending: isCreating } = useMutation({
-		mutationFn: useContextMutation(api.files.createDirectory),
-		onSuccess: () => {
+		...createDirectoryMutation,
+		onSuccess: (data, vars, result, context) => {
+			createDirectoryMutation.onSuccess?.(data, vars, result, context)
 			onOpenChange(false)
 			toast.success("Directory created successfully")
 		},
@@ -41,7 +44,7 @@ export function NewDirectoryDialog({
 		const name = formData.get("directoryName") as string
 
 		if (name) {
-			createDirectory({ name, directoryId })
+			createDirectory({ name, parentId: parentDirectory.id })
 		}
 	}
 

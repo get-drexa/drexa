@@ -3,6 +3,7 @@ package drexa
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/get-drexa/drexa/internal/account"
 	"github.com/get-drexa/drexa/internal/auth"
@@ -14,6 +15,7 @@ import (
 	"github.com/get-drexa/drexa/internal/user"
 	"github.com/get-drexa/drexa/internal/virtualfs"
 	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/gofiber/fiber/v2/middleware/logger"
 	"github.com/uptrace/bun"
 	"github.com/uptrace/bun/extra/bundebug"
@@ -43,6 +45,16 @@ func NewServer(c Config) (*Server, error) {
 		ProxyHeader:             fiber.HeaderXForwardedFor,
 	})
 	app.Use(logger.New())
+
+	// Configure CORS middleware
+	corsConfig := cors.Config{
+		AllowOrigins:     "",
+		AllowCredentials: c.CORS.AllowCredentials,
+	}
+	if len(c.CORS.AllowOrigins) > 0 {
+		corsConfig.AllowOrigins = strings.Join(c.CORS.AllowOrigins, ",")
+	}
+	app.Use(cors.New(corsConfig))
 
 	db := database.NewFromPostgres(c.Database.PostgresURL)
 	db.AddQueryHook(bundebug.NewQueryHook(bundebug.WithVerbose(true)))
@@ -92,6 +104,7 @@ func NewServer(c Config) (*Server, error) {
 
 	cookieConfig := auth.CookieConfig{
 		Domain: c.Cookie.Domain,
+		Secure: c.Cookie.Secure,
 	}
 
 	authMiddleware := auth.NewAuthMiddleware(authService, db, cookieConfig)

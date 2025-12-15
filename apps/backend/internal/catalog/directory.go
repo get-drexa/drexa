@@ -85,12 +85,23 @@ func (h *HTTPHandler) currentDirectoryMiddleware(c *fiber.Ctx) error {
 	}
 
 	directoryID := c.Params("directoryID")
-	node, err := h.vfs.FindNodeByPublicID(c.Context(), h.db, account.ID, directoryID)
-	if err != nil {
-		if errors.Is(err, virtualfs.ErrNodeNotFound) {
-			return c.SendStatus(fiber.StatusNotFound)
+
+	var node *virtualfs.Node
+	if directoryID == "root" {
+		n, err := h.vfs.FindRootDirectory(c.Context(), h.db, account.ID)
+		if err != nil {
+			return httperr.Internal(err)
 		}
-		return httperr.Internal(err)
+		node = n
+	} else {
+		n, err := h.vfs.FindNodeByPublicID(c.Context(), h.db, account.ID, directoryID)
+		if err != nil {
+			if errors.Is(err, virtualfs.ErrNodeNotFound) {
+				return c.SendStatus(fiber.StatusNotFound)
+			}
+			return httperr.Internal(err)
+		}
+		node = n
 	}
 
 	c.Locals("directory", node)
@@ -349,23 +360,117 @@ func (h *HTTPHandler) deleteDirectory(c *fiber.Ctx) error {
 
 	shouldTrash := c.Query("trash") == "true"
 	if shouldTrash {
-		err = h.vfs.SoftDeleteNode(c.Context(), h.db, node)
+		_, err := h.vfs.SoftDeleteNode(c.Context(), tx, node)
 		if err != nil {
 			return httperr.Internal(err)
 		}
+
+		err = tx.Commit()
+		if err != nil {
+			return httperr.Internal(err)
+		}
+
+		return c.JSON(directoryInfoFromNode(node))
 	} else {
-		err = h.vfs.PermanentlyDeleteNode(c.Context(), h.db, node)
+		err = h.vfs.PermanentlyDeleteNode(c.Context(), tx, node)
 		if err != nil {
 			return httperr.Internal(err)
 		}
+
+		err = tx.Commit()
+		if err != nil {
+			return httperr.Internal(err)
+		}
+
+		return c.SendStatus(fiber.StatusNoContent)
 	}
 
-	err = tx.Commit()
+}
+
+// deleteDirectories removes multiple directories
+// @Summary Bulk delete directories
+// @Description Delete multiple directories permanently or move them to trash. Deleting directories also affects all their contents. All items must be directories.
+// @Tags directories
+// @Security BearerAuth
+// @Param accountID path string true "Account ID" format(uuid)
+// @Param id query string true "Comma-separated list of directory IDs to delete" example:"kRp2XYTq9A55,xYz123AbC456"
+// @Param trash query bool false "Move to trash instead of permanent delete" default(false)
+// @Success 204 {string} string "Directories deleted"
+// @Failure 400 {object} map[string]string "All items must be directories"
+// @Failure 401 {string} string "Not authenticated"
+// @Router /accounts/{accountID}/directories [delete]
+func (h *HTTPHandler) deleteDirectories(c *fiber.Ctx) error {
+	account := account.CurrentAccount(c)
+	if account == nil {
+		return c.SendStatus(fiber.StatusUnauthorized)
+	}
+
+	idq := c.Query("id", "")
+	if idq == "" {
+		return c.SendStatus(fiber.StatusNoContent)
+	}
+
+	ids := strings.Split(idq, ",")
+	if len(ids) == 0 {
+		return c.SendStatus(fiber.StatusNoContent)
+	}
+
+	shouldTrash := c.Query("trash") == "true"
+
+	tx, err := h.db.BeginTx(c.Context(), nil)
+	if err != nil {
+		return httperr.Internal(err)
+	}
+	defer tx.Rollback()
+
+	nodes, err := h.vfs.FindNodesByPublicID(c.Context(), tx, account.ID, ids)
 	if err != nil {
 		return httperr.Internal(err)
 	}
 
-	return c.SendStatus(fiber.StatusNoContent)
+	if len(nodes) == 0 {
+		return c.SendStatus(fiber.StatusNoContent)
+	}
+
+	for _, node := range nodes {
+		if node.Kind != virtualfs.NodeKindDirectory {
+			return httperr.NewHTTPError(fiber.StatusBadRequest, "all items must be directories", nil)
+		}
+	}
+
+	if shouldTrash {
+		deleted, err := h.vfs.SoftDeleteNodes(c.Context(), tx, nodes)
+		if err != nil {
+			return httperr.Internal(err)
+		}
+
+		err = tx.Commit()
+		if err != nil {
+			return httperr.Internal(err)
+		}
+
+		res := make([]DirectoryInfo, 0, len(deleted))
+		for _, node := range deleted {
+			res = append(res, directoryInfoFromNode(node))
+		}
+
+		return c.JSON(deleted)
+	} else {
+		for _, node := range nodes {
+			err = h.vfs.PermanentlyDeleteNode(c.Context(), tx, node)
+			if err != nil {
+				return httperr.Internal(err)
+			}
+		}
+
+		err = tx.Commit()
+		if err != nil {
+			return httperr.Internal(err)
+		}
+
+		return c.SendStatus(fiber.StatusNoContent)
+	}
+
 }
 
 // moveItemsToDirectory moves files and directories into this directory

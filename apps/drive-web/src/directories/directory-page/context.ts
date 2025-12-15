@@ -1,12 +1,9 @@
-import type { Doc } from "@fileone/convex/dataModel"
-import type { FileSystemItem } from "@fileone/convex/filesystem"
-import type { DirectoryInfo } from "@fileone/convex/types"
 import { createContext } from "react"
+import type { DirectoryContent, DirectoryInfoWithPath } from "@/vfs/vfs"
 
 type DirectoryPageContextType = {
-	rootDirectory: Doc<"directories">
-	directory: DirectoryInfo
-	directoryContent: FileSystemItem[]
+	directory: DirectoryInfoWithPath
+	directoryContent: DirectoryContent
 }
 
 export const DirectoryPageContext = createContext<DirectoryPageContextType>(

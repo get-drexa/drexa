@@ -13,3 +13,8 @@ storage:
   mode: hierarchical
   backend: fs
   root_path: ./data
+  
+cors:
+  allow_origins:
+    - http://localhost:3000
+  allow_credentials: true

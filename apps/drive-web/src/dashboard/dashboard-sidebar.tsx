@@ -1,12 +1,6 @@
-import { api } from "@fileone/convex/api"
-import { newDirectoryHandle } from "@fileone/convex/filesystem"
-import { useMutation } from "@tanstack/react-query"
+import { useMutation, useQuery } from "@tanstack/react-query"
 import { Link, useLocation, useParams } from "@tanstack/react-router"
-import {
-	useMutation as useConvexMutation,
-	useQuery as useConvexQuery,
-} from "convex/react"
-import { useAtomValue, useSetAtom, useStore } from "jotai"
+import { useAtom, useAtomValue, useSetAtom } from "jotai"
 import {
 	CircleXIcon,
 	ClockIcon,
@@ -37,9 +31,13 @@ import {
 	SidebarMenuItem,
 } from "@/components/ui/sidebar"
 import { formatError } from "@/lib/error"
+import {
+	moveDirectoryItemsMutationAtom,
+	rootDirectoryQueryAtom,
+} from "@/vfs/api"
 import { Button } from "../components/ui/button"
 import { LoadingSpinner } from "../components/ui/loading-spinner"
-import { clearCutItemsAtom, cutHandlesAtom } from "../files/store"
+import { clearCutItemsAtom, cutItemsAtom } from "../files/store"
 import { backgroundTaskProgressAtom } from "./state"
 
 export function DashboardSidebar() {
@@ -95,7 +93,9 @@ function MainSidebarMenu() {
 
 function AllFilesItem() {
 	const location = useLocation()
-	const rootDirectory = useConvexQuery(api.files.fetchRootDirectory)
+	const { data: rootDirectory } = useQuery(
+		useAtomValue(rootDirectoryQueryAtom),
+	)
 
 	if (!rootDirectory) return null
 
@@ -105,7 +105,7 @@ function AllFilesItem() {
 				asChild
 				isActive={location.pathname.startsWith("/directories")}
 			>
-				<Link to={`/directories/${rootDirectory._id}`}>
+				<Link to={`/directories/${rootDirectory.id}`}>
 					<FilesIcon />
 					<span>All Files</span>
 				</Link>
@@ -116,7 +116,9 @@ function AllFilesItem() {
 
 function TrashItem() {
 	const location = useLocation()
-	const rootDirectory = useConvexQuery(api.files.fetchRootDirectory)
+	const { data: rootDirectory } = useQuery(
+		useAtomValue(rootDirectoryQueryAtom),
+	)
 
 	if (!rootDirectory) return null
 
@@ -126,7 +128,7 @@ function TrashItem() {
 				asChild
 				isActive={location.pathname.startsWith("/trash/directories")}
 			>
-				<Link to={`/trash/directories/${rootDirectory._id}`}>
+				<Link to={`/trash/directories/${rootDirectory.id}`}>
 					<TrashIcon />
 					<span>Trash</span>
 				</Link>
@@ -154,26 +156,26 @@ function BackgroundTaskProgressItem() {
  */
 function CutItemsCard() {
 	const { directoryId } = useParams({ strict: false })
-	const cutHandles = useAtomValue(cutHandlesAtom)
+	const [cutItems, setCutItems] = useAtom(cutItemsAtom)
 	const clearCutItems = useSetAtom(clearCutItemsAtom)
-	const setCutHandles = useSetAtom(cutHandlesAtom)
 	const setBackgroundTaskProgress = useSetAtom(backgroundTaskProgressAtom)
-	const store = useStore()
 
-	const _moveItems = useConvexMutation(api.filesystem.moveItems)
+	const moveDirectoryItemsMutation = useAtomValue(
+		moveDirectoryItemsMutationAtom,
+	)
+
 	const { mutate: moveItems } = useMutation({
-		mutationFn: _moveItems,
+		...moveDirectoryItemsMutation,
 		onMutate: () => {
 			setBackgroundTaskProgress({
 				label: "Moving items…",
 			})
-			const cutHandles = store.get(cutHandlesAtom)
 			clearCutItems()
-			return { cutHandles }
+			return { cutItems }
 		},
 		onError: (error, _variables, context) => {
-			if (context?.cutHandles) {
-				setCutHandles(context.cutHandles)
+			if (context?.cutItems) {
+				setCutItems(context.cutItems)
 			}
 			toast.error("Failed to move items", {
 				description: formatError(error),
@@ -187,13 +189,13 @@ function CutItemsCard() {
 		},
 	})
 
-	if (cutHandles.length === 0) return null
+	if (cutItems.length === 0) return null
 
 	const moveCutItems = () => {
 		if (directoryId) {
 			moveItems({
-				targetDirectory: newDirectoryHandle(directoryId),
-				items: cutHandles,
+				targetDirectory: directoryId,
+				items: cutItems,
 			})
 		}
 	}
@@ -204,7 +206,7 @@ function CutItemsCard() {
 				<CardHeader className="px-3.5 py-1.5! gap-0 border-b border-b-primary-foreground/10 bg-primary text-primary-foreground">
 					<CardTitle className="p-0 m-0 text-xs uppercase">
 						<div className="flex items-center gap-1.5">
-							<ScissorsIcon size={16} /> {cutHandles.length} Cut
+							<ScissorsIcon size={16} /> {cutItems.length} Cut
 							Items
 						</div>
 					</CardTitle>

@@ -1,6 +1,6 @@
-import type { FileSystemHandle } from "@fileone/convex/filesystem"
 import { atom } from "jotai"
 import { atomFamily } from "jotai/utils"
+import type { DirectoryItem } from "@/vfs/vfs"
 
 export enum FileUploadStatusKind {
 	InProgress = "InProgress",
@@ -94,7 +94,7 @@ export const hasFileUploadsErrorAtom = atom((get) => {
 	return false
 })
 
-export const cutHandlesAtom = atom<FileSystemHandle[]>([])
+export const cutItemsAtom = atom<DirectoryItem[]>([])
 export const clearCutItemsAtom = atom(null, (_, set) => {
-	set(cutHandlesAtom, [])
+	set(cutItemsAtom, [])
 })

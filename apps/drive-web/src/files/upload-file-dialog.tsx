@@ -1,4 +1,3 @@
-import type { Doc } from "@fileone/convex/dataModel"
 import { mutationOptions } from "@tanstack/react-query"
 import { atom, useAtom, useAtomValue, useSetAtom, useStore } from "jotai"
 import { atomEffect } from "jotai-effect"
@@ -29,7 +28,9 @@ import {
 	TooltipContent,
 	TooltipTrigger,
 } from "@/components/ui/tooltip"
+import type { DirectoryInfoWithPath } from "@/vfs/vfs"
 import { formatError } from "@/lib/error"
+import { currentAccountAtom } from "../account/account"
 import {
 	clearAllFileUploadStatusesAtom,
 	clearFileUploadStatusesAtom,
@@ -40,10 +41,10 @@ import {
 	hasFileUploadsErrorAtom,
 	successfulFileUploadCountAtom,
 } from "./store"
-import useUploadFile from "./use-upload-file"
+import { uploadFile } from "./upload"
 
 type UploadFileDialogProps = {
-	targetDirectory: Doc<"directories">
+	targetDirectory: DirectoryInfoWithPath
 	onClose: () => void
 }
 
@@ -58,17 +59,22 @@ export const pickedFilesAtom = atom<PickedFile[]>([])
 function useUploadFilesAtom({
 	targetDirectory,
 }: {
-	targetDirectory: Doc<"directories">
+	targetDirectory: DirectoryInfoWithPath
 }) {
-	const uploadFile = useUploadFile({ targetDirectory })
 	const store = useStore()
+
 	const options = useMemo(
 		() =>
 			mutationOptions({
 				mutationFn: async (files: PickedFile[]) => {
+					const account = store.get(currentAccountAtom)
+					if (!account) throw new Error("No account selected")
+
 					const promises = files.map((pickedFile) =>
 						uploadFile({
+							account,
 							file: pickedFile.file,
+							targetDirectory,
 							onStart: () => {
 								store.set(
 									fileUploadStatusAtomFamily(pickedFile.id),
@@ -133,8 +139,9 @@ function useUploadFilesAtom({
 					toast.error(formatError(error))
 				},
 			}),
-		[uploadFile, store.set],
+		[store, targetDirectory],
 	)
+
 	return useMemo(() => atomWithMutation(() => options), [options])
 }
 type UploadFilesAtom = ReturnType<typeof useUploadFilesAtom>
@@ -288,7 +295,7 @@ function UploadDialogHeader({
 	targetDirectory,
 }: {
 	uploadFilesAtom: UploadFilesAtom
-	targetDirectory: Doc<"directories">
+	targetDirectory: DirectoryInfoWithPath
 }) {
 	const { data: uploadResults, isPending: isUploading } =
 		useAtomValue(uploadFilesAtom)

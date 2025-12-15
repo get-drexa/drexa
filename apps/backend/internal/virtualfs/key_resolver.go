@@ -29,6 +29,7 @@ type DeletionPlan struct {
 
 // BlobMoveOp represents a blob move operation from OldKey to NewKey.
 type BlobMoveOp struct {
+	Node   *Node
 	OldKey blob.Key
 	NewKey blob.Key
 }

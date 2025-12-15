@@ -31,5 +31,22 @@ storage:
 cookie:
   # Domain for cross-subdomain auth cookies.
   # Set this when frontend and API are on different subdomains (e.g., "app.com" for web.app.com + api.app.com).
-  # Leave empty for single-domain or localhost setups.
+  # Leave empty for same-host cookies (localhost, single domain).
   # domain: app.com
+  # Secure flag for cookies. If not set, automatically determined from request protocol (true for HTTPS, false for HTTP).
+  # Set explicitly to override automatic detection (useful for local development with HTTPS).
+  # secure: false
+
+cors:
+  # Allowed origins for cross-origin requests.
+  # Required when frontend and API are on different domains.
+  # If not specified, CORS will be restrictive (only same-origin requests allowed).
+  # Example for cross-domain setup:
+  # allow_origins:
+  #   - http://localhost:3000
+  #   - https://app.example.com
+  # Allow credentials (cookies, authorization headers) in cross-origin requests.
+  # Should be true when using cookies for authentication in cross-domain setups.
+  # Note: When allow_credentials is true, you must explicitly specify allow_origins
+  # (wildcard "*" is not allowed with credentials for security reasons).
+  # allow_credentials: true

@@ -1,30 +1,22 @@
-import { api } from "@fileone/convex/api"
-import type { Doc, Id } from "@fileone/convex/dataModel"
-import * as Err from "@fileone/convex/error"
-import {
-	type DirectoryHandle,
-	type FileSystemHandle,
-	isSameHandle,
-} from "@fileone/convex/filesystem"
 import { useMutation } from "@tanstack/react-query"
-import { useMutation as useContextMutation } from "convex/react"
 import type { PrimitiveAtom } from "jotai"
-import { useSetAtom, useStore } from "jotai"
+import { useAtomValue, useSetAtom, useStore } from "jotai"
 import { useState } from "react"
 import { toast } from "sonner"
+import {
+	type MoveDirectoryItemsResult,
+	moveDirectoryItemsMutationAtom,
+} from "@/vfs/api"
+import type { DirectoryInfo, DirectoryItem } from "@/vfs/vfs"
 
 export interface FileDragInfo {
-	source: FileSystemHandle
-	items: FileSystemHandle[]
+	source: DirectoryItem
+	items: DirectoryItem[]
 }
 
 export interface UseFileDropOptions {
-	destItem: DirectoryHandle | null
+	destDir: DirectoryInfo | string
 	dragInfoAtom: PrimitiveAtom<FileDragInfo | null>
-	onDropSuccess?: (
-		items: Id<"files">[],
-		targetDirectory: Doc<"directories">,
-	) => void
 }
 
 export interface UseFileDropReturn {
@@ -37,7 +29,7 @@ export interface UseFileDropReturn {
 }
 
 export function useFileDrop({
-	destItem,
+	destDir,
 	dragInfoAtom,
 }: UseFileDropOptions): UseFileDropReturn {
 	const [isDraggedOver, setIsDraggedOver] = useState(false)
@@ -45,39 +37,28 @@ export function useFileDrop({
 	const store = useStore()
 
 	const { mutate: moveDroppedItems } = useMutation({
-		mutationFn: useContextMutation(api.filesystem.moveItems),
-		onSuccess: ({
-			moved,
-			errors,
-		}: {
-			moved: FileSystemHandle[]
-			errors: Err.ApplicationErrorData[]
-		}) => {
-			const conflictCount = errors.reduce((acc, error) => {
-				if (error.code === Err.ErrorCode.Conflict) {
-					return acc + 1
-				}
-				return acc
-			}, 0)
+		...useAtomValue(moveDirectoryItemsMutationAtom),
+		onSuccess: (result: MoveDirectoryItemsResult) => {
+			const conflictCount = result.conflicts.length
 			if (conflictCount > 0) {
 				toast.warning(
-					`${moved.length} items moved${conflictCount > 0 ? `, ${conflictCount} conflicts` : ""}`,
+					`${result.moved.length} items moved${conflictCount > 0 ? `, ${conflictCount} conflicts` : ""}`,
 				)
 			} else {
-				toast.success(`${moved.length} items moved!`)
+				toast.success(`${result.moved.length} items moved!`)
 			}
 		},
 	})
 
+	const dirId = typeof destDir === "string" ? destDir : destDir.id
+
 	const handleDrop = (_e: React.DragEvent) => {
 		const dragInfo = store.get(dragInfoAtom)
-		if (dragInfo && destItem) {
-			const items = dragInfo.items.filter(
-				(item) => !isSameHandle(item, destItem),
-			)
+		if (dragInfo) {
+			const items = dragInfo.items.filter((item) => item.id !== dirId)
 			if (items.length > 0) {
 				moveDroppedItems({
-					targetDirectory: destItem,
+					targetDirectory: destDir,
 					items,
 				})
 			}
@@ -88,7 +69,7 @@ export function useFileDrop({
 
 	const handleDragOver = (e: React.DragEvent) => {
 		const dragInfo = store.get(dragInfoAtom)
-		if (dragInfo && destItem) {
+		if (dragInfo && destDir) {
 			e.preventDefault()
 			e.dataTransfer.dropEffect = "move"
 			setIsDraggedOver(true)

@@ -1,18 +1,6 @@
-import { api } from "@fileone/convex/api"
-import type { Doc, Id } from "@fileone/convex/dataModel"
-import {
-	type FileSystemItem,
-	newFileSystemHandle,
-	type OpenedFile,
-} from "@fileone/convex/filesystem"
-import { useMutation } from "@tanstack/react-query"
+import { useMutation, useQuery } from "@tanstack/react-query"
 import { createFileRoute } from "@tanstack/react-router"
 import type { Row, Table } from "@tanstack/react-table"
-import {
-	useMutation as useContextMutation,
-	useMutation as useConvexMutation,
-	useQuery as useConvexQuery,
-} from "convex/react"
 import { atom, useAtom, useAtomValue, useSetAtom, useStore } from "jotai"
 import {
 	ChevronDownIcon,
@@ -47,9 +35,20 @@ import { NewDirectoryDialog } from "@/directories/directory-page/new-directory-d
 import { RenameFileDialog } from "@/directories/directory-page/rename-file-dialog"
 import { DirectoryPathBreadcrumb } from "@/directories/directory-path-breadcrumb"
 import { FilePreviewDialog } from "@/files/file-preview-dialog"
-import { cutHandlesAtom, inProgressFileUploadCountAtom } from "@/files/store"
+import { cutItemsAtom, inProgressFileUploadCountAtom } from "@/files/store"
 import { UploadFileDialog } from "@/files/upload-file-dialog"
 import type { FileDragInfo } from "@/files/use-file-drop"
+import {
+	directoryContentQueryAtom,
+	directoryInfoQueryAtom,
+	moveToTrashMutationAtom,
+} from "@/vfs/api"
+import type {
+	DirectoryInfo,
+	DirectoryInfoWithPath,
+	DirectoryItem,
+	FileInfo,
+} from "@/vfs/vfs"
 
 export const Route = createFileRoute(
 	"/_authenticated/_sidebar-layout/directories/$directoryId",
@@ -68,55 +67,54 @@ type NewDirectoryDialogData = {
 
 type UploadFileDialogData = {
 	kind: DialogKind.UploadFile
-	directory: Doc<"directories">
+	directory: DirectoryInfoWithPath
 }
 
 type ActiveDialogData = NewDirectoryDialogData | UploadFileDialogData
 
 // MARK: atoms
-const contextMenuTargetItemsAtom = atom<FileSystemItem[]>([])
+const contextMenuTargetItemsAtom = atom<DirectoryItem[]>([])
 const activeDialogDataAtom = atom<ActiveDialogData | null>(null)
 const fileDragInfoAtom = atom<FileDragInfo | null>(null)
-const optimisticDeletedItemsAtom = atom(
-	new Set<Id<"files"> | Id<"directories">>(),
-)
-const openedFileAtom = atom<OpenedFile | null>(null)
+const optimisticDeletedItemsAtom = atom(new Set<string>())
+const openedFileAtom = atom<FileInfo | null>(null)
 const itemBeingRenamedAtom = atom<{
-	originalItem: FileSystemItem
+	originalItem: DirectoryItem
 	name: string
 } | null>(null)
 
 // MARK: page entry
 function RouteComponent() {
 	const { directoryId } = Route.useParams()
-	const rootDirectory = useConvexQuery(api.files.fetchRootDirectory)
-	const directory = useConvexQuery(api.files.fetchDirectory, {
-		directoryId,
-	})
-	const directoryContent = useConvexQuery(
-		api.filesystem.fetchDirectoryContent,
-		{
-			directoryId,
-			trashed: false,
-		},
+	const { data: directoryInfo, isLoading: isLoadingDirectoryInfo, error: directoryInfoError } = useQuery(
+		useAtomValue(directoryInfoQueryAtom(directoryId)),
 	)
+	const { data: directoryContent, isLoading: isLoadingDirectoryContent, error: directoryContentError } =
+		useQuery(useAtomValue(directoryContentQueryAtom(directoryId)))
 
 	const directoryUrlById = useCallback(
-		(directoryId: Id<"directories">) => `/directories/${directoryId}`,
+		(directoryId: string) => `/directories/${directoryId}`,
 		[],
 	)
+	
+	console.log({ directoryInfoError, directoryContentError })
 
-	if (!directory || !directoryContent || !rootDirectory) {
+	if (isLoadingDirectoryInfo || isLoadingDirectoryContent) {
 		return <DirectoryPageSkeleton />
+	}
+
+	if (!directoryInfo || !directoryContent) {
+		// TODO: handle empty state/error
+		return null
 	}
 
 	return (
 		<DirectoryPageContext
-			value={{ rootDirectory, directory, directoryContent }}
+			value={{ directory: directoryInfo, directoryContent }}
 		>
 			<header className="flex py-2 shrink-0 items-center gap-2 border-b px-4 w-full">
 				<DirectoryPathBreadcrumb
-					directory={directory}
+					directory={directoryInfo}
 					rootLabel="All Files"
 					directoryUrlFn={directoryUrlById}
 					fileDragInfoAtom={fileDragInfoAtom}
@@ -139,7 +137,7 @@ function RouteComponent() {
 					<>
 						<NewDirectoryDialog
 							open={data?.kind === DialogKind.NewDirectory}
-							directoryId={directory._id}
+							parentDirectory={directoryInfo}
 							onOpenChange={(open) => {
 								if (!open) {
 									setData(null)
@@ -148,7 +146,7 @@ function RouteComponent() {
 						/>
 						{data?.kind === DialogKind.UploadFile && (
 							<UploadFileDialog
-								targetDirectory={data.directory}
+								targetDirectory={directoryInfo}
 								onClose={() => setData(null)}
 							/>
 						)}
@@ -194,29 +192,18 @@ function _DirectoryContentTable() {
 	const setOpenedFile = useSetAtom(openedFileAtom)
 	const setContextMenuTargetItems = useSetAtom(contextMenuTargetItemsAtom)
 
-	const { mutate: openFile } = useMutation({
-		mutationFn: useConvexMutation(api.filesystem.openFile),
-		onSuccess: (openedFile: OpenedFile) => {
-			setOpenedFile(openedFile)
-		},
-		onError: (error) => {
-			console.error(error)
-			toast.error("Failed to open file")
-		},
-	})
-
-	const onTableOpenFile = (file: Doc<"files">) => {
-		openFile({ fileId: file._id })
+	const onTableOpenFile = (file: FileInfo) => {
+		setOpenedFile(file)
 	}
 
 	const directoryUrlFn = useCallback(
-		(directory: Doc<"directories">) => `/directories/${directory._id}`,
+		(directory: DirectoryInfo) => `/directories/${directory.id}`,
 		[],
 	)
 
 	const handleContextMenuRequest = (
-		row: Row<FileSystemItem>,
-		table: Table<FileSystemItem>,
+		row: Row<DirectoryItem>,
+		table: Table<DirectoryItem>,
 	) => {
 		if (row.getIsSelected()) {
 			setContextMenuTargetItems(
@@ -251,44 +238,34 @@ function DirectoryContentContextMenu({
 	const [target, setTarget] = useAtom(contextMenuTargetItemsAtom)
 	const setOptimisticDeletedItems = useSetAtom(optimisticDeletedItemsAtom)
 	const setBackgroundTaskProgress = useSetAtom(backgroundTaskProgressAtom)
-	const setCutHandles = useSetAtom(cutHandlesAtom)
-	const moveToTrashMutation = useContextMutation(api.filesystem.moveToTrash)
+	const setCutItems = useSetAtom(cutItemsAtom)
 
 	const { mutate: moveToTrash } = useMutation({
-		mutationFn: moveToTrashMutation,
-		onMutate: ({ handles }) => {
+		...useAtomValue(moveToTrashMutationAtom),
+		onMutate: (items) => {
 			setBackgroundTaskProgress({
 				label: "Moving items to trash…",
 			})
 			setOptimisticDeletedItems(
-				(prev) =>
-					new Set([...prev, ...handles.map((handle) => handle.id)]),
+				(prev) => new Set([...prev, ...items.map((item) => item.id)]),
 			)
 		},
-		onSuccess: ({ deleted, errors }, { handles }) => {
+		onSuccess: (trashedItems) => {
 			setBackgroundTaskProgress(null)
 			setOptimisticDeletedItems((prev) => {
 				const newSet = new Set(prev)
-				for (const handle of handles) {
-					newSet.delete(handle.id)
+				for (const item of trashedItems) {
+					newSet.delete(item.id)
 				}
 				return newSet
 			})
-			if (errors.length === 0 && deleted.length === handles.length) {
-				toast.success(`Moved ${handles.length} items to trash`)
-			} else if (errors.length === handles.length) {
-				toast.error("Failed to move to trash")
-			} else {
-				toast.info(
-					`Moved ${deleted.length} items to trash; failed to move ${errors.length} items`,
-				)
-			}
+			toast.success(`Moved ${trashedItems.length} items to trash`)
 		},
-		onError: (_err, { handles }) => {
+		onError: (_err, items) => {
 			setOptimisticDeletedItems((prev) => {
 				const newSet = new Set(prev)
-				for (const handle of handles) {
-					newSet.delete(handle.id)
+				for (const item of items) {
+					newSet.delete(item.id)
 				}
 				return newSet
 			})
@@ -298,16 +275,14 @@ function DirectoryContentContextMenu({
 	const handleCut = () => {
 		const selectedItems = store.get(contextMenuTargetItemsAtom)
 		if (selectedItems.length > 0) {
-			setCutHandles(selectedItems.map(newFileSystemHandle))
+			setCutItems(selectedItems)
 		}
 	}
 
 	const handleDelete = () => {
 		const selectedItems = store.get(contextMenuTargetItemsAtom)
 		if (selectedItems.length > 0) {
-			moveToTrash({
-				handles: selectedItems.map(newFileSystemHandle),
-			})
+			moveToTrash(selectedItems)
 		}
 	}
 
@@ -352,7 +327,7 @@ function RenameMenuItem() {
 			const selectedItem = selectedItems[0]!
 			setItemBeingRenamed({
 				originalItem: selectedItem,
-				name: selectedItem.doc.name,
+				name: selectedItem.name,
 			})
 		}
 	}

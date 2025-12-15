@@ -28,6 +28,7 @@ type Config struct {
 	JWT      JWTConfig      `yaml:"jwt"`
 	Storage  StorageConfig  `yaml:"storage"`
 	Cookie   CookieConfig   `yaml:"cookie"`
+	CORS     CORSConfig     `yaml:"cors"`
 }
 
 type ServerConfig struct {
@@ -55,9 +56,20 @@ type StorageConfig struct {
 
 // CookieConfig controls auth cookie behavior.
 // Domain is optional - only needed for cross-subdomain setups (e.g., "app.com" for web.app.com + api.app.com).
-// Secure flag is derived from the request protocol automatically.
+// Secure flag is derived from the request protocol automatically, unless explicitly set.
 type CookieConfig struct {
 	Domain string `yaml:"domain"`
+	Secure *bool  `yaml:"secure"`
+}
+
+// CORSConfig controls Cross-Origin Resource Sharing behavior.
+// AllowOrigins specifies which origins are allowed to make cross-origin requests.
+// If empty, CORS will allow all origins (not recommended for production).
+// AllowCredentials enables sending credentials (cookies, authorization headers) in cross-origin requests.
+// This should be true when using cookies for authentication in cross-domain setups.
+type CORSConfig struct {
+	AllowOrigins     []string `yaml:"allow_origins"`
+	AllowCredentials bool     `yaml:"allow_credentials"`
 }
 
 // ConfigFromFile loads configuration from a YAML file.
@@ -157,6 +169,11 @@ func (c *Config) Validate() []error {
 		if c.Storage.Mode == StorageModeHierarchical {
 			errs = append(errs, errors.New("storage.mode must be 'flat' when backend is 's3'"))
 		}
+	}
+
+	// CORS validation
+	if c.CORS.AllowCredentials && len(c.CORS.AllowOrigins) == 0 {
+		errs = append(errs, errors.New("cors.allow_origins is required when cors.allow_credentials is true (cannot use wildcard '*' with credentials)"))
 	}
 
 	return errs

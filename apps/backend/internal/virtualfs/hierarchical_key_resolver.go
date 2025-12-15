@@ -72,7 +72,7 @@ func (r *HierarchicalKeyResolver) ResolveBulkMoveOps(ctx context.Context, db bun
 	for i, node := range nodes {
 		oldKey := blob.Key(fmt.Sprintf("%s/%s/%s", accountID, oldParentPath, node.Name))
 		newKey := blob.Key(fmt.Sprintf("%s/%s/%s", accountID, newParentPath, node.Name))
-		ops[i] = BlobMoveOp{OldKey: oldKey, NewKey: newKey}
+		ops[i] = BlobMoveOp{Node: node, OldKey: oldKey, NewKey: newKey}
 	}
 
 	return ops, nil

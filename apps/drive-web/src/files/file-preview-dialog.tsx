@@ -1,14 +1,14 @@
-import type { OpenedFile } from "@fileone/convex/filesystem"
+import type { FileInfo } from "./file"
 import { ImagePreviewDialog } from "./image-preview-dialog"
 
 export function FilePreviewDialog({
 	openedFile,
 	onClose,
 }: {
-	openedFile: OpenedFile
+	openedFile: FileInfo
 	onClose: () => void
 }) {
-	switch (openedFile.file.mimeType) {
+	switch (openedFile.mimeType) {
 		case "image/jpeg":
 		case "image/png":
 		case "image/gif":

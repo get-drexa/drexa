@@ -1,15 +1,3 @@
-import type { Doc } from "@fileone/convex/dataModel"
-import {
-	type DirectoryHandle,
-	type FileHandle,
-	type FileSystemHandle,
-	type FileSystemItem,
-	FileType,
-	isSameHandle,
-	newDirectoryHandle,
-	newFileHandle,
-	newFileSystemHandle,
-} from "@fileone/convex/filesystem"
 import { Link, useNavigate } from "@tanstack/react-router"
 import {
 	type ColumnDef,
@@ -23,6 +11,7 @@ import {
 import { type PrimitiveAtom, useSetAtom, useStore } from "jotai"
 import { useContext, useEffect, useMemo, useRef } from "react"
 import { DirectoryIcon } from "@/components/icons/directory-icon"
+import { TextFileIcon } from "@/components/icons/text-file-icon"
 import { Checkbox } from "@/components/ui/checkbox"
 import {
 	Table,
@@ -32,26 +21,26 @@ import {
 	TableHeader,
 	TableRow,
 } from "@/components/ui/table"
+import { type FileDragInfo, useFileDrop } from "@/files/use-file-drop"
 import {
 	isControlOrCommandKeyActive,
 	keyboardModifierAtom,
 } from "@/lib/keyboard"
-import { TextFileIcon } from "../../components/icons/text-file-icon"
-import { type FileDragInfo, useFileDrop } from "../../files/use-file-drop"
-import { cn } from "../../lib/utils"
+import { cn } from "@/lib/utils"
+import type { DirectoryInfo, DirectoryItem, FileInfo } from "@/vfs/vfs"
 import { DirectoryPageContext } from "./context"
 
-type DirectoryContentTableItemIdFilter = Set<FileSystemItem["doc"]["_id"]>
+type DirectoryContentTableItemIdFilter = Set<string>
 
 type DirectoryContentTableProps = {
 	hiddenItems: DirectoryContentTableItemIdFilter
-	directoryUrlFn: (directory: Doc<"directories">) => string
+	directoryUrlFn: (directory: DirectoryInfo) => string
 	fileDragInfoAtom: PrimitiveAtom<FileDragInfo | null>
 	onContextMenu: (
-		row: Row<FileSystemItem>,
-		table: TableType<FileSystemItem>,
+		row: Row<DirectoryItem>,
+		table: TableType<DirectoryItem>,
 	) => void
-	onOpenFile: (file: Doc<"files">) => void
+	onOpenFile: (file: FileInfo) => void
 }
 
 function formatFileSize(bytes: number): string {
@@ -65,9 +54,9 @@ function formatFileSize(bytes: number): string {
 }
 
 function useTableColumns(
-	onOpenFile: (file: Doc<"files">) => void,
-	directoryUrlFn: (directory: Doc<"directories">) => string,
-): ColumnDef<FileSystemItem>[] {
+	onOpenFile: (file: FileInfo) => void,
+	directoryUrlFn: (directory: DirectoryInfo) => string,
+): ColumnDef<DirectoryItem>[] {
 	return useMemo(
 		() => [
 			{
@@ -100,17 +89,17 @@ function useTableColumns(
 				accessorKey: "doc.name",
 				cell: ({ row }) => {
 					switch (row.original.kind) {
-						case FileType.File:
+						case "file":
 							return (
 								<FileNameCell
-									file={row.original.doc}
+									file={row.original}
 									onOpenFile={onOpenFile}
 								/>
 							)
-						case FileType.Directory:
+						case "directory":
 							return (
 								<DirectoryNameCell
-									directory={row.original.doc}
+									directory={row.original}
 									directoryUrlFn={directoryUrlFn}
 								/>
 							)
@@ -123,13 +112,11 @@ function useTableColumns(
 				accessorKey: "size",
 				cell: ({ row }) => {
 					switch (row.original.kind) {
-						case FileType.File:
+						case "file":
 							return (
-								<div>
-									{formatFileSize(row.original.doc.size)}
-								</div>
+								<div>{formatFileSize(row.original.size)}</div>
 							)
-						case FileType.Directory:
+						case "directory":
 							return <div className="font-mono">-</div>
 					}
 				},
@@ -140,9 +127,7 @@ function useTableColumns(
 				cell: ({ row }) => {
 					return (
 						<div>
-							{new Date(
-								row.original.doc.createdAt,
-							).toLocaleString()}
+							{new Date(row.original.createdAt).toLocaleString()}
 						</div>
 					)
 				},
@@ -178,8 +163,8 @@ export function DirectoryContentTable({
 			_columnId,
 			filterValue: DirectoryContentTableItemIdFilter,
 			_addMeta,
-		) => !filterValue.has(row.original.doc._id),
-		getRowId: (row) => row.doc._id,
+		) => !filterValue.has(row.original.id),
+		getRowId: (row) => row.id,
 	})
 
 	useEffect(
@@ -196,7 +181,7 @@ export function DirectoryContentTable({
 	)
 
 	const handleRowContextMenu = (
-		row: Row<FileSystemItem>,
+		row: Row<DirectoryItem>,
 		_event: React.MouseEvent,
 	) => {
 		if (!row.getIsSelected()) {
@@ -205,7 +190,7 @@ export function DirectoryContentTable({
 		onContextMenu(row, table)
 	}
 
-	const selectRow = (row: Row<FileSystemItem>) => {
+	const selectRow = (row: Row<DirectoryItem>) => {
 		const keyboardModifiers = store.get(keyboardModifierAtom)
 		const isMultiSelectMode = isControlOrCommandKeyActive(keyboardModifiers)
 		const isRowSelected = row.getIsSelected()
@@ -227,10 +212,10 @@ export function DirectoryContentTable({
 		}
 	}
 
-	const handleRowDoubleClick = (row: Row<FileSystemItem>) => {
-		if (row.original.kind === FileType.Directory) {
+	const handleRowDoubleClick = (row: Row<DirectoryItem>) => {
+		if (row.original.kind === "directory") {
 			navigate({
-				to: `/directories/${row.original.doc._id}`,
+				to: `/directories/${row.original.id}`,
 			})
 		}
 	}
@@ -302,8 +287,8 @@ function FileItemRow({
 	onDoubleClick,
 	fileDragInfoAtom,
 }: {
-	table: TableType<FileSystemItem>
-	row: Row<FileSystemItem>
+	table: TableType<DirectoryItem>
+	row: Row<DirectoryItem>
 	onClick: () => void
 	onContextMenu: (e: React.MouseEvent) => void
 	onDoubleClick: () => void
@@ -313,39 +298,24 @@ function FileItemRow({
 	const setFileDragInfo = useSetAtom(fileDragInfoAtom)
 
 	const { isDraggedOver, dropHandlers } = useFileDrop({
-		destItem:
-			row.original.kind === FileType.Directory
-				? newDirectoryHandle(row.original.doc._id)
-				: null,
+		destDir: row.original,
 		dragInfoAtom: fileDragInfoAtom,
 	})
 
 	const handleDragStart = (_e: React.DragEvent) => {
-		let source: DirectoryHandle | FileHandle
-		switch (row.original.kind) {
-			case FileType.File:
-				source = newFileHandle(row.original.doc._id)
-				break
-			case FileType.Directory:
-				source = newDirectoryHandle(row.original.doc._id)
-				break
-		}
-
-		let draggedItems: FileSystemHandle[]
+		let draggedItems: DirectoryItem[]
 		// drag all selections, but only if the currently dragged row is also selected
 		if (row.getIsSelected()) {
-			draggedItems = table
-				.getSelectedRowModel()
-				.rows.map((row) => newFileSystemHandle(row.original))
-			if (!draggedItems.some((item) => isSameHandle(item, source))) {
-				draggedItems.push(source)
+			draggedItems = [...table.getSelectedRowModel().rows]
+			if (!draggedItems.some((item) => item.id === row.original.id)) {
+				draggedItems.push(row.original)
 			}
 		} else {
-			draggedItems = [source]
+			draggedItems = [row.original]
 		}
 
 		setFileDragInfo({
-			source,
+			source: row.original,
 			items: draggedItems,
 		})
 	}
@@ -385,8 +355,8 @@ function DirectoryNameCell({
 	directory,
 	directoryUrlFn,
 }: {
-	directory: Doc<"directories">
-	directoryUrlFn: (directory: Doc<"directories">) => string
+	directory: DirectoryInfo
+	directoryUrlFn: (directory: DirectoryInfo) => string
 }) {
 	return (
 		<div className="flex w-full items-center gap-2">
@@ -402,8 +372,8 @@ function FileNameCell({
 	file,
 	onOpenFile,
 }: {
-	file: Doc<"files">
-	onOpenFile: (file: Doc<"files">) => void
+	file: FileInfo
+	onOpenFile: (file: FileInfo) => void
 }) {
 	return (
 		<div className="flex w-full items-center gap-2">

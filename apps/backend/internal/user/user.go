@@ -18,10 +18,10 @@ type User struct {
 	// User's display name
 	DisplayName string `bun:"display_name" json:"displayName" example:"John Doe"`
 	// User's email address
-	Email       string          `bun:"email,unique,notnull" json:"email" example:"john@example.com"`
-	Password    password.Hashed `bun:"password,notnull" json:"-" swaggerignore:"true"`
-	CreatedAt   time.Time       `bun:"created_at,notnull,nullzero" json:"-" swaggerignore:"true"`
-	UpdatedAt   time.Time       `bun:"updated_at,notnull,nullzero" json:"-" swaggerignore:"true"`
+	Email     string          `bun:"email,unique,notnull" json:"email" example:"john@example.com"`
+	Password  password.Hashed `bun:"password,notnull" json:"-" swaggerignore:"true"`
+	CreatedAt time.Time       `bun:"created_at,notnull,nullzero" json:"-" swaggerignore:"true"`
+	UpdatedAt time.Time       `bun:"updated_at,notnull,nullzero" json:"-" swaggerignore:"true"`
 }
 
 func newUserID() (uuid.UUID, error) {

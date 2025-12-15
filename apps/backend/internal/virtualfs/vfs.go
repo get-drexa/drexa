@@ -37,6 +37,17 @@ type CreateFileOptions struct {
 	Name     string
 }
 
+type MoveFileError struct {
+	Node  *Node
+	Error error
+}
+
+type MoveFilesResult struct {
+	Moved     []*Node
+	Conflicts []*Node
+	Errors    []MoveFileError
+}
+
 const RootDirectoryName = "root"
 
 func New(blobStore blob.Store, keyResolver BlobKeyResolver) (*VirtualFS, error) {
@@ -95,6 +106,26 @@ func (vfs *VirtualFS) FindNodesByPublicID(ctx context.Context, db bun.IDB, accou
 	}
 
 	return nodes, nil
+}
+
+func (vfs *VirtualFS) FindRootDirectory(ctx context.Context, db bun.IDB, accountID uuid.UUID) (*Node, error) {
+	root := new(Node)
+
+	err := db.NewSelect().Model(root).
+		Where("account_id = ?", accountID).
+		Where("parent_id IS NULL").
+		Where("status = ?", NodeStatusReady).
+		Where("deleted_at IS NULL").
+		Scan(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	if root.Kind != NodeKindDirectory {
+		return nil, ErrNodeNotFound
+	}
+
+	return root, nil
 }
 
 func (vfs *VirtualFS) ListChildren(ctx context.Context, db bun.IDB, node *Node) ([]*Node, error) {
@@ -299,26 +330,43 @@ func (vfs *VirtualFS) CreateDirectory(ctx context.Context, db bun.IDB, accountID
 	return node, nil
 }
 
-func (vfs *VirtualFS) SoftDeleteNode(ctx context.Context, db bun.IDB, node *Node) error {
-	if !node.IsAccessible() {
-		return ErrNodeNotFound
+func (vfs *VirtualFS) SoftDeleteNode(ctx context.Context, db bun.IDB, node *Node) (*Node, error) {
+	deleted, err := vfs.SoftDeleteNodes(ctx, db, []*Node{node})
+	if err != nil {
+		return nil, err
+	}
+	if len(deleted) == 0 {
+		return nil, ErrNodeNotFound
+	}
+	return deleted[0], nil
+}
+
+func (vfs *VirtualFS) SoftDeleteNodes(ctx context.Context, db bun.IDB, nodes []*Node) ([]*Node, error) {
+	if len(nodes) == 0 {
+		return nil, nil
 	}
 
-	_, err := db.NewUpdate().Model(node).
-		WherePK().
-		Where("deleted_at IS NULL").
+	deletableNodes := make([]*Node, 0, len(nodes))
+	nodeIDs := make([]uuid.UUID, 0, len(nodes))
+	for _, node := range nodes {
+		if node.IsAccessible() {
+			nodeIDs = append(nodeIDs, node.ID)
+			deletableNodes = append(deletableNodes, node)
+		}
+	}
+
+	_, err := db.NewUpdate().Model(deletableNodes).
+		Where("id IN (?)", bun.In(nodeIDs)).
 		Where("status = ?", NodeStatusReady).
+		Where("deleted_at IS NULL").
 		Set("deleted_at = NOW()").
 		Returning("deleted_at").
 		Exec(ctx)
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return ErrNodeNotFound
-		}
-		return err
+		return nil, err
 	}
 
-	return nil
+	return deletableNodes, nil
 }
 
 func (vfs *VirtualFS) RestoreNode(ctx context.Context, db bun.IDB, node *Node) error {
@@ -447,23 +495,53 @@ func (vfs *VirtualFS) MoveNode(ctx context.Context, db bun.IDB, node *Node, pare
 // All nodes MUST have the same current parent directory; this constraint enables an
 // optimization where parent paths are computed only once (2 recursive queries total)
 // rather than computing full paths for each node individually (N queries).
-func (vfs *VirtualFS) MoveNodesInSameDirectory(ctx context.Context, db bun.IDB, nodes []*Node, newParentID uuid.UUID) error {
+func (vfs *VirtualFS) MoveNodesInSameDirectory(ctx context.Context, db bun.IDB, nodes []*Node, newParentID uuid.UUID) (*MoveFilesResult, error) {
 	if len(nodes) == 0 {
-		return nil
+		return nil, nil
 	}
 
 	// Validate all nodes are accessible
 	nodeIDs := make([]uuid.UUID, len(nodes))
+	nodeNames := make([]string, len(nodes))
 	for i, node := range nodes {
 		if !node.IsAccessible() {
-			return ErrNodeNotFound
+			return nil, ErrNodeNotFound
 		}
 		nodeIDs[i] = node.ID
+		nodeNames[i] = node.Name
 	}
 
-	moveOps, err := vfs.keyResolver.ResolveBulkMoveOps(ctx, db, nodes, newParentID)
+	var conflicts []*Node
+	err := db.NewSelect().Model(&conflicts).
+		Where("account_id = ?", nodes[0].AccountID).
+		Where("parent_id = ?", newParentID).
+		Where("name IN (?)", bun.In(nodeNames)).
+		Scan(ctx)
 	if err != nil {
-		return err
+		return nil, err
+	}
+
+	conflictID := make(map[uuid.UUID]struct{})
+	for _, c := range conflicts {
+		conflictID[c.ID] = struct{}{}
+	}
+
+	movableNodes := make([]*Node, 0, len(nodes)-len(conflicts))
+	for _, node := range nodes {
+		if _, ok := conflictID[node.ID]; !ok {
+			movableNodes = append(movableNodes, node)
+		}
+	}
+
+	if len(movableNodes) == 0 {
+		return &MoveFilesResult{
+			Conflicts: conflicts,
+		}, nil
+	}
+
+	moveOps, err := vfs.keyResolver.ResolveBulkMoveOps(ctx, db, movableNodes, newParentID)
+	if err != nil {
+		return nil, err
 	}
 
 	_, err = db.NewUpdate().
@@ -474,17 +552,23 @@ func (vfs *VirtualFS) MoveNodesInSameDirectory(ctx context.Context, db bun.IDB, 
 		Set("parent_id = ?", newParentID).
 		Exec(ctx)
 	if err != nil {
-		if database.IsUniqueViolation(err) {
-			return ErrNodeConflict
-		}
-		return err
+		return nil, err
 	}
+
+	errs := []MoveFileError{}
 
 	for _, op := range moveOps {
 		if op.OldKey != op.NewKey {
 			err = vfs.blobStore.Move(ctx, op.OldKey, op.NewKey)
 			if err != nil {
-				return err
+				if errors.Is(err, blob.ErrConflict) {
+					// somehow the node is not conflicting in vfs
+					// but is conflicting in the blob store
+					// this is a catatrophic error, so the whole operation
+					// is considered a failure
+					return nil, ErrNodeConflict
+				}
+				errs = append(errs, MoveFileError{Node: op.Node, Error: err})
 			}
 		}
 	}
@@ -493,7 +577,11 @@ func (vfs *VirtualFS) MoveNodesInSameDirectory(ctx context.Context, db bun.IDB, 
 		node.ParentID = newParentID
 	}
 
-	return nil
+	return &MoveFilesResult{
+		Moved:     movableNodes,
+		Conflicts: conflicts,
+		Errors:    errs,
+	}, nil
 }
 
 func (vfs *VirtualFS) RealPath(ctx context.Context, db bun.IDB, node *Node) (Path, error) {
@@ -501,6 +589,45 @@ func (vfs *VirtualFS) RealPath(ctx context.Context, db bun.IDB, node *Node) (Pat
 		return nil, ErrNodeNotFound
 	}
 	return buildNoteAbsolutePath(ctx, db, node)
+}
+
+func (vfs *VirtualFS) PermanentlyDeleteFiles(ctx context.Context, db bun.IDB, nodes []*Node) error {
+	if len(nodes) == 0 {
+		return nil
+	}
+
+	for _, n := range nodes {
+		if n.Kind != NodeKindFile {
+			return ErrUnsupportedOperation
+		}
+	}
+
+	deletedIDs := make([]uuid.UUID, 0, len(nodes))
+	for _, n := range nodes {
+		err := vfs.permanentlyDeleteFileNode(ctx, db, n)
+		if err != nil {
+			if errors.Is(err, blob.ErrNotFound) {
+				// no op if the blob does not exist
+				continue
+			}
+			return err
+		} else {
+			deletedIDs = append(deletedIDs, n.ID)
+		}
+	}
+
+	if len(deletedIDs) == 0 {
+		return nil
+	}
+
+	_, err := db.NewDelete().Model((*Node)(nil)).
+		Where("id IN (?)", bun.In(deletedIDs)).
+		Exec(ctx)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (vfs *VirtualFS) PermanentlyDeleteNode(ctx context.Context, db bun.IDB, node *Node) error {
@@ -522,6 +649,10 @@ func (vfs *VirtualFS) permanentlyDeleteFileNode(ctx context.Context, db bun.IDB,
 
 	err = vfs.blobStore.Delete(ctx, key)
 	if err != nil {
+		if errors.Is(err, blob.ErrNotFound) {
+			// no op if the blob does not exist
+			return nil
+		}
 		return err
 	}
 

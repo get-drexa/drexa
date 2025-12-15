@@ -90,6 +90,18 @@ func (s *Service) CreateAccount(ctx context.Context, db bun.IDB, userID uuid.UUI
 	return account, nil
 }
 
+func (s *Service) ListAccounts(ctx context.Context, db bun.IDB, userID uuid.UUID) ([]*Account, error) {
+	var accounts []*Account
+	err := db.NewSelect().Model(&accounts).Where("user_id = ?", userID).Scan(ctx)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return make([]*Account, 0), nil
+		}
+		return nil, err
+	}
+	return accounts, nil
+}
+
 func (s *Service) AccountByUserID(ctx context.Context, db bun.IDB, userID uuid.UUID) (*Account, error) {
 	var account Account
 	err := db.NewSelect().Model(&account).Where("user_id = ?", userID).Scan(ctx)
