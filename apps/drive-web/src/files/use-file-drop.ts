@@ -15,8 +15,9 @@ export interface FileDragInfo {
 }
 
 export interface UseFileDropOptions {
-	destDir: DirectoryInfo | string
+	destDir?: DirectoryInfo | string
 	dragInfoAtom: PrimitiveAtom<FileDragInfo | null>
+	enabled?: boolean
 }
 
 export interface UseFileDropReturn {
@@ -31,6 +32,7 @@ export interface UseFileDropReturn {
 export function useFileDrop({
 	destDir,
 	dragInfoAtom,
+	enabled,
 }: UseFileDropOptions): UseFileDropReturn {
 	const [isDraggedOver, setIsDraggedOver] = useState(false)
 	const setDragInfo = useSetAtom(dragInfoAtom)
@@ -50,9 +52,11 @@ export function useFileDrop({
 		},
 	})
 
-	const dirId = typeof destDir === "string" ? destDir : destDir.id
+	const dirId = typeof destDir === "string" ? destDir : destDir?.id
 
 	const handleDrop = (_e: React.DragEvent) => {
+		if (!enabled || !destDir || !dirId) return
+
 		const dragInfo = store.get(dragInfoAtom)
 		if (dragInfo) {
 			const items = dragInfo.items.filter((item) => item.id !== dirId)

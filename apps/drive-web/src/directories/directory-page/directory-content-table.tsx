@@ -298,7 +298,8 @@ function FileItemRow({
 	const setFileDragInfo = useSetAtom(fileDragInfoAtom)
 
 	const { isDraggedOver, dropHandlers } = useFileDrop({
-		destDir: row.original,
+		enabled: row.original.kind === "directory",
+		destDir: row.original.kind === "directory" ? row.original : undefined,
 		dragInfoAtom: fileDragInfoAtom,
 	})
 
@@ -306,8 +307,15 @@ function FileItemRow({
 		let draggedItems: DirectoryItem[]
 		// drag all selections, but only if the currently dragged row is also selected
 		if (row.getIsSelected()) {
-			draggedItems = [...table.getSelectedRowModel().rows]
-			if (!draggedItems.some((item) => item.id === row.original.id)) {
+			draggedItems = []
+			let currentRowFound = false
+			for (const { original: item } of table.getSelectedRowModel().rows) {
+				draggedItems.push(item)
+				if (item.id === row.original.id) {
+					currentRowFound = true
+				}
+			}
+			if (!currentRowFound) {
 				draggedItems.push(row.original)
 			}
 		} else {
