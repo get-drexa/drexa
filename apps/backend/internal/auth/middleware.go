@@ -36,9 +36,31 @@ func NewAuthMiddleware(s *Service, db *bun.DB, cookieConfig CookieConfig) fiber.
 			setCookies = true
 		}
 
-		if at == "" {
-			slog.Info("no access token")
+		if at == "" && rt == "" {
+			slog.Info("no access token or refresh token")
 			return c.SendStatus(fiber.StatusUnauthorized)
+		}
+
+		if at == "" {
+			// if there is no access token, attempt to get new access token using the refresh token.
+			tx, err := db.BeginTx(c.Context(), nil)
+			if err != nil {
+				return c.SendStatus(fiber.StatusUnauthorized)
+			}
+			defer tx.Rollback()
+
+			newTokens, err := s.RefreshAccessToken(c.Context(), tx, rt)
+			if err != nil {
+				return c.SendStatus(fiber.StatusUnauthorized)
+			}
+
+			if err := tx.Commit(); err != nil {
+				return c.SendStatus(fiber.StatusUnauthorized)
+			}
+
+			setAuthCookies(c, newTokens.AccessToken, newTokens.RefreshToken, cookieConfig)
+			at = newTokens.AccessToken
+			rt = newTokens.RefreshToken
 		}
 
 		authResult, err := s.AuthenticateWithAccessToken(c.Context(), db, at)
