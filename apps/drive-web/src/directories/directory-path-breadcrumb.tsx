@@ -52,9 +52,9 @@ export function DirectoryPathBreadcrumb({
 
 	const breadcrumbItems: React.ReactNode[] = [
 		<FilePathBreadcrumbItem
-			key={directory.path[0].id}
-			segment={directory.path[0]}
-			rootLabel={rootLabel}
+			key={directory.path[0]!.id}
+			segment={directory.path[0]!}
+			label={rootLabel}
 			directoryUrlFn={directoryUrlFn}
 			fileDragInfoAtom={fileDragInfoAtom}
 		/>,
@@ -65,7 +65,6 @@ export function DirectoryPathBreadcrumb({
 				<BreadcrumbSeparator />
 				<FilePathBreadcrumbItem
 					segment={directory.path[i]!}
-					rootLabel={rootLabel}
 					directoryUrlFn={directoryUrlFn}
 					fileDragInfoAtom={fileDragInfoAtom}
 				/>
@@ -88,12 +87,12 @@ export function DirectoryPathBreadcrumb({
 
 function FilePathBreadcrumbItem({
 	segment,
-	rootLabel,
+	label,
 	directoryUrlFn,
 	fileDragInfoAtom,
 }: {
 	segment: PathSegment
-	rootLabel: string
+	label?: string
 	directoryUrlFn: (directoryId: string) => string
 	fileDragInfoAtom: PrimitiveAtom<FileDragInfo | null>
 }) {
@@ -102,7 +101,7 @@ function FilePathBreadcrumbItem({
 		dragInfoAtom: fileDragInfoAtom,
 	})
 
-	const dirName = segment.name || rootLabel
+	const dirName = label || segment.name
 
 	return (
 		<Tooltip open={isDraggedOver}>
