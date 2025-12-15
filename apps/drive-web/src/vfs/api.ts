@@ -88,13 +88,17 @@ export const createDirectoryMutationAtom = atom((get) => {
 	return mutationOptions({
 		mutationFn: async (data: { name: string; parentId: string }) => {
 			if (!account) throw new Error("No account selected")
-			return fetchApi("POST", `/accounts/${account.id}/directories`, {
-				body: JSON.stringify({
-					name: data.name,
-					parentId: data.parentId,
-				}),
-				returns: DirectoryInfoWithPath,
-			}).then(([_, result]) => result)
+			return fetchApi(
+				"POST",
+				`/accounts/${account.id}/directories?include=path`,
+				{
+					body: JSON.stringify({
+						name: data.name,
+						parentId: data.parentId,
+					}),
+					returns: DirectoryInfoWithPath,
+				},
+			).then(([_, result]) => result)
 		},
 		onSuccess: (data, _variables, _context, { client }) => {
 			client.setQueryData(
