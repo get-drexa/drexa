@@ -6,5 +6,5 @@ export const PathSegment = type({
 })
 export type PathSegment = typeof PathSegment.infer
 
-export const Path = type([PathSegment])
+export const Path = PathSegment.array()
 export type Path = typeof Path.infer
