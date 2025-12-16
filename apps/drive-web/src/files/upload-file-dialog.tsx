@@ -28,8 +28,9 @@ import {
 	TooltipContent,
 	TooltipTrigger,
 } from "@/components/ui/tooltip"
-import type { DirectoryInfoWithPath } from "@/vfs/vfs"
 import { formatError } from "@/lib/error"
+import { directoryContentQueryAtom } from "@/vfs/api"
+import type { DirectoryInfoWithPath } from "@/vfs/vfs"
 import { currentAccountAtom } from "../account/account"
 import {
 	clearAllFileUploadStatusesAtom,
@@ -106,7 +107,7 @@ function useUploadFilesAtom({
 					)
 					return await Promise.allSettled(promises)
 				},
-				onSuccess: (results, files) => {
+				onSuccess: (results, files, _result, { client }) => {
 					const remainingPickedFiles: PickedFile[] = []
 					results.forEach((result, i) => {
 						// biome-ignore lint/style/noNonNullAssertion: results lenght must match input files array length
@@ -129,13 +130,19 @@ function useUploadFilesAtom({
 								break
 						}
 					})
-					// setPickedFiles(remainingPickedFiles)
 
 					if (remainingPickedFiles.length === 0) {
 						toast.success("All files uploaded successfully")
 					}
+
+					client.invalidateQueries(
+						store.get(
+							directoryContentQueryAtom(targetDirectory.id),
+						),
+					)
 				},
 				onError: (error) => {
+					console.error(error)
 					toast.error(formatError(error))
 				},
 			}),
