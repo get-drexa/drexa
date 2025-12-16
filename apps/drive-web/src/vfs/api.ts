@@ -163,7 +163,7 @@ export const moveDirectoryItemsMutationAtom = atom((get) =>
 				if (item.parentId) {
 					const s = movedItems.get(item.parentId)
 					if (!s) {
-						movedItems.set(item.parentId, new Set())
+						movedItems.set(item.parentId, new Set(s))
 					} else {
 						s.add(item.id)
 					}
@@ -192,7 +192,6 @@ export const moveDirectoryItemsMutationAtom = atom((get) =>
 				typeof targetDirectory === "string"
 					? targetDirectory
 					: targetDirectory.id
-			console.log(dirId)
 			client.invalidateQueries(get(directoryContentQueryAtom(dirId)))
 			for (const item of items) {
 				if (item.parentId) {
@@ -238,35 +237,93 @@ export const moveToTrashMutationAtom = atom((get) =>
 				}
 			}
 
-			const fileDeleteParams = new URLSearchParams()
-			fileDeleteParams.set("id", fileIds.join(","))
-			fileDeleteParams.set("trash", "true")
-			const deleteFilesPromise = fetchApi(
-				"DELETE",
-				`/accounts/${account.id}/files?${fileDeleteParams.toString()}`,
-				{
-					returns: FileInfo.array(),
-				},
-			)
+			let deleteFilesPromise: Promise<FileInfo[]>
+			if (fileIds.length > 0) {
+				const fileDeleteParams = new URLSearchParams()
+				fileDeleteParams.set("id", fileIds.join(","))
+				fileDeleteParams.set("trash", "true")
+				deleteFilesPromise = fetchApi(
+					"DELETE",
+					`/accounts/${account.id}/files?${fileDeleteParams.toString()}`,
+					{
+						returns: FileInfo.array(),
+					},
+				).then(([_, result]) => result)
+			} else {
+				deleteFilesPromise = Promise.resolve([])
+			}
 
-			const directoryDeleteParams = new URLSearchParams()
-			directoryDeleteParams.set("id", directoryIds.join(","))
-			directoryDeleteParams.set("trash", "true")
-			const deleteDirectoriesPromise = fetchApi(
-				"DELETE",
-				`/accounts/${account.id}/directories?${directoryDeleteParams.toString()}`,
-				{
-					returns: DirectoryInfo.array(),
-				},
-			)
+			let deleteDirectoriesPromise: Promise<DirectoryInfo[]>
+			if (directoryIds.length > 0) {
+				const directoryDeleteParams = new URLSearchParams()
+				directoryDeleteParams.set("id", directoryIds.join(","))
+				directoryDeleteParams.set("trash", "true")
+				deleteDirectoriesPromise = fetchApi(
+					"DELETE",
+					`/accounts/${account.id}/directories?${directoryDeleteParams.toString()}`,
+					{
+						returns: DirectoryInfo.array(),
+					},
+				).then(([_, result]) => result)
+			} else {
+				deleteDirectoriesPromise = Promise.resolve([])
+			}
 
-			const [[, deletedFiles], [, deletedDirectories]] =
-				await Promise.all([
-					deleteFilesPromise,
-					deleteDirectoriesPromise,
-				])
+			const [deletedFiles, deletedDirectories] = await Promise.all([
+				deleteFilesPromise,
+				deleteDirectoriesPromise,
+			])
 
 			return [...deletedFiles, ...deletedDirectories]
+		},
+		onMutate: (items, { client }) => {
+			const trashedItems = new Map<string, Set<string>>()
+			for (const item of items) {
+				if (item.parentId) {
+					const s = trashedItems.get(item.parentId)
+					if (!s) {
+						trashedItems.set(item.parentId, new Set(s))
+					} else {
+						s.add(item.id)
+					}
+				}
+			}
+
+			const prevDirContentMap = new Map<
+				string,
+				DirectoryItem[] | undefined
+			>()
+			trashedItems.forEach((s, parentId) => {
+				const query = get(directoryContentQueryAtom(parentId))
+				const prevDirContent = client.getQueryData(query.queryKey)
+				client.setQueryData(
+					query.queryKey,
+					(prev) => prev?.filter((it) => !s.has(it.id)) ?? prev,
+				)
+				prevDirContentMap.set(parentId, prevDirContent)
+			})
+			return { prevDirContentMap }
+		},
+		onSuccess: (_data, items, _result, { client }) => {
+			for (const item of items) {
+				if (item.parentId) {
+					client.invalidateQueries(
+						get(directoryContentQueryAtom(item.parentId)),
+					)
+				}
+			}
+		},
+		onError: (_error, items, context, { client }) => {
+			if (context) {
+				context.prevDirContentMap.forEach(
+					(prevDirContent, parentId) => {
+						client.setQueryData(
+							get(directoryContentQueryAtom(parentId)).queryKey,
+							prevDirContent,
+						)
+					},
+				)
+			}
 		},
 	}),
 )

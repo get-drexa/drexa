@@ -49,6 +49,7 @@ import type {
 	DirectoryItem,
 	FileInfo,
 } from "@/vfs/vfs"
+import { formatError } from "../../../lib/error"
 
 export const Route = createFileRoute(
 	"/_authenticated/_sidebar-layout/directories/$directoryId",
@@ -86,17 +87,22 @@ const itemBeingRenamedAtom = atom<{
 // MARK: page entry
 function RouteComponent() {
 	const { directoryId } = Route.useParams()
-	const { data: directoryInfo, isLoading: isLoadingDirectoryInfo, error: directoryInfoError } = useQuery(
-		useAtomValue(directoryInfoQueryAtom(directoryId)),
-	)
-	const { data: directoryContent, isLoading: isLoadingDirectoryContent, error: directoryContentError } =
-		useQuery(useAtomValue(directoryContentQueryAtom(directoryId)))
+	const {
+		data: directoryInfo,
+		isLoading: isLoadingDirectoryInfo,
+		error: directoryInfoError,
+	} = useQuery(useAtomValue(directoryInfoQueryAtom(directoryId)))
+	const {
+		data: directoryContent,
+		isLoading: isLoadingDirectoryContent,
+		error: directoryContentError,
+	} = useQuery(useAtomValue(directoryContentQueryAtom(directoryId)))
 
 	const directoryUrlById = useCallback(
 		(directoryId: string) => `/directories/${directoryId}`,
 		[],
 	)
-	
+
 	console.log({ directoryInfoError, directoryContentError })
 
 	if (isLoadingDirectoryInfo || isLoadingDirectoryContent) {
@@ -236,39 +242,31 @@ function DirectoryContentContextMenu({
 }) {
 	const store = useStore()
 	const [target, setTarget] = useAtom(contextMenuTargetItemsAtom)
-	const setOptimisticDeletedItems = useSetAtom(optimisticDeletedItemsAtom)
 	const setBackgroundTaskProgress = useSetAtom(backgroundTaskProgressAtom)
 	const setCutItems = useSetAtom(cutItemsAtom)
 
+	const moveToTrashMutation = useAtomValue(moveToTrashMutationAtom)
 	const { mutate: moveToTrash } = useMutation({
-		...useAtomValue(moveToTrashMutationAtom),
-		onMutate: (items) => {
+		...moveToTrashMutation,
+		onMutate: (vars, ctx) => {
 			setBackgroundTaskProgress({
 				label: "Moving items to trash…",
 			})
-			setOptimisticDeletedItems(
-				(prev) => new Set([...prev, ...items.map((item) => item.id)]),
+			return (
+				moveToTrashMutation.onMutate?.(vars, ctx) ?? {
+					prevDirContentMap: new Map(),
+				}
 			)
 		},
-		onSuccess: (trashedItems) => {
+		onSuccess: (data, vars, result, ctx) => {
+			moveToTrashMutation.onSuccess?.(data, vars, result, ctx)
 			setBackgroundTaskProgress(null)
-			setOptimisticDeletedItems((prev) => {
-				const newSet = new Set(prev)
-				for (const item of trashedItems) {
-					newSet.delete(item.id)
-				}
-				return newSet
-			})
-			toast.success(`Moved ${trashedItems.length} items to trash`)
+			toast.success(`Moved ${data.length} items to trash`)
 		},
-		onError: (_err, items) => {
-			setOptimisticDeletedItems((prev) => {
-				const newSet = new Set(prev)
-				for (const item of items) {
-					newSet.delete(item.id)
-				}
-				return newSet
-			})
+		onError: (err, vars, mutateResult, context) => {
+			moveToTrashMutation.onError?.(err, vars, mutateResult, context)
+			toast.error(formatError(err))
+			setBackgroundTaskProgress(null)
 		},
 	})
 
