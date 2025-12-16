@@ -99,6 +99,7 @@ function FilePathBreadcrumbItem({
 	const { isDraggedOver, dropHandlers } = useFileDrop({
 		destDir: segment.id,
 		dragInfoAtom: fileDragInfoAtom,
+		enabled: true,
 	})
 
 	const dirName = label || segment.name
