@@ -10,8 +10,6 @@ export const Upload = type({
 	id: "string",
 	status: UploadStatus,
 	uploadUrl: "string.url",
-	createdAt: "string.date.iso.parse",
-	updatedAt: "string.date.iso.parse",
 })
 export type Upload = typeof Upload.infer
 
