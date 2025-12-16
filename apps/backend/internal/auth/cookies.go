@@ -32,10 +32,10 @@ func authCookies(c *fiber.Ctx) map[string]string {
 	return m
 }
 
-// setAuthCookies sets HTTP-only auth cookies with security settings derived from the request.
+// SetAuthCookies sets HTTP-only auth cookies with security settings derived from the request.
 // Secure flag is based on actual protocol (works automatically with proxies/tunnels),
 // unless explicitly set in cfg.Secure.
-func setAuthCookies(c *fiber.Ctx, accessToken, refreshToken string, cfg CookieConfig) {
+func SetAuthCookies(c *fiber.Ctx, accessToken, refreshToken string, cfg CookieConfig) {
 	secure := c.Protocol() == "https"
 
 	accessTokenCookie := &fiber.Cookie{

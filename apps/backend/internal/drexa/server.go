@@ -113,7 +113,7 @@ func NewServer(c Config) (*Server, error) {
 	auth.NewHTTPHandler(authService, db, cookieConfig).RegisterRoutes(api)
 	user.NewHTTPHandler(userService, db, authMiddleware).RegisterRoutes(api)
 
-	accountRouter := account.NewHTTPHandler(accountService, authService, db, authMiddleware).RegisterRoutes(api)
+	accountRouter := account.NewHTTPHandler(accountService, authService, db, authMiddleware, cookieConfig).RegisterRoutes(api)
 	upload.NewHTTPHandler(uploadService, db).RegisterRoutes(accountRouter)
 	catalog.NewHTTPHandler(vfs, db).RegisterRoutes(accountRouter)
 

@@ -11,8 +11,8 @@ import (
 )
 
 const (
-	tokenDeliveryCookie = "cookie"
-	tokenDeliveryBody   = "body"
+	TokenDeliveryCookie = "cookie"
+	TokenDeliveryBody   = "body"
 )
 
 const (
@@ -113,13 +113,13 @@ func (h *HTTPHandler) Login(c *fiber.Ctx) error {
 	default:
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid token delivery method"})
 
-	case tokenDeliveryCookie:
-		setAuthCookies(c, result.AccessToken, result.RefreshToken, h.cookieConfig)
+	case TokenDeliveryCookie:
+		SetAuthCookies(c, result.AccessToken, result.RefreshToken, h.cookieConfig)
 		return c.JSON(loginResponse{
 			User: *result.User,
 		})
 
-	case tokenDeliveryBody:
+	case TokenDeliveryBody:
 		return c.JSON(loginResponse{
 			User:         *result.User,
 			AccessToken:  result.AccessToken,

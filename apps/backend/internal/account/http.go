@@ -17,6 +17,7 @@ type HTTPHandler struct {
 	authService    *auth.Service
 	db             *bun.DB
 	authMiddleware fiber.Handler
+	cookieConfig   auth.CookieConfig
 }
 
 // registerAccountRequest represents a new account registration
@@ -28,6 +29,8 @@ type registerAccountRequest struct {
 	Password string `json:"password" example:"securepassword123"`
 	// Display name for the user
 	DisplayName string `json:"displayName" example:"Jane Doe"`
+	// How to deliver tokens: "cookie" (set HTTP-only cookies) or "body" (include in response)
+	TokenDelivery string `json:"tokenDelivery" example:"body" enums:"cookie,body"`
 }
 
 // registerAccountResponse represents a successful registration
@@ -37,10 +40,10 @@ type registerAccountResponse struct {
 	Account *Account `json:"account"`
 	// The created user
 	User *user.User `json:"user"`
-	// JWT access token for immediate authentication
-	AccessToken string `json:"accessToken" example:"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI1NTBlODQwMC1lMjliLTQxZDQtYTcxNi00NDY2NTU0NDAwMDAifQ.signature"`
-	// Base64 URL encoded refresh token
-	RefreshToken string `json:"refreshToken" example:"dR4nD0mUu1DkZXlCeXRlc0FuZFJhbmRvbURhdGFIZXJlMTIzNDU2Nzg5MGFi"`
+	// JWT access token for immediate authentication (only included when tokenDelivery is "body")
+	AccessToken string `json:"accessToken,omitempty" example:"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI1NTBlODQwMC1lMjliLTQxZDQtYTcxNi00NDY2NTU0NDAwMDAifQ.signature"`
+	// Base64 URL encoded refresh token (only included when tokenDelivery is "body")
+	RefreshToken string `json:"refreshToken,omitempty" example:"dR4nD0mUu1DkZXlCeXRlc0FuZFJhbmRvbURhdGFIZXJlMTIzNDU2Nzg5MGFi"`
 }
 
 const currentAccountKey = "currentAccount"
@@ -49,8 +52,8 @@ func CurrentAccount(c *fiber.Ctx) *Account {
 	return c.Locals(currentAccountKey).(*Account)
 }
 
-func NewHTTPHandler(accountService *Service, authService *auth.Service, db *bun.DB, authMiddleware fiber.Handler) *HTTPHandler {
-	return &HTTPHandler{accountService: accountService, authService: authService, db: db, authMiddleware: authMiddleware}
+func NewHTTPHandler(accountService *Service, authService *auth.Service, db *bun.DB, authMiddleware fiber.Handler, cookieConfig auth.CookieConfig) *HTTPHandler {
+	return &HTTPHandler{accountService: accountService, authService: authService, db: db, authMiddleware: authMiddleware, cookieConfig: cookieConfig}
 }
 
 func (h *HTTPHandler) RegisterRoutes(api fiber.Router) fiber.Router {
@@ -126,13 +129,13 @@ func (h *HTTPHandler) getAccount(c *fiber.Ctx) error {
 
 // registerAccount creates a new account and user
 // @Summary Register new account
-// @Description Create a new user account with email and password. Returns the account, user, and authentication tokens.
+// @Description Create a new user account with email and password. Returns the account, user, and authentication tokens. Tokens can be delivered via HTTP-only cookies or in the response body based on the tokenDelivery field.
 // @Tags accounts
 // @Accept json
 // @Produce json
 // @Param request body registerAccountRequest true "Registration details"
 // @Success 200 {object} registerAccountResponse "Account created successfully"
-// @Failure 400 {string} string "Invalid request body"
+// @Failure 400 {string} string "Invalid request body or token delivery method"
 // @Failure 409 {string} string "Email already registered"
 // @Router /accounts [post]
 func (h *HTTPHandler) registerAccount(c *fiber.Ctx) error {
@@ -173,10 +176,23 @@ func (h *HTTPHandler) registerAccount(c *fiber.Ctx) error {
 		return httperr.Internal(err)
 	}
 
-	return c.JSON(registerAccountResponse{
-		Account:      acc,
-		User:         u,
-		AccessToken:  result.AccessToken,
-		RefreshToken: result.RefreshToken,
-	})
+	switch req.TokenDelivery {
+	default:
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid token delivery method"})
+
+	case auth.TokenDeliveryCookie:
+		auth.SetAuthCookies(c, result.AccessToken, result.RefreshToken, h.cookieConfig)
+		return c.JSON(registerAccountResponse{
+			Account: acc,
+			User:    u,
+		})
+
+	case auth.TokenDeliveryBody:
+		return c.JSON(registerAccountResponse{
+			Account:      acc,
+			User:         u,
+			AccessToken:  result.AccessToken,
+			RefreshToken: result.RefreshToken,
+		})
+	}
 }

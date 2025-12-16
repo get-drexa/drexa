@@ -58,7 +58,7 @@ func NewAuthMiddleware(s *Service, db *bun.DB, cookieConfig CookieConfig) fiber.
 				return c.SendStatus(fiber.StatusUnauthorized)
 			}
 
-			setAuthCookies(c, newTokens.AccessToken, newTokens.RefreshToken, cookieConfig)
+			SetAuthCookies(c, newTokens.AccessToken, newTokens.RefreshToken, cookieConfig)
 			at = newTokens.AccessToken
 			rt = newTokens.RefreshToken
 		}
@@ -90,7 +90,7 @@ func NewAuthMiddleware(s *Service, db *bun.DB, cookieConfig CookieConfig) fiber.
 				newTokens, err := s.RefreshAccessToken(c.Context(), tx, rt)
 				if err == nil {
 					if commitErr := tx.Commit(); commitErr == nil {
-						setAuthCookies(c, newTokens.AccessToken, newTokens.RefreshToken, cookieConfig)
+						SetAuthCookies(c, newTokens.AccessToken, newTokens.RefreshToken, cookieConfig)
 					}
 				} else {
 					_ = tx.Rollback()
