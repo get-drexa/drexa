@@ -68,6 +68,7 @@ function putFile({
 }): Promise<void> {
 	return new Promise<void>((resolve, reject) => {
 		const xhr = new XMLHttpRequest()
+		xhr.withCredentials = true
 		xhr.upload.addEventListener("progress", (e) => {
 			onProgress(e.loaded / e.total)
 		})
