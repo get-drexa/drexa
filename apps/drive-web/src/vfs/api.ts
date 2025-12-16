@@ -156,6 +156,64 @@ export const moveDirectoryItemsMutationAtom = atom((get) =>
 			)
 			return result
 		},
+		onMutate: ({ items }, { client }) => {
+			const movedItems = new Map<string, Set<string>>()
+
+			for (const item of items) {
+				if (item.parentId) {
+					const s = movedItems.get(item.parentId)
+					if (!s) {
+						movedItems.set(item.parentId, new Set())
+					} else {
+						s.add(item.id)
+					}
+				}
+			}
+
+			const prevDirContentMap = new Map<
+				string,
+				DirectoryItem[] | undefined
+			>()
+
+			movedItems.forEach((s, parentId) => {
+				const query = get(directoryContentQueryAtom(parentId))
+				const prevDirContent = client.getQueryData(query.queryKey)
+				client.setQueryData(
+					query.queryKey,
+					(prev) => prev?.filter((it) => !s.has(it.id)) ?? prev,
+				)
+				prevDirContentMap.set(parentId, prevDirContent)
+			})
+
+			return { prevDirContentMap }
+		},
+		onSuccess: (_data, { targetDirectory, items }, _result, { client }) => {
+			const dirId =
+				typeof targetDirectory === "string"
+					? targetDirectory
+					: targetDirectory.id
+			console.log(dirId)
+			client.invalidateQueries(get(directoryContentQueryAtom(dirId)))
+			for (const item of items) {
+				if (item.parentId) {
+					client.invalidateQueries(
+						get(directoryContentQueryAtom(item.parentId)),
+					)
+				}
+			}
+		},
+		onError: (_error, _vars, context, { client }) => {
+			if (context) {
+				context.prevDirContentMap.forEach(
+					(prevDirContent, parentId) => {
+						client.setQueryData(
+							get(directoryContentQueryAtom(parentId)).queryKey,
+							prevDirContent,
+						)
+					},
+				)
+			}
+		},
 	}),
 )
 

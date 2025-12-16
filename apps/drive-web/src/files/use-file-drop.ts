@@ -38,16 +38,21 @@ export function useFileDrop({
 	const setDragInfo = useSetAtom(dragInfoAtom)
 	const store = useStore()
 
+	const moveDirectoryItemsMutation = useAtomValue(
+		moveDirectoryItemsMutationAtom,
+	)
+
 	const { mutate: moveDroppedItems } = useMutation({
-		...useAtomValue(moveDirectoryItemsMutationAtom),
-		onSuccess: (result: MoveDirectoryItemsResult) => {
-			const conflictCount = result.conflicts.length
+		...moveDirectoryItemsMutation,
+		onSuccess: (data: MoveDirectoryItemsResult, vars, result, ctx) => {
+			moveDirectoryItemsMutation.onSuccess?.(data, vars, result, ctx)
+			const conflictCount = data.errors.length
 			if (conflictCount > 0) {
 				toast.warning(
-					`${result.moved.length} items moved${conflictCount > 0 ? `, ${conflictCount} conflicts` : ""}`,
+					`${data.moved.length} items moved${conflictCount > 0 ? `, ${conflictCount} conflicts` : ""}`,
 				)
 			} else {
-				toast.success(`${result.moved.length} items moved!`)
+				toast.success(`${data.moved.length} items moved!`)
 			}
 		},
 	})

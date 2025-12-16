@@ -4,6 +4,7 @@ import { Path } from "@/lib/path"
 export const FileInfo = type({
 	kind: "'file'",
 	id: "string",
+	"parentId?": "string",
 	name: "string",
 	size: "number",
 	mimeType: "string",
@@ -16,6 +17,7 @@ export type FileInfo = typeof FileInfo.infer
 export const DirectoryInfo = type({
 	kind: "'directory'",
 	id: "string",
+	"parentId?": "string",
 	name: "string",
 	createdAt: "string.date.iso.parse",
 	updatedAt: "string.date.iso.parse",
