@@ -24,6 +24,8 @@ type DirectoryInfo struct {
 	Kind string `json:"kind" example:"directory"`
 	// Unique directory identifier
 	ID string `json:"id" example:"kRp2XYTq9A55"`
+	// ParentID is the pbulic ID of the directory this directory is in
+	ParentID string `json:"parentId,omitempty" example:"kRp2XYTq9A55"`
 	// Full path from root (included when ?include=path)
 	Path virtualfs.Path `json:"path,omitempty"`
 	// Directory name
@@ -270,6 +272,7 @@ func (h *HTTPHandler) listDirectory(c *fiber.Ctx) error {
 			items[i] = FileInfo{
 				Kind:      DirItemKindFile,
 				ID:        child.PublicID,
+				ParentID:  node.PublicID,
 				Name:      child.Name,
 				Size:      child.Size,
 				MimeType:  child.MimeType,
@@ -384,7 +387,6 @@ func (h *HTTPHandler) deleteDirectory(c *fiber.Ctx) error {
 
 		return c.SendStatus(fiber.StatusNoContent)
 	}
-
 }
 
 // deleteDirectories removes multiple directories
@@ -536,7 +538,12 @@ func (h *HTTPHandler) moveItemsToDirectory(c *fiber.Ctx) error {
 		return httperr.Internal(err)
 	}
 
-	res := moveItemsToDirectoryResponse{}
+	res := moveItemsToDirectoryResponse{
+		Items:     make([]any, 0),
+		Moved:     make([]string, 0),
+		Conflicts: make([]string, 0),
+		Errors:    make([]moveItemError, 0),
+	}
 
 	for _, node := range result.Moved {
 		res.Items = append(res.Items, toDirectoryItem(node))
