@@ -18,8 +18,8 @@ type FileInfo struct {
 	Kind string `json:"kind" example:"file"`
 	// Unique file identifier
 	ID string `json:"id" example:"mElnUNCm8F22"`
-	// ParentID is the pbulic ID of the directory this file is in
-	ParentID string `json:"parentId,omitempty" exmaple:"kRp2XYTq9A55"`
+	// ParentID is the public ID of the directory this file is in
+	ParentID string `json:"parentId,omitempty" example:"kRp2XYTq9A55"`
 	// File name
 	Name string `json:"name" example:"document.pdf"`
 	// File size in bytes
@@ -297,7 +297,6 @@ func (h *HTTPHandler) deleteFiles(c *fiber.Ctx) error {
 		}
 
 		return c.JSON(res)
-
 	} else {
 		err = h.vfs.PermanentlyDeleteFiles(c.Context(), tx, nodes)
 		if err != nil {

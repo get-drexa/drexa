@@ -1,6 +1,5 @@
 import { useMutation } from "@tanstack/react-query"
 import { createFileRoute, useNavigate } from "@tanstack/react-router"
-import { useSetAtom } from "jotai"
 import { GalleryVerticalEnd } from "lucide-react"
 import { loginMutation } from "@/auth/api"
 import { Button } from "@/components/ui/button"
@@ -20,7 +19,6 @@ import {
 } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { cn } from "@/lib/utils"
-import { currentAccountAtom } from "../account/account"
 
 export const Route = createFileRoute("/login")({
 	component: RouteComponent,

@@ -7,6 +7,7 @@ import (
 	"database/sql"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"io"
 	"time"
 
@@ -18,6 +19,23 @@ import (
 	"github.com/sqids/sqids-go"
 	"github.com/uptrace/bun"
 )
+
+type ListChildrenOrder string
+
+const (
+	ListChildrenOrderByName      ListChildrenOrder = "name"
+	ListChildrenOrderByCreatedAt ListChildrenOrder = "created_at"
+	ListChildrenOrderByUpdatedAt ListChildrenOrder = "updated_at"
+)
+
+type ListChildrenDirection int
+
+const (
+	ListChildrenDirectionAsc ListChildrenDirection = iota
+	ListChildrenDirectionDesc
+)
+
+const listChildrenDefaultLimit = 50
 
 type VirtualFS struct {
 	blobStore   blob.Store
@@ -46,6 +64,19 @@ type MoveFilesResult struct {
 	Moved     []*Node
 	Conflicts []*Node
 	Errors    []MoveFileError
+}
+
+type ListChildrenOptions struct {
+	Limit          int
+	OrderBy        ListChildrenOrder
+	OrderDirection ListChildrenDirection
+	Cursor         *ListChildrenCursor
+}
+
+type ListChildrenCursor struct {
+	Node           *Node
+	OrderBy        ListChildrenOrder
+	OrderDirection ListChildrenDirection
 }
 
 const RootDirectoryName = "root"
@@ -128,26 +159,108 @@ func (vfs *VirtualFS) FindRootDirectory(ctx context.Context, db bun.IDB, account
 	return root, nil
 }
 
-func (vfs *VirtualFS) ListChildren(ctx context.Context, db bun.IDB, node *Node) ([]*Node, error) {
+// ListChildren returns the children of a directory node with optional sorting and cursor-based pagination.
+func (vfs *VirtualFS) ListChildren(ctx context.Context, db bun.IDB, node *Node, opts ListChildrenOptions) ([]*Node, *ListChildrenCursor, error) {
 	if !node.IsAccessible() {
-		return nil, ErrNodeNotFound
+		return nil, nil, ErrNodeNotFound
 	}
 
 	var nodes []*Node
-	err := db.NewSelect().Model(&nodes).
+	q := db.NewSelect().Model(&nodes).
 		Where("account_id = ?", node.AccountID).
 		Where("parent_id = ?", node.ID).
 		Where("status = ?", NodeStatusReady).
-		Where("deleted_at IS NULL").
-		Scan(ctx)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return make([]*Node, 0), nil
+		Where("deleted_at IS NULL")
+
+	var dir string
+	if opts.OrderBy != "" {
+		switch opts.OrderDirection {
+		default:
+			dir = "ASC"
+		case ListChildrenDirectionAsc:
+			dir = "ASC"
+		case ListChildrenDirectionDesc:
+			dir = "DESC"
 		}
-		return nil, err
 	}
 
-	return nodes, nil
+	// Apply sorting with directories always first, then ID as tiebreaker.
+	//
+	// Cursor-based pagination implementation notes:
+	// - The cursor contains the last node from the previous page along with the sort configuration
+	// - The WHERE clause uses tuple comparison (kind, field, id) to filter results after the cursor position
+	// - Directories are always ordered before files (kind ASC puts 'directory' before 'file' alphabetically)
+	// - ID is always sorted ASC as a tiebreaker, regardless of the main sort direction
+	//
+	// Why ID is always ASC:
+	// - Ensures deterministic ordering when multiple items have the same sort field value
+	// - Maintains consistent tiebreaker behavior across different sort directions
+	// - Prevents pagination inconsistencies where items with the same name/date appear in different orders
+	//   depending on whether sorting ASC or DESC
+	// - The tuple comparison in the WHERE clause correctly handles the direction for the main field,
+	//   while ID provides a stable secondary sort
+	switch opts.OrderBy {
+	case ListChildrenOrderByName:
+		q = q.Order("kind ASC", "name "+dir, "id ASC")
+	case ListChildrenOrderByCreatedAt:
+		q = q.Order("kind ASC", "created_at "+dir, "id ASC")
+	case ListChildrenOrderByUpdatedAt:
+		q = q.Order("kind ASC", "updated_at "+dir, "id ASC")
+	}
+
+	// Apply cursor filter for pagination.
+	// The cursor contains the last node from the previous page. We use tuple comparison
+	// (kind, field, id) to find all rows that come after the cursor position in the sorted order.
+	// Kind is included to handle pagination across the directory/file boundary correctly.
+	// For ASC: use > to get rows after cursor
+	// For DESC: use < to get rows after cursor (because "after" in descending order means lesser values)
+	if opts.Cursor != nil {
+		if opts.Cursor.OrderBy != opts.OrderBy {
+			return nil, nil, ErrCursorMismatchedOrderField
+		}
+		if opts.Cursor.OrderDirection != opts.OrderDirection {
+			return nil, nil, ErrCursorMismatchedDirection
+		}
+
+		var op string
+		switch opts.Cursor.OrderDirection {
+		case ListChildrenDirectionAsc:
+			op = ">"
+		case ListChildrenDirectionDesc:
+			op = "<"
+		}
+
+		// Include kind in tuple comparison to handle pagination across directory/file boundary
+		switch opts.Cursor.OrderBy {
+		case ListChildrenOrderByName:
+			q = q.Where("(kind, name, id) "+op+" (?, ?, ?)", opts.Cursor.Node.Kind, opts.Cursor.Node.Name, opts.Cursor.Node.ID)
+		case ListChildrenOrderByCreatedAt:
+			q = q.Where("(kind, created_at, id) "+op+" (?, ?, ?)", opts.Cursor.Node.Kind, opts.Cursor.Node.CreatedAt, opts.Cursor.Node.ID)
+		case ListChildrenOrderByUpdatedAt:
+			q = q.Where("(kind, updated_at, id) "+op+" (?, ?, ?)", opts.Cursor.Node.Kind, opts.Cursor.Node.UpdatedAt, opts.Cursor.Node.ID)
+		}
+	}
+
+	if opts.Limit > 0 {
+		q = q.Limit(opts.Limit)
+	} else {
+		q = q.Limit(listChildrenDefaultLimit)
+	}
+
+	if err := q.Scan(ctx); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return make([]*Node, 0), nil, nil
+		}
+		return nil, nil, err
+	}
+
+	c := &ListChildrenCursor{
+		Node:           nodes[len(nodes)-1],
+		OrderBy:        opts.OrderBy,
+		OrderDirection: opts.OrderDirection,
+	}
+
+	return nodes, c, nil
 }
 
 func (vfs *VirtualFS) CreateFile(ctx context.Context, db bun.IDB, accountID uuid.UUID, opts CreateFileOptions) (*Node, error) {
@@ -178,7 +291,7 @@ func (vfs *VirtualFS) CreateFile(ctx context.Context, db bun.IDB, accountID uuid
 		}
 	}
 
-	_, err = db.NewInsert().Model(&node).Returning("*").Exec(ctx)
+	_, err = db.NewInsert().Model(&node).On("CONFLICT DO NOTHING").Returning("*").Exec(ctx)
 	if err != nil {
 		if database.IsUniqueViolation(err) {
 			return nil, ErrNodeConflict
@@ -355,7 +468,7 @@ func (vfs *VirtualFS) SoftDeleteNodes(ctx context.Context, db bun.IDB, nodes []*
 		}
 	}
 
-	_, err := db.NewUpdate().Model(deletableNodes).
+	_, err := db.NewUpdate().Model(&deletableNodes).
 		Where("id IN (?)", bun.In(nodeIDs)).
 		Where("status = ?", NodeStatusReady).
 		Where("deleted_at IS NULL").
@@ -363,7 +476,7 @@ func (vfs *VirtualFS) SoftDeleteNodes(ctx context.Context, db bun.IDB, nodes []*
 		Returning("deleted_at").
 		Exec(ctx)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to soft delete nodes: %w", err)
 	}
 
 	return deletableNodes, nil

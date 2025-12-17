@@ -1,4 +1,10 @@
-import { mutationOptions, queryOptions, skipToken } from "@tanstack/react-query"
+import {
+	type InfiniteData,
+	infiniteQueryOptions,
+	mutationOptions,
+	queryOptions,
+	skipToken,
+} from "@tanstack/react-query"
 import { type } from "arktype"
 import { atom } from "jotai"
 import { atomFamily } from "jotai/utils"
@@ -11,6 +17,11 @@ import {
 	DirectoryItem,
 	FileInfo,
 } from "./vfs"
+
+const DirectoryContentResponse = type({
+	items: DirectoryContent,
+	"nextCursor?": "string",
+})
 
 /**
  * This atom derives the file url for a given file.
@@ -58,27 +69,63 @@ export const directoryInfoQueryAtom = atomFamily((directoryId: string) =>
 	}),
 )
 
-export const directoryContentQueryAtom = atomFamily((directoryId: string) =>
-	atom((get) => {
-		const account = get(currentAccountAtom)
-		return queryOptions({
-			queryKey: [
-				"accounts",
-				account?.id,
-				"directories",
-				directoryId,
-				"content",
-			],
-			queryFn: account
-				? () =>
-						fetchApi(
-							"GET",
-							`/accounts/${account.id}/directories/${directoryId}/content`,
-							{ returns: DirectoryContent },
-						).then(([_, result]) => result)
-				: skipToken,
-		})
-	}),
+export const DIRECTORY_CONTENT_ORDER_BY = {
+	name: "name",
+	createdAt: "createdAt",
+	updatedAt: "updatedAt",
+} as const
+export type DirectoryContentOrderBy =
+	(typeof DIRECTORY_CONTENT_ORDER_BY)[keyof typeof DIRECTORY_CONTENT_ORDER_BY]
+
+export const DIRECTORY_CONTENT_ORDER_DIRECTION = {
+	asc: "asc",
+	desc: "desc",
+} as const
+type DirectoryContentOrderDirection =
+	(typeof DIRECTORY_CONTENT_ORDER_DIRECTION)[keyof typeof DIRECTORY_CONTENT_ORDER_DIRECTION]
+
+type DirectoryContentQueryParams = {
+	directoryId: string
+	orderBy: DirectoryContentOrderBy
+	direction: DirectoryContentOrderDirection
+	limit: number
+}
+
+const directoryContentQueryKey = (
+	accountId: string | undefined,
+	directoryId: string,
+) => ["accounts", accountId, "directories", directoryId, "content"]
+export const directoryContentQueryAtom = atomFamily(
+	({ directoryId, orderBy, direction, limit }: DirectoryContentQueryParams) =>
+		atom((get) => {
+			const account = get(currentAccountAtom)
+			return infiniteQueryOptions({
+				queryKey: directoryContentQueryKey(account?.id, directoryId),
+				initialPageParam: {
+					orderBy,
+					direction,
+					limit,
+					cursor: "",
+				},
+				queryFn: ({ pageParam }) =>
+					account
+						? fetchApi(
+								"GET",
+								`/accounts/${account.id}/directories/${directoryId}/content?orderBy=${pageParam.orderBy}&dir=${pageParam.direction}&limit=${pageParam.limit}${pageParam.cursor ? `&cursor=${pageParam.cursor}` : ""}`,
+								{ returns: DirectoryContentResponse },
+							).then(([_, result]) => result)
+						: Promise.reject(new Error("No account selected")),
+				getNextPageParam: (lastPage, _pages, lastPageParam) => ({
+					...lastPageParam,
+					cursor: lastPage.nextCursor ?? "",
+				}),
+			})
+		}),
+	(paramsA, paramsB) =>
+		paramsA.directoryId === paramsB.directoryId &&
+		paramsA.orderBy === paramsB.orderBy &&
+		paramsA.direction === paramsB.direction &&
+		paramsA.limit === paramsB.limit,
 )
 
 export const createDirectoryMutationAtom = atom((get) => {
@@ -103,13 +150,6 @@ export const createDirectoryMutationAtom = atom((get) => {
 				get(directoryInfoQueryAtom(data.id)).queryKey,
 				data,
 			)
-			const parent = data.path.at(-2)
-			if (parent) {
-				client.setQueryData(
-					get(directoryContentQueryAtom(parent.id)).queryKey,
-					(prev) => (prev ? [...prev, data] : [data]),
-				)
-			}
 		},
 	})
 })
@@ -157,13 +197,18 @@ export const moveDirectoryItemsMutationAtom = atom((get) =>
 			return result
 		},
 		onMutate: ({ items }, { client }) => {
+			const account = get(currentAccountAtom)
+			if (!account) {
+				return null
+			}
+
 			const movedItems = new Map<string, Set<string>>()
 
 			for (const item of items) {
 				if (item.parentId) {
 					const s = movedItems.get(item.parentId)
 					if (!s) {
-						movedItems.set(item.parentId, new Set(s))
+						movedItems.set(item.parentId, new Set([item.id]))
 					} else {
 						s.add(item.id)
 					}
@@ -172,45 +217,67 @@ export const moveDirectoryItemsMutationAtom = atom((get) =>
 
 			const prevDirContentMap = new Map<
 				string,
-				DirectoryItem[] | undefined
+				InfiniteData<typeof DirectoryContentResponse.infer> | undefined
 			>()
 
 			movedItems.forEach((s, parentId) => {
-				const query = get(directoryContentQueryAtom(parentId))
-				const prevDirContent = client.getQueryData(query.queryKey)
-				client.setQueryData(
-					query.queryKey,
-					(prev) => prev?.filter((it) => !s.has(it.id)) ?? prev,
-				)
+				const key = directoryContentQueryKey(account.id, parentId)
+				const prevDirContent =
+					client.getQueryData<
+						InfiniteData<typeof DirectoryContentResponse.infer>
+					>(key)
+				client.setQueryData<
+					InfiniteData<typeof DirectoryContentResponse.infer>
+				>(key, (prev) => {
+					if (!prev) return prev
+					return {
+						...prev,
+						pages: prev.pages.map((page) => ({
+							...page,
+							items: page.items.filter((it) => !s.has(it.id)),
+						})),
+					}
+				})
 				prevDirContentMap.set(parentId, prevDirContent)
 			})
 
 			return { prevDirContentMap }
 		},
 		onSuccess: (_data, { targetDirectory, items }, _result, { client }) => {
+			const account = get(currentAccountAtom)
+			if (!account) return
+
 			const dirId =
 				typeof targetDirectory === "string"
 					? targetDirectory
 					: targetDirectory.id
-			client.invalidateQueries(get(directoryContentQueryAtom(dirId)))
+			client.invalidateQueries({
+				queryKey: directoryContentQueryKey(account.id, dirId),
+			})
 			for (const item of items) {
 				if (item.parentId) {
-					client.invalidateQueries(
-						get(directoryContentQueryAtom(item.parentId)),
-					)
+					client.invalidateQueries({
+						queryKey: directoryContentQueryKey(
+							account.id,
+							item.parentId,
+						),
+					})
 				}
 			}
 		},
 		onError: (_error, _vars, context, { client }) => {
 			if (context) {
-				context.prevDirContentMap.forEach(
-					(prevDirContent, parentId) => {
-						client.setQueryData(
-							get(directoryContentQueryAtom(parentId)).queryKey,
-							prevDirContent,
-						)
-					},
-				)
+				const account = get(currentAccountAtom)
+				if (account) {
+					context.prevDirContentMap.forEach(
+						(prevDirContent, parentId) => {
+							client.setQueryData(
+								directoryContentQueryKey(account.id, parentId),
+								prevDirContent,
+							)
+						},
+					)
+				}
 			}
 		},
 	}),
@@ -277,12 +344,17 @@ export const moveToTrashMutationAtom = atom((get) =>
 			return [...deletedFiles, ...deletedDirectories]
 		},
 		onMutate: (items, { client }) => {
+			const account = get(currentAccountAtom)
+			if (!account) {
+				return null
+			}
+
 			const trashedItems = new Map<string, Set<string>>()
 			for (const item of items) {
 				if (item.parentId) {
 					const s = trashedItems.get(item.parentId)
 					if (!s) {
-						trashedItems.set(item.parentId, new Set(s))
+						trashedItems.set(item.parentId, new Set([item.id]))
 					} else {
 						s.add(item.id)
 					}
@@ -291,38 +363,58 @@ export const moveToTrashMutationAtom = atom((get) =>
 
 			const prevDirContentMap = new Map<
 				string,
-				DirectoryItem[] | undefined
+				InfiniteData<typeof DirectoryContentResponse.infer> | undefined
 			>()
 			trashedItems.forEach((s, parentId) => {
-				const query = get(directoryContentQueryAtom(parentId))
-				const prevDirContent = client.getQueryData(query.queryKey)
-				client.setQueryData(
-					query.queryKey,
-					(prev) => prev?.filter((it) => !s.has(it.id)) ?? prev,
-				)
+				const key = directoryContentQueryKey(account.id, parentId)
+				const prevDirContent =
+					client.getQueryData<
+						InfiniteData<typeof DirectoryContentResponse.infer>
+					>(key)
+				client.setQueryData<
+					InfiniteData<typeof DirectoryContentResponse.infer>
+				>(key, (prev) => {
+					if (!prev) return prev
+					return {
+						...prev,
+						pages: prev.pages.map((page) => ({
+							...page,
+							items: page.items.filter((it) => !s.has(it.id)),
+						})),
+					}
+				})
 				prevDirContentMap.set(parentId, prevDirContent)
 			})
 			return { prevDirContentMap }
 		},
 		onSuccess: (_data, items, _result, { client }) => {
-			for (const item of items) {
-				if (item.parentId) {
-					client.invalidateQueries(
-						get(directoryContentQueryAtom(item.parentId)),
-					)
+			const account = get(currentAccountAtom)
+			if (account) {
+				for (const item of items) {
+					if (item.parentId) {
+						client.invalidateQueries({
+							queryKey: directoryContentQueryKey(
+								account.id,
+								item.parentId,
+							),
+						})
+					}
 				}
 			}
 		},
-		onError: (_error, items, context, { client }) => {
+		onError: (_error, _items, context, { client }) => {
 			if (context) {
-				context.prevDirContentMap.forEach(
-					(prevDirContent, parentId) => {
-						client.setQueryData(
-							get(directoryContentQueryAtom(parentId)).queryKey,
-							prevDirContent,
-						)
-					},
-				)
+				const account = get(currentAccountAtom)
+				if (account) {
+					context.prevDirContentMap.forEach(
+						(prevDirContent, parentId) => {
+							client.setQueryData(
+								directoryContentQueryKey(account.id, parentId),
+								prevDirContent,
+							)
+						},
+					)
+				}
 			}
 		},
 	}),

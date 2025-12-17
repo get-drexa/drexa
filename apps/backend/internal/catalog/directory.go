@@ -1,8 +1,11 @@
 package catalog
 
 import (
+	"encoding/base64"
 	"errors"
+	"fmt"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -24,7 +27,7 @@ type DirectoryInfo struct {
 	Kind string `json:"kind" example:"directory"`
 	// Unique directory identifier
 	ID string `json:"id" example:"kRp2XYTq9A55"`
-	// ParentID is the pbulic ID of the directory this directory is in
+	// ParentID is the public ID of the directory this directory is in
 	ParentID string `json:"parentId,omitempty" example:"kRp2XYTq9A55"`
 	// Full path from root (included when ?include=path)
 	Path virtualfs.Path `json:"path,omitempty"`
@@ -54,6 +57,15 @@ type postDirectoryContentRequest struct {
 	Items []string `json:"items" example:"mElnUNCm8F22,kRp2XYTq9A55"`
 }
 
+// listDirectoryResponse represents the response to a request to list the contents of a directory
+// @Description Response to a request to list the contents of a directory
+type listDirectoryResponse struct {
+	// Items is the list of items in the directory, limited to the limit specified in the request
+	Items []any `json:"items"`
+	// NextCursor is the cursor to use to get the next page of results
+	NextCursor string `json:"nextCursor,omitempty"`
+}
+
 // moveItemsToDirectoryResponse represents the response to a request
 // to move items into a directory.
 // @Description Response from moving items to a directory with status for each item
@@ -78,6 +90,12 @@ type moveItemError struct {
 	ID string `json:"id" example:"mElnUNCm8F22"`
 	// Error message describing what went wrong
 	Error string `json:"error" example:"permission denied"`
+}
+
+type decodedListChildrenCursor struct {
+	orderBy        virtualfs.ListChildrenOrder
+	orderDirection virtualfs.ListChildrenDirection
+	nodeID         string
 }
 
 func (h *HTTPHandler) currentDirectoryMiddleware(c *fiber.Ctx) error {
@@ -236,19 +254,79 @@ func (h *HTTPHandler) fetchDirectory(c *fiber.Ctx) error {
 
 // listDirectory returns directory contents
 // @Summary List directory contents
-// @Description Get all files and subdirectories within a directory
+// @Description Get all files and subdirectories within a directory with optional pagination, sorting, and filtering
 // @Tags directories
 // @Produce json
 // @Security BearerAuth
 // @Param accountID path string true "Account ID" format(uuid)
-// @Param directoryID path string true "Directory ID"
-// @Success 200 {array} interface{} "Array of FileInfo and DirectoryInfo objects"
+// @Param directoryID path string true "Directory ID (use 'root' for the root directory)"
+// @Param orderBy query string false "Sort field: name, createdAt, or updatedAt" Enums(name,createdAt,updatedAt)
+// @Param dir query string false "Sort direction: asc or desc" Enums(asc,desc)
+// @Param limit query integer false "Maximum number of items to return (default: 100, min: 1)"
+// @Param cursor query string false "Cursor for pagination (base64-encoded cursor from previous response)"
+// @Success 200 {object} listDirectoryResponse "Paginated list of FileInfo and DirectoryInfo objects"
+// @Failure 400 {object} map[string]string "Invalid limit or cursor"
 // @Failure 401 {string} string "Not authenticated"
 // @Failure 404 {string} string "Directory not found"
 // @Router /accounts/{accountID}/directories/{directoryID}/content [get]
 func (h *HTTPHandler) listDirectory(c *fiber.Ctx) error {
 	node := mustCurrentDirectoryNode(c)
-	children, err := h.vfs.ListChildren(c.Context(), h.db, node)
+
+	opts := virtualfs.ListChildrenOptions{}
+
+	if by := c.Query("orderBy"); by != "" {
+		switch by {
+		case "name":
+			opts.OrderBy = virtualfs.ListChildrenOrderByName
+		case "createdAt":
+			opts.OrderBy = virtualfs.ListChildrenOrderByCreatedAt
+		case "updatedAt":
+			opts.OrderBy = virtualfs.ListChildrenOrderByUpdatedAt
+		}
+	}
+
+	if dir := c.Query("dir"); dir != "" {
+		switch dir {
+		case "asc":
+			opts.OrderDirection = virtualfs.ListChildrenDirectionAsc
+		case "desc":
+			opts.OrderDirection = virtualfs.ListChildrenDirectionDesc
+		}
+	}
+
+	if limit := c.Query("limit"); limit != "" {
+		limit, err := strconv.Atoi(limit)
+		if err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid limit"})
+		}
+		if limit < 1 {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Limit must be at least 1"})
+		}
+		opts.Limit = limit
+	}
+
+	if cursor := c.Query("cursor"); cursor != "" {
+		dc, err := decodeListChildrenCursor(cursor)
+		if err != nil {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid cursor"})
+		}
+
+		n, err := h.vfs.FindNodeByPublicID(c.Context(), h.db, node.AccountID, dc.nodeID)
+		if err != nil {
+			if errors.Is(err, virtualfs.ErrNodeNotFound) {
+				return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid cursor"})
+			}
+			return httperr.Internal(err)
+		}
+
+		opts.Cursor = &virtualfs.ListChildrenCursor{
+			Node:           n,
+			OrderBy:        dc.orderBy,
+			OrderDirection: dc.orderDirection,
+		}
+	}
+
+	children, cursor, err := h.vfs.ListChildren(c.Context(), h.db, node, opts)
 	if err != nil {
 		if errors.Is(err, virtualfs.ErrNodeNotFound) {
 			return c.SendStatus(fiber.StatusNotFound)
@@ -283,7 +361,10 @@ func (h *HTTPHandler) listDirectory(c *fiber.Ctx) error {
 		}
 	}
 
-	return c.JSON(items)
+	return c.JSON(listDirectoryResponse{
+		Items:      items,
+		NextCursor: encodeListChildrenCursor(cursor),
+	})
 }
 
 // patchDirectory updates directory properties
@@ -561,4 +642,65 @@ func (h *HTTPHandler) moveItemsToDirectory(c *fiber.Ctx) error {
 	}
 
 	return c.JSON(res)
+}
+
+func encodeListChildrenCursor(cursor *virtualfs.ListChildrenCursor) string {
+	var by int
+	switch cursor.OrderBy {
+	case virtualfs.ListChildrenOrderByName:
+		by = 0
+	case virtualfs.ListChildrenOrderByCreatedAt:
+		by = 1
+	case virtualfs.ListChildrenOrderByUpdatedAt:
+		by = 2
+	}
+
+	var d int
+	switch cursor.OrderDirection {
+	case virtualfs.ListChildrenDirectionAsc:
+		d = 0
+	case virtualfs.ListChildrenDirectionDesc:
+		d = 1
+	}
+
+	s := fmt.Sprintf("%d:%d:%s", by, d, cursor.Node.ID)
+	return base64.URLEncoding.EncodeToString([]byte(s))
+}
+
+func decodeListChildrenCursor(s string) (*decodedListChildrenCursor, error) {
+	bs, err := base64.URLEncoding.DecodeString(s)
+	if err != nil {
+		return nil, err
+	}
+
+	parts := strings.Split(string(bs), ":")
+	if len(parts) != 3 {
+		return nil, errors.New("invalid cursor")
+	}
+
+	c := new(decodedListChildrenCursor)
+
+	switch parts[0] {
+	case "0":
+		c.orderBy = virtualfs.ListChildrenOrderByName
+	case "1":
+		c.orderBy = virtualfs.ListChildrenOrderByCreatedAt
+	case "2":
+		c.orderBy = virtualfs.ListChildrenOrderByUpdatedAt
+	default:
+		return nil, errors.New("invalid cursor")
+	}
+
+	switch parts[1] {
+	case "0":
+		c.orderDirection = virtualfs.ListChildrenDirectionAsc
+	case "1":
+		c.orderDirection = virtualfs.ListChildrenDirectionDesc
+	default:
+		return nil, errors.New("invalid cursor")
+	}
+
+	c.nodeID = parts[2]
+
+	return c, nil
 }

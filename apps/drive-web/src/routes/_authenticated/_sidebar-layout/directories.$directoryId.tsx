@@ -1,6 +1,7 @@
 import { useMutation, useQuery } from "@tanstack/react-query"
 import { createFileRoute } from "@tanstack/react-router"
 import type { Row, Table } from "@tanstack/react-table"
+import { type } from "arktype"
 import { atom, useAtom, useAtomValue, useSetAtom, useStore } from "jotai"
 import {
 	ChevronDownIcon,
@@ -38,8 +39,10 @@ import { FilePreviewDialog } from "@/files/file-preview-dialog"
 import { cutItemsAtom, inProgressFileUploadCountAtom } from "@/files/store"
 import { UploadFileDialog } from "@/files/upload-file-dialog"
 import type { FileDragInfo } from "@/files/use-file-drop"
+import { formatError } from "@/lib/error"
 import {
-	directoryContentQueryAtom,
+	DIRECTORY_CONTENT_ORDER_BY,
+	DIRECTORY_CONTENT_ORDER_DIRECTION,
 	directoryInfoQueryAtom,
 	moveToTrashMutationAtom,
 } from "@/vfs/api"
@@ -49,11 +52,20 @@ import type {
 	DirectoryItem,
 	FileInfo,
 } from "@/vfs/vfs"
-import { formatError } from "../../../lib/error"
+
+const DirectoryContentPageParams = type({
+	orderBy: type
+		.valueOf(DIRECTORY_CONTENT_ORDER_BY)
+		.default(DIRECTORY_CONTENT_ORDER_BY.name),
+	direction: type
+		.valueOf(DIRECTORY_CONTENT_ORDER_DIRECTION)
+		.default(DIRECTORY_CONTENT_ORDER_DIRECTION.asc),
+})
 
 export const Route = createFileRoute(
 	"/_authenticated/_sidebar-layout/directories/$directoryId",
 )({
+	validateSearch: DirectoryContentPageParams,
 	component: RouteComponent,
 })
 
@@ -87,37 +99,54 @@ const itemBeingRenamedAtom = atom<{
 // MARK: page entry
 function RouteComponent() {
 	const { directoryId } = Route.useParams()
-	const {
-		data: directoryInfo,
-		isLoading: isLoadingDirectoryInfo,
-		error: directoryInfoError,
-	} = useQuery(useAtomValue(directoryInfoQueryAtom(directoryId)))
-	const {
-		data: directoryContent,
-		isLoading: isLoadingDirectoryContent,
-		error: directoryContentError,
-	} = useQuery(useAtomValue(directoryContentQueryAtom(directoryId)))
+	const { data: directoryInfo, isLoading: isLoadingDirectoryInfo } = useQuery(
+		useAtomValue(directoryInfoQueryAtom(directoryId)),
+	)
+
+	const setOpenedFile = useSetAtom(openedFileAtom)
+	const setContextMenuTargetItems = useSetAtom(contextMenuTargetItemsAtom)
 
 	const directoryUrlById = useCallback(
 		(directoryId: string) => `/directories/${directoryId}`,
 		[],
 	)
 
-	console.log({ directoryInfoError, directoryContentError })
+	const onTableOpenFile = useCallback(
+		(file: FileInfo) => {
+			setOpenedFile(file)
+		},
+		[setOpenedFile],
+	)
 
-	if (isLoadingDirectoryInfo || isLoadingDirectoryContent) {
+	const directoryUrlFn = useCallback(
+		(directory: DirectoryInfo) => `/directories/${directory.id}`,
+		[],
+	)
+
+	const handleContextMenuRequest = useCallback(
+		(row: Row<DirectoryItem>, table: Table<DirectoryItem>) => {
+			if (row.getIsSelected()) {
+				setContextMenuTargetItems(
+					table.getSelectedRowModel().rows.map((row) => row.original),
+				)
+			} else {
+				setContextMenuTargetItems([row.original])
+			}
+		},
+		[setContextMenuTargetItems],
+	)
+
+	if (isLoadingDirectoryInfo) {
 		return <DirectoryPageSkeleton />
 	}
 
-	if (!directoryInfo || !directoryContent) {
+	if (!directoryInfo) {
 		// TODO: handle empty state/error
 		return null
 	}
 
 	return (
-		<DirectoryPageContext
-			value={{ directory: directoryInfo, directoryContent }}
-		>
+		<DirectoryPageContext value={{ directory: directoryInfo }}>
 			<header className="flex py-2 shrink-0 items-center gap-2 border-b px-4 w-full">
 				<DirectoryPathBreadcrumb
 					directory={directoryInfo}
@@ -134,7 +163,12 @@ function RouteComponent() {
 			{/* DirectoryContentContextMenu must wrap div instead of DirectoryContentTable, otherwise radix will throw "event.preventDefault is not a function" error, idk why */}
 			<DirectoryContentContextMenu>
 				<div className="w-full">
-					<_DirectoryContentTable />
+					<DirectoryContentTable
+						directoryUrlFn={directoryUrlFn}
+						fileDragInfoAtom={fileDragInfoAtom}
+						onContextMenu={handleContextMenuRequest}
+						onOpenFile={onTableOpenFile}
+					/>
 				</div>
 			</DirectoryContentContextMenu>
 
@@ -188,46 +222,6 @@ function RouteComponent() {
 				}}
 			</WithAtom>
 		</DirectoryPageContext>
-	)
-}
-
-// MARK: directory table
-
-function _DirectoryContentTable() {
-	const optimisticDeletedItems = useAtomValue(optimisticDeletedItemsAtom)
-	const setOpenedFile = useSetAtom(openedFileAtom)
-	const setContextMenuTargetItems = useSetAtom(contextMenuTargetItemsAtom)
-
-	const onTableOpenFile = (file: FileInfo) => {
-		setOpenedFile(file)
-	}
-
-	const directoryUrlFn = useCallback(
-		(directory: DirectoryInfo) => `/directories/${directory.id}`,
-		[],
-	)
-
-	const handleContextMenuRequest = (
-		row: Row<DirectoryItem>,
-		table: Table<DirectoryItem>,
-	) => {
-		if (row.getIsSelected()) {
-			setContextMenuTargetItems(
-				table.getSelectedRowModel().rows.map((row) => row.original),
-			)
-		} else {
-			setContextMenuTargetItems([row.original])
-		}
-	}
-
-	return (
-		<DirectoryContentTable
-			hiddenItems={optimisticDeletedItems}
-			directoryUrlFn={directoryUrlFn}
-			fileDragInfoAtom={fileDragInfoAtom}
-			onContextMenu={handleContextMenuRequest}
-			onOpenFile={onTableOpenFile}
-		/>
 	)
 }
 

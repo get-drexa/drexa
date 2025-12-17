@@ -1,4 +1,5 @@
-import { Link, useNavigate } from "@tanstack/react-router"
+import { useInfiniteQuery } from "@tanstack/react-query"
+import { Link, useNavigate, useSearch } from "@tanstack/react-router"
 import {
 	type ColumnDef,
 	flexRender,
@@ -8,7 +9,7 @@ import {
 	type Table as TableType,
 	useReactTable,
 } from "@tanstack/react-table"
-import { type PrimitiveAtom, useSetAtom, useStore } from "jotai"
+import { type PrimitiveAtom, useAtomValue, useSetAtom, useStore } from "jotai"
 import { useContext, useEffect, useMemo, useRef } from "react"
 import { DirectoryIcon } from "@/components/icons/directory-icon"
 import { TextFileIcon } from "@/components/icons/text-file-icon"
@@ -28,12 +29,13 @@ import {
 } from "@/lib/keyboard"
 import { cn } from "@/lib/utils"
 import type { DirectoryInfo, DirectoryItem, FileInfo } from "@/vfs/vfs"
+import { directoryContentQueryAtom } from "../../vfs/api"
 import { DirectoryPageContext } from "./context"
+import { DirectoryContentTableSkeleton } from "./directory-content-table-skeleton"
 
 type DirectoryContentTableItemIdFilter = Set<string>
 
 type DirectoryContentTableProps = {
-	hiddenItems: DirectoryContentTableItemIdFilter
 	directoryUrlFn: (directory: DirectoryInfo) => string
 	fileDragInfoAtom: PrimitiveAtom<FileDragInfo | null>
 	onContextMenu: (
@@ -138,26 +140,40 @@ function useTableColumns(
 }
 
 export function DirectoryContentTable({
-	hiddenItems,
 	directoryUrlFn,
 	onContextMenu,
 	fileDragInfoAtom,
 	onOpenFile,
 }: DirectoryContentTableProps) {
-	const { directoryContent } = useContext(DirectoryPageContext)
+	const { directory } = useContext(DirectoryPageContext)
+	const search = useSearch({
+		from: "/_authenticated/_sidebar-layout/directories/$directoryId",
+	})
+
+	const directoryContentQuery = useAtomValue(
+		directoryContentQueryAtom({
+			directoryId: directory.id,
+			orderBy: search.orderBy,
+			direction: search.direction,
+			limit: 100,
+		}),
+	)
+	const { data: directoryContent, isLoading: isLoadingDirectoryContent } =
+		useInfiniteQuery(directoryContentQuery)
+
 	const store = useStore()
 	const navigate = useNavigate()
 
 	const table = useReactTable({
-		data: directoryContent || [],
+		data: useMemo(
+			() => directoryContent?.pages.flatMap((page) => page.items) || [],
+			[directoryContent],
+		),
 		columns: useTableColumns(onOpenFile, directoryUrlFn),
 		getCoreRowModel: getCoreRowModel(),
 		getFilteredRowModel: getFilteredRowModel(),
 		enableRowSelection: true,
 		enableGlobalFilter: true,
-		state: {
-			globalFilter: hiddenItems,
-		},
 		globalFilterFn: (
 			row,
 			_columnId,
@@ -179,6 +195,10 @@ export function DirectoryContentTable({
 		},
 		[table.setRowSelection],
 	)
+
+	if (isLoadingDirectoryContent) {
+		return <DirectoryContentTableSkeleton />
+	}
 
 	const handleRowContextMenu = (
 		row: Row<DirectoryItem>,

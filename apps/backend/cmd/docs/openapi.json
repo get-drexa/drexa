@@ -15,8 +15,45 @@
   },
   "paths": {
     "/accounts": {
+      "get": {
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "description": "Retrieve all accounts for the authenticated user",
+        "tags": [
+          "accounts"
+        ],
+        "summary": "List accounts",
+        "responses": {
+          "200": {
+            "description": "List of accounts for the authenticated user",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/internal_account.Account"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      },
       "post": {
-        "description": "Create a new user account with email and password. Returns the account, user, and authentication tokens.",
+        "description": "Create a new user account with email and password. Returns the account, user, and authentication tokens. Tokens can be delivered via HTTP-only cookies or in the response body based on the tokenDelivery field.",
         "tags": [
           "accounts"
         ],
@@ -44,7 +81,7 @@
             }
           },
           "400": {
-            "description": "Invalid request body",
+            "description": "Invalid request body or token delivery method",
             "content": {
               "application/json": {
                 "schema": {
@@ -1616,6 +1653,15 @@
             "description": "Password for the new account (min 8 characters)",
             "type": "string",
             "example": "securepassword123"
+          },
+          "tokenDelivery": {
+            "description": "How to deliver tokens: \"cookie\" (set HTTP-only cookies) or \"body\" (include in response)",
+            "type": "string",
+            "enum": [
+              "cookie",
+              "body"
+            ],
+            "example": "body"
           }
         }
       },
@@ -1624,7 +1670,7 @@
         "type": "object",
         "properties": {
           "accessToken": {
-            "description": "JWT access token for immediate authentication",
+            "description": "JWT access token for immediate authentication (only included when tokenDelivery is \"body\")",
             "type": "string",
             "example": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI1NTBlODQwMC1lMjliLTQxZDQtYTcxNi00NDY2NTU0NDAwMDAifQ.signature"
           },
@@ -1637,7 +1683,7 @@
             ]
           },
           "refreshToken": {
-            "description": "Base64 URL encoded refresh token",
+            "description": "Base64 URL encoded refresh token (only included when tokenDelivery is \"body\")",
             "type": "string",
             "example": "dR4nD0mUu1DkZXlCeXRlc0FuZFJhbmRvbURhdGFIZXJlMTIzNDU2Nzg5MGFi"
           },
