@@ -92,7 +92,6 @@ type ActiveDialogData = NewDirectoryDialogData | UploadFileDialogData
 const contextMenuTargetItemsAtom = atom<DirectoryItem[]>([])
 const activeDialogDataAtom = atom<ActiveDialogData | null>(null)
 const fileDragInfoAtom = atom<FileDragInfo | null>(null)
-const optimisticDeletedItemsAtom = atom(new Set<string>())
 const openedFileAtom = atom<FileInfo | null>(null)
 const itemBeingRenamedAtom = atom<{
 	originalItem: DirectoryItem
