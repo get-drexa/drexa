@@ -1,5 +1,5 @@
 import { useInfiniteQuery } from "@tanstack/react-query"
-import { Link, useNavigate, useSearch } from "@tanstack/react-router"
+import { Link, useNavigate } from "@tanstack/react-router"
 import {
 	type ColumnDef,
 	flexRender,
@@ -10,9 +10,9 @@ import {
 	useReactTable,
 } from "@tanstack/react-table"
 import { useVirtualizer, type VirtualItem } from "@tanstack/react-virtual"
-import { type PrimitiveAtom, useAtomValue, useSetAtom, useStore } from "jotai"
+import { type PrimitiveAtom, useSetAtom, useStore } from "jotai"
 import type React from "react"
-import { useContext, useEffect, useMemo, useRef } from "react"
+import { useEffect, useMemo, useRef } from "react"
 import { DirectoryIcon } from "@/components/icons/directory-icon"
 import { TextFileIcon } from "@/components/icons/text-file-icon"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -31,14 +31,13 @@ import {
 	keyboardModifierAtom,
 } from "@/lib/keyboard"
 import { cn } from "@/lib/utils"
+import type { DirectoryContentQuery } from "@/vfs/api"
 import type { DirectoryInfo, DirectoryItem, FileInfo } from "@/vfs/vfs"
-import { directoryContentQueryAtom } from "../../vfs/api"
-import { DirectoryPageContext } from "./context"
 import { DirectoryContentTableSkeleton } from "./directory-content-table-skeleton"
 
 type DirectoryContentTableItemIdFilter = Set<string>
 
-type DirectoryContentTableProps = {
+export type DirectoryContentTableProps = {
 	directoryUrlFn: (directory: DirectoryInfo) => string
 	fileDragInfoAtom: PrimitiveAtom<FileDragInfo | null>
 	onContextMenu: (
@@ -46,6 +45,9 @@ type DirectoryContentTableProps = {
 		table: TableType<DirectoryItem>,
 	) => void
 	onOpenFile: (file: FileInfo) => void
+	query: DirectoryContentQuery
+	loadingComponent?: React.ReactNode
+	debugBanner?: React.ReactNode
 }
 
 function formatFileSize(bytes: number): string {
@@ -142,39 +144,33 @@ function useTableColumns(
 	)
 }
 
+// Shared table component that accepts query options as props
 export function DirectoryContentTable({
 	directoryUrlFn,
 	onContextMenu,
 	fileDragInfoAtom,
 	onOpenFile,
+	query,
+	loadingComponent,
+	debugBanner,
 }: DirectoryContentTableProps) {
-	const { directory } = useContext(DirectoryPageContext)
-	const search = useSearch({
-		from: "/_authenticated/_sidebar-layout/directories/$directoryId",
-	})
-
-	const directoryContentQuery = useAtomValue(
-		directoryContentQueryAtom({
-			directoryId: directory.id,
-			orderBy: search.orderBy,
-			direction: search.direction,
-			limit: 100,
-		}),
-	)
 	const {
 		data: directoryContent,
 		isLoading: isLoadingDirectoryContent,
 		isFetchingNextPage: isFetchingMoreDirectoryItems,
 		fetchNextPage: fetchMoreDirectoryItems,
 		hasNextPage: hasMoreDirectoryItems,
-	} = useInfiniteQuery(directoryContentQuery)
+	} = useInfiniteQuery(query)
 
 	const store = useStore()
 	const navigate = useNavigate()
 
 	const table = useReactTable({
 		data: useMemo(
-			() => directoryContent?.pages.flatMap((page) => page.items) || [],
+			() =>
+				directoryContent?.pages.flatMap(
+					(page) => (page as { items: DirectoryItem[] }).items,
+				) || [],
 			[directoryContent],
 		),
 		columns: useTableColumns(onOpenFile, directoryUrlFn),
@@ -233,7 +229,7 @@ export function DirectoryContentTable({
 	)
 
 	if (isLoadingDirectoryContent) {
-		return <DirectoryContentTableSkeleton />
+		return <>{loadingComponent || <DirectoryContentTableSkeleton />}</>
 	}
 
 	const handleRowContextMenu = (
@@ -277,7 +273,8 @@ export function DirectoryContentTable({
 	}
 
 	const renderRow = (virtualRow: VirtualItem, i: number) => {
-		const row = rows[virtualRow.index]!
+		const row = rows[virtualRow.index]
+		if (!row) return null
 		return (
 			<FileItemRow
 				style={{
@@ -300,40 +297,47 @@ export function DirectoryContentTable({
 	}
 
 	return (
-		<TableContainer className="h-full" ref={containerRef}>
-			<Table className="h-full min-h-0">
-				<TableHeader>
-					{table.getHeaderGroups().map((headerGroup) => (
-						<TableRow
-							className="px-4 border-b-0!"
-							key={headerGroup.id}
-						>
-							{headerGroup.headers.map((header) => (
-								<TableHead
-									className="first:pl-4 last:pr-4 sticky top-0 bg-background z-1 inset-shadow-[0_-1px_0_0_var(--border)]"
-									key={header.id}
-									style={{ width: header.getSize() }}
-								>
-									{header.isPlaceholder
-										? null
-										: flexRender(
-												header.column.columnDef.header,
-												header.getContext(),
-											)}
-								</TableHead>
-							))}
-						</TableRow>
-					))}
-				</TableHeader>
-				<TableBody className="overflow-auto">
-					{rows.length > 0 ? (
-						virtualItems.map(renderRow)
-					) : (
-						<NoResultsRow />
-					)}
-				</TableBody>
-			</Table>
-		</TableContainer>
+		<div className="h-full flex flex-col">
+			{debugBanner}
+			<TableContainer
+				className={debugBanner ? "flex-1" : "h-full"}
+				ref={containerRef}
+			>
+				<Table className="h-full min-h-0">
+					<TableHeader>
+						{table.getHeaderGroups().map((headerGroup) => (
+							<TableRow
+								className="px-4 border-b-0!"
+								key={headerGroup.id}
+							>
+								{headerGroup.headers.map((header) => (
+									<TableHead
+										className="first:pl-4 last:pr-4 sticky top-0 bg-background z-1 inset-shadow-[0_-1px_0_0_var(--border)]"
+										key={header.id}
+										style={{ width: header.getSize() }}
+									>
+										{header.isPlaceholder
+											? null
+											: flexRender(
+													header.column.columnDef
+														.header,
+													header.getContext(),
+												)}
+									</TableHead>
+								))}
+							</TableRow>
+						))}
+					</TableHeader>
+					<TableBody className="overflow-auto">
+						{rows.length > 0 ? (
+							virtualItems.map(renderRow)
+						) : (
+							<NoResultsRow />
+						)}
+					</TableBody>
+				</Table>
+			</TableContainer>
+		</div>
 	)
 }
 

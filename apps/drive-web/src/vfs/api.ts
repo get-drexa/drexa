@@ -91,10 +91,32 @@ type DirectoryContentQueryParams = {
 	limit: number
 }
 
+type DirectoryContentPageParam = {
+	orderBy: DirectoryContentOrderBy
+	direction: DirectoryContentOrderDirection
+	limit: number
+	cursor: string
+}
+
 const directoryContentQueryKey = (
 	accountId: string | undefined,
 	directoryId: string,
-) => ["accounts", accountId, "directories", directoryId, "content"]
+): readonly (string | undefined)[] => [
+	"accounts",
+	accountId,
+	"directories",
+	directoryId,
+	"content",
+]
+export type DirectoryContentQuery = ReturnType<
+	typeof infiniteQueryOptions<
+		typeof DirectoryContentResponse.infer,
+		Error,
+		InfiniteData<typeof DirectoryContentResponse.infer>,
+		readonly (string | undefined)[],
+		DirectoryContentPageParam
+	>
+>
 export const directoryContentQueryAtom = atomFamily(
 	({ directoryId, orderBy, direction, limit }: DirectoryContentQueryParams) =>
 		atom((get) => {

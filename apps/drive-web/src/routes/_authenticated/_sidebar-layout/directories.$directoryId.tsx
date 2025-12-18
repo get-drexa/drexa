@@ -3,6 +3,7 @@ import { createFileRoute } from "@tanstack/react-router"
 import type { Row, Table } from "@tanstack/react-table"
 import { type } from "arktype"
 import { atom, useAtom, useAtomValue, useSetAtom, useStore } from "jotai"
+import { atomWithStorage } from "jotai/utils"
 import {
 	ChevronDownIcon,
 	PlusIcon,
@@ -10,7 +11,7 @@ import {
 	TextCursorInputIcon,
 	TrashIcon,
 } from "lucide-react"
-import { useCallback, useContext } from "react"
+import { lazy, Suspense, useCallback, useContext } from "react"
 import { toast } from "sonner"
 import { DirectoryIcon } from "@/components/icons/directory-icon"
 import { TextFileIcon } from "@/components/icons/text-file-icon"
@@ -30,10 +31,7 @@ import {
 import { WithAtom } from "@/components/with-atom"
 import { backgroundTaskProgressAtom } from "@/dashboard/state"
 import { DirectoryPageContext } from "@/directories/directory-page/context"
-import {
-	DirectoryContentTableWrapper,
-	mockTableAtom,
-} from "@/directories/directory-page/directory-content-table-wrapper"
+import { DirectoryContentTable } from "@/directories/directory-page/directory-content-table"
 import { DirectoryPageSkeleton } from "@/directories/directory-page/directory-page-skeleton"
 import { NewDirectoryDialog } from "@/directories/directory-page/new-directory-dialog"
 import { RenameFileDialog } from "@/directories/directory-page/rename-file-dialog"
@@ -46,6 +44,7 @@ import { formatError } from "@/lib/error"
 import {
 	DIRECTORY_CONTENT_ORDER_BY,
 	DIRECTORY_CONTENT_ORDER_DIRECTION,
+	directoryContentQueryAtom,
 	directoryInfoQueryAtom,
 	moveToTrashMutationAtom,
 } from "@/vfs/api"
@@ -55,6 +54,18 @@ import type {
 	DirectoryItem,
 	FileInfo,
 } from "@/vfs/vfs"
+
+// Conditional lazy import - Vite will tree-shake this entire import in production
+// because import.meta.env.DEV is evaluated at build time
+const MockDirectoryContentTable = import.meta.env.DEV
+	? lazy(() =>
+			import(
+				"@/directories/directory-page/mock-directory-content-table"
+			).then((mod) => ({
+				default: mod.MockDirectoryContentTable,
+			})),
+		)
+	: null
 
 const DirectoryContentPageParams = type({
 	orderBy: type
@@ -98,6 +109,14 @@ const itemBeingRenamedAtom = atom<{
 	name: string
 } | null>(null)
 
+// Atom to control mock table usage
+// In dev mode: uses atomWithStorage to persist in localStorage
+// In production: uses regular atom (always false, tree-shaken)
+// This ensures hooks are always called in the same order
+const mockTableAtom = import.meta.env.DEV
+	? atomWithStorage("drexa:use-mock-directory-table", false)
+	: atom(false)
+
 // MARK: page entry
 function RouteComponent() {
 	const { directoryId } = Route.useParams()
@@ -105,37 +124,9 @@ function RouteComponent() {
 		useAtomValue(directoryInfoQueryAtom(directoryId)),
 	)
 
-	const setOpenedFile = useSetAtom(openedFileAtom)
-	const setContextMenuTargetItems = useSetAtom(contextMenuTargetItemsAtom)
-
 	const directoryUrlById = useCallback(
 		(directoryId: string) => `/directories/${directoryId}`,
 		[],
-	)
-
-	const onTableOpenFile = useCallback(
-		(file: FileInfo) => {
-			setOpenedFile(file)
-		},
-		[setOpenedFile],
-	)
-
-	const directoryUrlFn = useCallback(
-		(directory: DirectoryInfo) => `/directories/${directory.id}`,
-		[],
-	)
-
-	const handleContextMenuRequest = useCallback(
-		(row: Row<DirectoryItem>, table: Table<DirectoryItem>) => {
-			if (row.getIsSelected()) {
-				setContextMenuTargetItems(
-					table.getSelectedRowModel().rows.map((row) => row.original),
-				)
-			} else {
-				setContextMenuTargetItems([row.original])
-			}
-		},
-		[setContextMenuTargetItems],
 	)
 
 	if (isLoadingDirectoryInfo) {
@@ -166,12 +157,7 @@ function RouteComponent() {
 			{/* DirectoryContentContextMenu must wrap div instead of DirectoryContentTable, otherwise radix will throw "event.preventDefault is not a function" error, idk why */}
 			<DirectoryContentContextMenu>
 				<div className="w-full min-h-0">
-					<DirectoryContentTableWrapper
-						directoryUrlFn={directoryUrlFn}
-						fileDragInfoAtom={fileDragInfoAtom}
-						onContextMenu={handleContextMenuRequest}
-						onOpenFile={onTableOpenFile}
-					/>
+					<_DirectoryContentTable />
 				</div>
 			</DirectoryContentContextMenu>
 
@@ -225,6 +211,99 @@ function RouteComponent() {
 				}}
 			</WithAtom>
 		</DirectoryPageContext>
+	)
+}
+
+function _DirectoryContentTable() {
+	// Always call the hook - in production the atom always returns false
+	const useMock = useAtomValue(mockTableAtom)
+	const { directory } = useContext(DirectoryPageContext)
+
+	const search = Route.useSearch()
+	const query = useAtomValue(
+		directoryContentQueryAtom({
+			directoryId: directory.id,
+			orderBy: search.orderBy,
+			direction: search.direction,
+			limit: 100,
+		}),
+	)
+
+	const setOpenedFile = useSetAtom(openedFileAtom)
+	const setContextMenuTargetItems = useSetAtom(contextMenuTargetItemsAtom)
+
+	const onTableOpenFile = useCallback(
+		(file: FileInfo) => {
+			setOpenedFile(file)
+		},
+		[setOpenedFile],
+	)
+
+	const directoryUrlFn = useCallback(
+		(directory: DirectoryInfo) => `/directories/${directory.id}`,
+		[],
+	)
+
+	const handleContextMenuRequest = useCallback(
+		(row: Row<DirectoryItem>, table: Table<DirectoryItem>) => {
+			if (row.getIsSelected()) {
+				setContextMenuTargetItems(
+					table.getSelectedRowModel().rows.map((row) => row.original),
+				)
+			} else {
+				setContextMenuTargetItems([row.original])
+			}
+		},
+		[setContextMenuTargetItems],
+	)
+
+	// In production, MockDirectoryContentTable is null, so this always renders real table
+	if (import.meta.env.DEV && useMock && MockDirectoryContentTable) {
+		return (
+			<Suspense fallback={<div>Loading mock table...</div>}>
+				<MockDirectoryContentTable
+					directoryUrlFn={directoryUrlFn}
+					onContextMenu={handleContextMenuRequest}
+					onOpenFile={onTableOpenFile}
+					query={query}
+				/>
+			</Suspense>
+		)
+	}
+
+	return (
+		<DirectoryContentTable
+			query={query}
+			directoryUrlFn={directoryUrlFn}
+			fileDragInfoAtom={fileDragInfoAtom}
+			onContextMenu={handleContextMenuRequest}
+			onOpenFile={onTableOpenFile}
+		/>
+	)
+}
+
+function MockTableToggle() {
+	// Always call the hook - mockTableAtom is always defined
+	// (it's a regular atom in production, but we only render in dev mode)
+	const [isEnabled, setIsEnabled] = useAtom(mockTableAtom)
+
+	if (!import.meta.env.DEV) {
+		return null
+	}
+
+	const handleToggle = () => {
+		setIsEnabled((prev) => !prev)
+	}
+
+	return (
+		<Button
+			variant={isEnabled ? "default" : "outline"}
+			size="sm"
+			onClick={handleToggle}
+			title="Toggle mock directory table (dev only)"
+		>
+			{isEnabled ? "Mock: ON" : "Mock: OFF"}
+		</Button>
 	)
 }
 
@@ -409,30 +488,5 @@ function NewDirectoryItemDropdown() {
 				</DropdownMenuItem>
 			</DropdownMenuContent>
 		</DropdownMenu>
-	)
-}
-
-function MockTableToggle() {
-	// Always call the hook - mockTableAtom is always defined
-	// (it's a regular atom in production, but we only render in dev mode)
-	const [isEnabled, setIsEnabled] = useAtom(mockTableAtom)
-
-	if (!import.meta.env.DEV) {
-		return null
-	}
-
-	const handleToggle = () => {
-		setIsEnabled((prev) => !prev)
-	}
-
-	return (
-		<Button
-			variant={isEnabled ? "default" : "outline"}
-			size="sm"
-			onClick={handleToggle}
-			title="Toggle mock directory table (dev only)"
-		>
-			{isEnabled ? "Mock: ON" : "Mock: OFF"}
-		</Button>
 	)
 }
