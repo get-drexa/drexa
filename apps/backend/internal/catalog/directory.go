@@ -307,6 +307,7 @@ func (h *HTTPHandler) listDirectory(c *fiber.Ctx) error {
 
 	if cursor := c.Query("cursor"); cursor != "" {
 		dc, err := decodeListChildrenCursor(cursor)
+		fmt.Printf("dc: %v\n", dc)
 		if err != nil {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid cursor"})
 		}
@@ -361,10 +362,17 @@ func (h *HTTPHandler) listDirectory(c *fiber.Ctx) error {
 		}
 	}
 
+	if cursor != nil {
+		return c.JSON(listDirectoryResponse{
+			Items:      items,
+			NextCursor: encodeListChildrenCursor(cursor),
+		})
+	}
+
 	return c.JSON(listDirectoryResponse{
-		Items:      items,
-		NextCursor: encodeListChildrenCursor(cursor),
+		Items: items,
 	})
+
 }
 
 // patchDirectory updates directory properties
@@ -663,7 +671,7 @@ func encodeListChildrenCursor(cursor *virtualfs.ListChildrenCursor) string {
 		d = 1
 	}
 
-	s := fmt.Sprintf("%d:%d:%s", by, d, cursor.Node.ID)
+	s := fmt.Sprintf("%d:%d:%s", by, d, cursor.Node.PublicID)
 	return base64.URLEncoding.EncodeToString([]byte(s))
 }
 

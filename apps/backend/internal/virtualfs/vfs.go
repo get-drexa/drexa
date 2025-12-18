@@ -254,6 +254,10 @@ func (vfs *VirtualFS) ListChildren(ctx context.Context, db bun.IDB, node *Node, 
 		return nil, nil, err
 	}
 
+	if len(nodes) == 0 {
+		return make([]*Node, 0), nil, nil
+	}
+
 	c := &ListChildrenCursor{
 		Node:           nodes[len(nodes)-1],
 		OrderBy:        opts.OrderBy,
