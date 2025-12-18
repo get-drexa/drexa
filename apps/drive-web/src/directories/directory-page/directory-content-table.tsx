@@ -9,7 +9,9 @@ import {
 	type Table as TableType,
 	useReactTable,
 } from "@tanstack/react-table"
+import { useVirtualizer, type VirtualItem } from "@tanstack/react-virtual"
 import { type PrimitiveAtom, useAtomValue, useSetAtom, useStore } from "jotai"
+import type React from "react"
 import { useContext, useEffect, useMemo, useRef } from "react"
 import { DirectoryIcon } from "@/components/icons/directory-icon"
 import { TextFileIcon } from "@/components/icons/text-file-icon"
@@ -18,6 +20,7 @@ import {
 	Table,
 	TableBody,
 	TableCell,
+	TableContainer,
 	TableHead,
 	TableHeader,
 	TableRow,
@@ -158,8 +161,13 @@ export function DirectoryContentTable({
 			limit: 100,
 		}),
 	)
-	const { data: directoryContent, isLoading: isLoadingDirectoryContent } =
-		useInfiniteQuery(directoryContentQuery)
+	const {
+		data: directoryContent,
+		isLoading: isLoadingDirectoryContent,
+		isFetchingNextPage: isFetchingMoreDirectoryItems,
+		fetchNextPage: fetchMoreDirectoryItems,
+		hasNextPage: hasMoreDirectoryItems,
+	} = useInfiniteQuery(directoryContentQuery)
 
 	const store = useStore()
 	const navigate = useNavigate()
@@ -182,6 +190,34 @@ export function DirectoryContentTable({
 		) => !filterValue.has(row.original.id),
 		getRowId: (row) => row.id,
 	})
+	const { rows } = table.getRowModel()
+
+	const containerRef = useRef<HTMLDivElement>(null)
+	const virtualizer = useVirtualizer({
+		count: rows.length,
+		getScrollElement: () => containerRef.current,
+		estimateSize: () => 36,
+		overscan: 20,
+	})
+	const virtualItems = virtualizer.getVirtualItems()
+
+	useEffect(() => {
+		const lastVirtualItem = virtualItems.at(-1)
+		if (
+			lastVirtualItem &&
+			lastVirtualItem.index >= rows.length - 1 &&
+			hasMoreDirectoryItems &&
+			!isFetchingMoreDirectoryItems
+		) {
+			fetchMoreDirectoryItems()
+		}
+	}, [
+		virtualItems,
+		rows.length,
+		hasMoreDirectoryItems,
+		isFetchingMoreDirectoryItems,
+		fetchMoreDirectoryItems,
+	])
 
 	useEffect(
 		function escapeToClearSelections() {
@@ -240,15 +276,41 @@ export function DirectoryContentTable({
 		}
 	}
 
+	const renderRow = (virtualRow: VirtualItem, i: number) => {
+		const row = rows[virtualRow.index]!
+		return (
+			<FileItemRow
+				style={{
+					height: virtualRow.size,
+					transform: `translateY(${
+						virtualRow.start - i * virtualRow.size
+					}px)`,
+				}}
+				key={row.id}
+				table={table}
+				row={row}
+				onClick={() => selectRow(row)}
+				fileDragInfoAtom={fileDragInfoAtom}
+				onContextMenu={(e) => handleRowContextMenu(row, e)}
+				onDoubleClick={() => {
+					handleRowDoubleClick(row)
+				}}
+			/>
+		)
+	}
+
 	return (
-		<div className="overflow-hidden">
-			<Table>
+		<TableContainer className="h-full" ref={containerRef}>
+			<Table className="h-full min-h-0">
 				<TableHeader>
 					{table.getHeaderGroups().map((headerGroup) => (
-						<TableRow className="px-4" key={headerGroup.id}>
+						<TableRow
+							className="px-4 border-b-0!"
+							key={headerGroup.id}
+						>
 							{headerGroup.headers.map((header) => (
 								<TableHead
-									className="first:pl-4 last:pr-4"
+									className="first:pl-4 last:pr-4 sticky top-0 bg-background z-1 inset-shadow-[0_-1px_0_0_var(--border)]"
 									key={header.id}
 									style={{ width: header.getSize() }}
 								>
@@ -263,29 +325,15 @@ export function DirectoryContentTable({
 						</TableRow>
 					))}
 				</TableHeader>
-				<TableBody>
-					{table.getRowModel().rows?.length ? (
-						table.getRowModel().rows.map((row) => (
-							<FileItemRow
-								key={row.id}
-								table={table}
-								row={row}
-								onClick={() => selectRow(row)}
-								fileDragInfoAtom={fileDragInfoAtom}
-								onContextMenu={(e) =>
-									handleRowContextMenu(row, e)
-								}
-								onDoubleClick={() => {
-									handleRowDoubleClick(row)
-								}}
-							/>
-						))
+				<TableBody className="overflow-auto">
+					{rows.length > 0 ? (
+						virtualItems.map(renderRow)
 					) : (
 						<NoResultsRow />
 					)}
 				</TableBody>
 			</Table>
-		</div>
+		</TableContainer>
 	)
 }
 
@@ -306,7 +354,8 @@ function FileItemRow({
 	onContextMenu,
 	onDoubleClick,
 	fileDragInfoAtom,
-}: {
+	...rowProps
+}: React.ComponentProps<typeof TableRow> & {
 	table: TableType<DirectoryItem>
 	row: Row<DirectoryItem>
 	onClick: () => void
@@ -365,6 +414,7 @@ function FileItemRow({
 			onDragEnd={handleDragEnd}
 			{...dropHandlers}
 			className={cn({ "bg-muted": isDraggedOver })}
+			{...rowProps}
 		>
 			{row.getVisibleCells().map((cell) => (
 				<TableCell

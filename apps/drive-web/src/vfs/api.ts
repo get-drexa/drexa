@@ -115,10 +115,13 @@ export const directoryContentQueryAtom = atomFamily(
 								{ returns: DirectoryContentResponse },
 							).then(([_, result]) => result)
 						: Promise.reject(new Error("No account selected")),
-				getNextPageParam: (lastPage, _pages, lastPageParam) => ({
-					...lastPageParam,
-					cursor: lastPage.nextCursor ?? "",
-				}),
+				getNextPageParam: (lastPage, _pages, lastPageParam) =>
+					lastPage.nextCursor
+						? {
+								...lastPageParam,
+								cursor: lastPage.nextCursor,
+							}
+						: null,
 			})
 		}),
 	(paramsA, paramsB) =>

@@ -30,7 +30,10 @@ import {
 import { WithAtom } from "@/components/with-atom"
 import { backgroundTaskProgressAtom } from "@/dashboard/state"
 import { DirectoryPageContext } from "@/directories/directory-page/context"
-import { DirectoryContentTable } from "@/directories/directory-page/directory-content-table"
+import {
+	DirectoryContentTableWrapper,
+	mockTableAtom,
+} from "@/directories/directory-page/directory-content-table-wrapper"
 import { DirectoryPageSkeleton } from "@/directories/directory-page/directory-page-skeleton"
 import { NewDirectoryDialog } from "@/directories/directory-page/new-directory-dialog"
 import { RenameFileDialog } from "@/directories/directory-page/rename-file-dialog"
@@ -155,6 +158,7 @@ function RouteComponent() {
 					fileDragInfoAtom={fileDragInfoAtom}
 				/>
 				<div className="ml-auto flex flex-row gap-2">
+					{import.meta.env.DEV && <MockTableToggle />}
 					<NewDirectoryItemDropdown />
 					<UploadFileButton />
 				</div>
@@ -162,8 +166,8 @@ function RouteComponent() {
 
 			{/* DirectoryContentContextMenu must wrap div instead of DirectoryContentTable, otherwise radix will throw "event.preventDefault is not a function" error, idk why */}
 			<DirectoryContentContextMenu>
-				<div className="w-full">
-					<DirectoryContentTable
+				<div className="w-full min-h-0">
+					<DirectoryContentTableWrapper
 						directoryUrlFn={directoryUrlFn}
 						fileDragInfoAtom={fileDragInfoAtom}
 						onContextMenu={handleContextMenuRequest}
@@ -406,5 +410,30 @@ function NewDirectoryItemDropdown() {
 				</DropdownMenuItem>
 			</DropdownMenuContent>
 		</DropdownMenu>
+	)
+}
+
+function MockTableToggle() {
+	// Always call the hook - mockTableAtom is always defined
+	// (it's a regular atom in production, but we only render in dev mode)
+	const [isEnabled, setIsEnabled] = useAtom(mockTableAtom)
+
+	if (!import.meta.env.DEV) {
+		return null
+	}
+
+	const handleToggle = () => {
+		setIsEnabled((prev) => !prev)
+	}
+
+	return (
+		<Button
+			variant={isEnabled ? "default" : "outline"}
+			size="sm"
+			onClick={handleToggle}
+			title="Toggle mock directory table (dev only)"
+		>
+			{isEnabled ? "Mock: ON" : "Mock: OFF"}
+		</Button>
 	)
 }
