@@ -29,7 +29,7 @@ import {
 	TooltipTrigger,
 } from "@/components/ui/tooltip"
 import { formatError } from "@/lib/error"
-import { directoryContentQueryAtom } from "@/vfs/api"
+import { directoryContentQueryKey } from "@/vfs/api"
 import type { DirectoryInfoWithPath } from "@/vfs/vfs"
 import { currentAccountAtom } from "../account/account"
 import {
@@ -135,11 +135,16 @@ function useUploadFilesAtom({
 						toast.success("All files uploaded successfully")
 					}
 
-					client.invalidateQueries(
-						store.get(
-							directoryContentQueryAtom(targetDirectory.id),
-						),
-					)
+					// Invalidate all queries for the target directory (with any params)
+					const account = store.get(currentAccountAtom)
+					if (account) {
+						client.invalidateQueries({
+							queryKey: directoryContentQueryKey(
+								account.id,
+								targetDirectory.id,
+							),
+						})
+					}
 				},
 				onError: (error) => {
 					console.error(error)

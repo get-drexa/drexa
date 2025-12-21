@@ -1,4 +1,6 @@
-import { useInfiniteQuery } from "@tanstack/react-query"
+// TODO: make table sorting work (right now not working probably because different params share same query key)
+
+import { useInfiniteQuery, useMutation } from "@tanstack/react-query"
 import { Link, useNavigate } from "@tanstack/react-router"
 import {
 	type ColumnDef,
@@ -10,9 +12,11 @@ import {
 	useReactTable,
 } from "@tanstack/react-table"
 import { useVirtualizer, type VirtualItem } from "@tanstack/react-virtual"
-import { type PrimitiveAtom, useSetAtom, useStore } from "jotai"
+import { type PrimitiveAtom, useAtomValue, useSetAtom, useStore } from "jotai"
+import { ArrowDownIcon, ArrowUpIcon } from "lucide-react"
 import type React from "react"
-import { useEffect, useMemo, useRef } from "react"
+import { createContext, useContext, useEffect, useMemo, useRef } from "react"
+import { toast } from "sonner"
 import { DirectoryIcon } from "@/components/icons/directory-icon"
 import { TextFileIcon } from "@/components/icons/text-file-icon"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -31,24 +35,55 @@ import {
 	keyboardModifierAtom,
 } from "@/lib/keyboard"
 import { cn } from "@/lib/utils"
-import type { DirectoryContentQuery } from "@/vfs/api"
+import {
+	DIRECTORY_CONTENT_ORDER_BY,
+	DIRECTORY_CONTENT_ORDER_DIRECTION,
+	type DirectoryContentOrderBy,
+	type DirectoryContentOrderDirection,
+	type DirectoryContentQuery,
+	type MoveDirectoryItemsResult,
+	moveDirectoryItemsMutationAtom,
+} from "@/vfs/api"
 import type { DirectoryInfo, DirectoryItem, FileInfo } from "@/vfs/vfs"
+import {
+	DEFAULT_DIRECTORY_CONTENT_ORDER_BY,
+	DEFAULT_DIRECTORY_CONTENT_ORDER_DIRECTION,
+} from "./defaults"
 import { DirectoryContentTableSkeleton } from "./directory-content-table-skeleton"
 
 type DirectoryContentTableItemIdFilter = Set<string>
 
+export type DirectoryContentTableSortChangeCallback = (
+	orderBy: DirectoryContentOrderBy,
+	direction: DirectoryContentOrderDirection,
+) => void
+
 export type DirectoryContentTableProps = {
+	query: DirectoryContentQuery
 	directoryUrlFn: (directory: DirectoryInfo) => string
 	fileDragInfoAtom: PrimitiveAtom<FileDragInfo | null>
+	loadingComponent?: React.ReactNode
+	debugBanner?: React.ReactNode
+
 	onContextMenu: (
 		row: Row<DirectoryItem>,
 		table: TableType<DirectoryItem>,
 	) => void
 	onOpenFile: (file: FileInfo) => void
-	query: DirectoryContentQuery
-	loadingComponent?: React.ReactNode
-	debugBanner?: React.ReactNode
+	onSortChange: DirectoryContentTableSortChangeCallback
 }
+
+export type DirectoryContentTableContext = {
+	orderBy: DirectoryContentOrderBy
+	direction: DirectoryContentOrderDirection
+	onSortChange: DirectoryContentTableSortChangeCallback
+}
+const DirectoryContentTableContext =
+	createContext<DirectoryContentTableContext>({
+		orderBy: DEFAULT_DIRECTORY_CONTENT_ORDER_BY,
+		direction: DEFAULT_DIRECTORY_CONTENT_ORDER_DIRECTION,
+		onSortChange: () => {},
+	})
 
 function formatFileSize(bytes: number): string {
 	if (bytes === 0) return "0 B"
@@ -92,7 +127,7 @@ function useTableColumns(
 				size: 24,
 			},
 			{
-				header: "Name",
+				header: () => <NameHeaderCell />,
 				accessorKey: "doc.name",
 				cell: ({ row }) => {
 					switch (row.original.kind) {
@@ -144,15 +179,15 @@ function useTableColumns(
 	)
 }
 
-// Shared table component that accepts query options as props
 export function DirectoryContentTable({
 	directoryUrlFn,
-	onContextMenu,
 	fileDragInfoAtom,
-	onOpenFile,
 	query,
 	loadingComponent,
 	debugBanner,
+	onOpenFile,
+	onContextMenu,
+	onSortChange,
 }: DirectoryContentTableProps) {
 	const {
 		data: directoryContent,
@@ -164,6 +199,33 @@ export function DirectoryContentTable({
 
 	const store = useStore()
 	const navigate = useNavigate()
+	const moveDirectoryItemsMutation = useAtomValue(
+		moveDirectoryItemsMutationAtom,
+	)
+
+	const { mutate: moveDroppedItems } = useMutation({
+		...moveDirectoryItemsMutation,
+		onSuccess: (data: MoveDirectoryItemsResult) => {
+			const conflictCount = data.errors.length
+			if (conflictCount > 0) {
+				toast.warning(
+					`${data.moved.length} items moved${conflictCount > 0 ? `, ${conflictCount} conflicts` : ""}`,
+				)
+			} else {
+				toast.success(`${data.moved.length} items moved!`)
+			}
+		},
+	})
+
+	const handleFileDrop = (
+		items: import("@/vfs/vfs").DirectoryItem[],
+		targetDirectory: import("@/vfs/vfs").DirectoryInfo | string,
+	) => {
+		moveDroppedItems({
+			targetDirectory,
+			items,
+		})
+	}
 
 	const table = useReactTable({
 		data: useMemo(
@@ -292,52 +354,61 @@ export function DirectoryContentTable({
 				onDoubleClick={() => {
 					handleRowDoubleClick(row)
 				}}
+				onFileDrop={handleFileDrop}
 			/>
 		)
 	}
 
 	return (
-		<div className="h-full flex flex-col">
-			{debugBanner}
-			<TableContainer
-				className={debugBanner ? "flex-1" : "h-full"}
-				ref={containerRef}
-			>
-				<Table className="h-full min-h-0">
-					<TableHeader>
-						{table.getHeaderGroups().map((headerGroup) => (
-							<TableRow
-								className="px-4 border-b-0!"
-								key={headerGroup.id}
-							>
-								{headerGroup.headers.map((header) => (
-									<TableHead
-										className="first:pl-4 last:pr-4 sticky top-0 bg-background z-1 inset-shadow-[0_-1px_0_0_var(--border)]"
-										key={header.id}
-										style={{ width: header.getSize() }}
-									>
-										{header.isPlaceholder
-											? null
-											: flexRender(
-													header.column.columnDef
-														.header,
-													header.getContext(),
-												)}
-									</TableHead>
-								))}
-							</TableRow>
-						))}
-					</TableHeader>
-					<TableBody className="overflow-auto">
-						{rows.length > 0 ? (
-							virtualItems.map(renderRow)
-						) : (
-							<NoResultsRow />
-						)}
-					</TableBody>
-				</Table>
-			</TableContainer>
-		</div>
+		<DirectoryContentTableContext
+			value={{
+				orderBy: query.initialPageParam.orderBy,
+				direction: query.initialPageParam.direction,
+				onSortChange,
+			}}
+		>
+			<div className="h-full flex flex-col">
+				{debugBanner}
+				<TableContainer
+					className={debugBanner ? "flex-1" : "h-full"}
+					ref={containerRef}
+				>
+					<Table className="h-full min-h-0">
+						<TableHeader>
+							{table.getHeaderGroups().map((headerGroup) => (
+								<TableRow
+									className="px-4 border-b-0!"
+									key={headerGroup.id}
+								>
+									{headerGroup.headers.map((header) => (
+										<TableHead
+											className="first:pl-4 last:pr-4 sticky top-0 bg-background z-1 inset-shadow-[0_-1px_0_0_var(--border)]"
+											key={header.id}
+											style={{ width: header.getSize() }}
+										>
+											{header.isPlaceholder
+												? null
+												: flexRender(
+														header.column.columnDef
+															.header,
+														header.getContext(),
+													)}
+										</TableHead>
+									))}
+								</TableRow>
+							))}
+						</TableHeader>
+						<TableBody className="overflow-auto">
+							{rows.length > 0 ? (
+								virtualItems.map(renderRow)
+							) : (
+								<NoResultsRow />
+							)}
+						</TableBody>
+					</Table>
+				</TableContainer>
+			</div>
+		</DirectoryContentTableContext>
 	)
 }
 
@@ -358,6 +429,7 @@ function FileItemRow({
 	onContextMenu,
 	onDoubleClick,
 	fileDragInfoAtom,
+	onFileDrop,
 	...rowProps
 }: React.ComponentProps<typeof TableRow> & {
 	table: TableType<DirectoryItem>
@@ -366,6 +438,10 @@ function FileItemRow({
 	onContextMenu: (e: React.MouseEvent) => void
 	onDoubleClick: () => void
 	fileDragInfoAtom: PrimitiveAtom<FileDragInfo | null>
+	onFileDrop: (
+		items: import("@/vfs/vfs").DirectoryItem[],
+		targetDirectory: import("@/vfs/vfs").DirectoryInfo | string,
+	) => void
 }) {
 	const ref = useRef<HTMLTableRowElement>(null)
 	const setFileDragInfo = useSetAtom(fileDragInfoAtom)
@@ -374,6 +450,7 @@ function FileItemRow({
 		enabled: row.original.kind === "directory",
 		destDir: row.original.kind === "directory" ? row.original : undefined,
 		dragInfoAtom: fileDragInfoAtom,
+		onDrop: onFileDrop,
 	})
 
 	const handleDragStart = (_e: React.DragEvent) => {
@@ -430,6 +507,54 @@ function FileItemRow({
 				</TableCell>
 			))}
 		</TableRow>
+	)
+}
+
+function NameHeaderCell() {
+	const { orderBy, direction, onSortChange } = useContext(
+		DirectoryContentTableContext,
+	)
+
+	let arrow: React.ReactNode = null
+	if (orderBy === DIRECTORY_CONTENT_ORDER_BY.name) {
+		switch (direction) {
+			case DIRECTORY_CONTENT_ORDER_DIRECTION.asc:
+				arrow = <ArrowUpIcon className="size-4" />
+				break
+			case DIRECTORY_CONTENT_ORDER_DIRECTION.desc:
+				arrow = <ArrowDownIcon className="size-4" />
+				break
+		}
+	}
+
+	let directionLabel: string
+	switch (direction) {
+		case DIRECTORY_CONTENT_ORDER_DIRECTION.asc:
+			directionLabel = "ascending"
+			break
+		case DIRECTORY_CONTENT_ORDER_DIRECTION.desc:
+			directionLabel = "descending"
+			break
+	}
+
+	return (
+		<button
+			type="button"
+			className="hover:underline cursor-pointer flex items-center gap-2 w-full"
+			onClick={() => {
+				onSortChange(
+					DIRECTORY_CONTENT_ORDER_BY.name,
+					direction === DIRECTORY_CONTENT_ORDER_DIRECTION.asc
+						? DIRECTORY_CONTENT_ORDER_DIRECTION.desc
+						: DIRECTORY_CONTENT_ORDER_DIRECTION.asc,
+				)
+			}}
+		>
+			<span className="sr-only">Sort by</span>
+			<span>Name</span>
+			<span className="sr-only">in {directionLabel} order</span>
+			{arrow}
+		</button>
 	)
 }
 

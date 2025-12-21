@@ -1,12 +1,6 @@
-import { useMutation } from "@tanstack/react-query"
 import type { PrimitiveAtom } from "jotai"
-import { useAtomValue, useSetAtom, useStore } from "jotai"
+import { useSetAtom, useStore } from "jotai"
 import { useState } from "react"
-import { toast } from "sonner"
-import {
-	type MoveDirectoryItemsResult,
-	moveDirectoryItemsMutationAtom,
-} from "@/vfs/api"
 import type { DirectoryInfo, DirectoryItem } from "@/vfs/vfs"
 
 export interface FileDragInfo {
@@ -18,6 +12,10 @@ export interface UseFileDropOptions {
 	destDir?: DirectoryInfo | string
 	dragInfoAtom: PrimitiveAtom<FileDragInfo | null>
 	enabled?: boolean
+	onDrop?: (
+		items: DirectoryItem[],
+		targetDirectory: DirectoryInfo | string,
+	) => void
 }
 
 export interface UseFileDropReturn {
@@ -33,43 +31,22 @@ export function useFileDrop({
 	destDir,
 	dragInfoAtom,
 	enabled,
+	onDrop,
 }: UseFileDropOptions): UseFileDropReturn {
 	const [isDraggedOver, setIsDraggedOver] = useState(false)
 	const setDragInfo = useSetAtom(dragInfoAtom)
 	const store = useStore()
 
-	const moveDirectoryItemsMutation = useAtomValue(
-		moveDirectoryItemsMutationAtom,
-	)
-
-	const { mutate: moveDroppedItems } = useMutation({
-		...moveDirectoryItemsMutation,
-		onSuccess: (data: MoveDirectoryItemsResult, vars, result, ctx) => {
-			moveDirectoryItemsMutation.onSuccess?.(data, vars, result, ctx)
-			const conflictCount = data.errors.length
-			if (conflictCount > 0) {
-				toast.warning(
-					`${data.moved.length} items moved${conflictCount > 0 ? `, ${conflictCount} conflicts` : ""}`,
-				)
-			} else {
-				toast.success(`${data.moved.length} items moved!`)
-			}
-		},
-	})
-
 	const dirId = typeof destDir === "string" ? destDir : destDir?.id
 
 	const handleDrop = (_e: React.DragEvent) => {
-		if (!enabled || !destDir || !dirId) return
+		if (!enabled || !destDir || !dirId || !onDrop) return
 
 		const dragInfo = store.get(dragInfoAtom)
 		if (dragInfo) {
 			const items = dragInfo.items.filter((item) => item.id !== dirId)
 			if (items.length > 0) {
-				moveDroppedItems({
-					targetDirectory: destDir,
-					items,
-				})
+				onDrop(items, destDir)
 			}
 		}
 		setIsDraggedOver(false)

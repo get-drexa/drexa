@@ -13,6 +13,7 @@ import {
 } from "lucide-react"
 import { lazy, Suspense, useCallback, useContext } from "react"
 import { toast } from "sonner"
+import { currentAccountAtom } from "@/account/account"
 import { DirectoryIcon } from "@/components/icons/directory-icon"
 import { TextFileIcon } from "@/components/icons/text-file-icon"
 import { Button } from "@/components/ui/button"
@@ -31,6 +32,10 @@ import {
 import { WithAtom } from "@/components/with-atom"
 import { backgroundTaskProgressAtom } from "@/dashboard/state"
 import { DirectoryPageContext } from "@/directories/directory-page/context"
+import {
+	DEFAULT_DIRECTORY_CONTENT_ORDER_BY,
+	DEFAULT_DIRECTORY_CONTENT_ORDER_DIRECTION,
+} from "@/directories/directory-page/defaults"
 import { DirectoryContentTable } from "@/directories/directory-page/directory-content-table"
 import { DirectoryPageSkeleton } from "@/directories/directory-page/directory-page-skeleton"
 import { NewDirectoryDialog } from "@/directories/directory-page/new-directory-dialog"
@@ -41,13 +46,22 @@ import { cutItemsAtom, inProgressFileUploadCountAtom } from "@/files/store"
 import { UploadFileDialog } from "@/files/upload-file-dialog"
 import type { FileDragInfo } from "@/files/use-file-drop"
 import { formatError } from "@/lib/error"
+import type {
+	DirectoryContentOrderBy,
+	DirectoryContentOrderDirection,
+} from "@/vfs/api"
 import {
 	DIRECTORY_CONTENT_ORDER_BY,
 	DIRECTORY_CONTENT_ORDER_DIRECTION,
 	directoryContentQueryAtom,
+	directoryContentQueryKey,
 	directoryInfoQueryAtom,
 	moveToTrashMutationAtom,
 } from "@/vfs/api"
+import {
+	optimisticallyRemoveDirectoryItems,
+	rollbackDirectoryContentOptimisticUpdate,
+} from "@/vfs/optimistic"
 import type {
 	DirectoryInfo,
 	DirectoryInfoWithPath,
@@ -70,10 +84,10 @@ const MockDirectoryContentTable = import.meta.env.DEV
 const DirectoryContentPageParams = type({
 	orderBy: type
 		.valueOf(DIRECTORY_CONTENT_ORDER_BY)
-		.default(DIRECTORY_CONTENT_ORDER_BY.name),
+		.default(DEFAULT_DIRECTORY_CONTENT_ORDER_BY),
 	direction: type
 		.valueOf(DIRECTORY_CONTENT_ORDER_DIRECTION)
-		.default(DIRECTORY_CONTENT_ORDER_DIRECTION.asc),
+		.default(DEFAULT_DIRECTORY_CONTENT_ORDER_DIRECTION),
 })
 
 export const Route = createFileRoute(
@@ -218,6 +232,7 @@ function _DirectoryContentTable() {
 	// Always call the hook - in production the atom always returns false
 	const useMock = useAtomValue(mockTableAtom)
 	const { directory } = useContext(DirectoryPageContext)
+	const navigate = Route.useNavigate()
 
 	const search = Route.useSearch()
 	const query = useAtomValue(
@@ -257,6 +272,21 @@ function _DirectoryContentTable() {
 		[setContextMenuTargetItems],
 	)
 
+	const applySorting = useCallback(
+		(
+			orderBy: DirectoryContentOrderBy,
+			direction: DirectoryContentOrderDirection,
+		) => {
+			navigate({
+				search: {
+					orderBy,
+					direction,
+				},
+			})
+		},
+		[navigate],
+	)
+
 	// In production, MockDirectoryContentTable is null, so this always renders real table
 	if (import.meta.env.DEV && useMock && MockDirectoryContentTable) {
 		return (
@@ -278,6 +308,7 @@ function _DirectoryContentTable() {
 			fileDragInfoAtom={fileDragInfoAtom}
 			onContextMenu={handleContextMenuRequest}
 			onOpenFile={onTableOpenFile}
+			onSortChange={applySorting}
 		/>
 	)
 }
@@ -320,29 +351,36 @@ function DirectoryContentContextMenu({
 	const [target, setTarget] = useAtom(contextMenuTargetItemsAtom)
 	const setBackgroundTaskProgress = useSetAtom(backgroundTaskProgressAtom)
 	const setCutItems = useSetAtom(cutItemsAtom)
+	const account = useAtomValue(currentAccountAtom)
+	const { directory } = useContext(DirectoryPageContext)
+	const search = Route.useSearch()
 
 	const moveToTrashMutation = useAtomValue(moveToTrashMutationAtom)
 	const { mutate: moveToTrash } = useMutation({
 		...moveToTrashMutation,
-		onMutate: (vars, ctx) => {
+		onMutate: (items, { client }) => {
 			setBackgroundTaskProgress({
 				label: "Moving items to trash…",
 			})
-			return (
-				moveToTrashMutation.onMutate?.(vars, ctx) ?? {
-					prevDirContentMap: new Map(),
-				}
-			)
+			if (!account) {
+				return null
+			}
+			return optimisticallyRemoveDirectoryItems(client, {
+				queryKey: directoryContentQueryKey(account.id, directory.id, {
+					orderBy: search.orderBy,
+					direction: search.direction,
+				}),
+				items,
+			})
 		},
-		onSuccess: (data, vars, result, ctx) => {
-			moveToTrashMutation.onSuccess?.(data, vars, result, ctx)
+		onSuccess: (data) => {
 			setBackgroundTaskProgress(null)
 			toast.success(`Moved ${data.length} items to trash`)
 		},
-		onError: (err, vars, mutateResult, context) => {
-			moveToTrashMutation.onError?.(err, vars, mutateResult, context)
+		onError: (err, _vars, mutateResult, { client }) => {
 			toast.error(formatError(err))
 			setBackgroundTaskProgress(null)
+			rollbackDirectoryContentOptimisticUpdate(client, mutateResult)
 		},
 	})
 

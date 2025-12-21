@@ -18,10 +18,11 @@ import {
 	FileInfo,
 } from "./vfs"
 
-const DirectoryContentResponse = type({
+export const DirectoryContentResponse = type({
 	items: DirectoryContent,
 	"nextCursor?": "string",
 })
+export type DirectoryContentResponseType = typeof DirectoryContentResponse.infer
 
 /**
  * This atom derives the file url for a given file.
@@ -81,7 +82,7 @@ export const DIRECTORY_CONTENT_ORDER_DIRECTION = {
 	asc: "asc",
 	desc: "desc",
 } as const
-type DirectoryContentOrderDirection =
+export type DirectoryContentOrderDirection =
 	(typeof DIRECTORY_CONTENT_ORDER_DIRECTION)[keyof typeof DIRECTORY_CONTENT_ORDER_DIRECTION]
 
 type DirectoryContentQueryParams = {
@@ -98,22 +99,27 @@ type DirectoryContentPageParam = {
 	cursor: string
 }
 
-const directoryContentQueryKey = (
+export const directoryContentQueryKey = (
 	accountId: string | undefined,
 	directoryId: string,
-): readonly (string | undefined)[] => [
+	params?: {
+		orderBy?: DirectoryContentOrderBy
+		direction?: DirectoryContentOrderDirection
+	},
+): readonly unknown[] => [
 	"accounts",
 	accountId,
 	"directories",
 	directoryId,
 	"content",
+	...(params ? [{ orderBy: params.orderBy, dir: params.direction }] : []),
 ]
 export type DirectoryContentQuery = ReturnType<
 	typeof infiniteQueryOptions<
 		typeof DirectoryContentResponse.infer,
 		Error,
 		InfiniteData<typeof DirectoryContentResponse.infer>,
-		readonly (string | undefined)[],
+		readonly unknown[],
 		DirectoryContentPageParam
 	>
 >
@@ -122,7 +128,10 @@ export const directoryContentQueryAtom = atomFamily(
 		atom((get) => {
 			const account = get(currentAccountAtom)
 			return infiniteQueryOptions({
-				queryKey: directoryContentQueryKey(account?.id, directoryId),
+				queryKey: directoryContentQueryKey(account?.id, directoryId, {
+					orderBy,
+					direction,
+				}),
 				initialPageParam: {
 					orderBy,
 					direction,
@@ -221,53 +230,6 @@ export const moveDirectoryItemsMutationAtom = atom((get) =>
 			)
 			return result
 		},
-		onMutate: ({ items }, { client }) => {
-			const account = get(currentAccountAtom)
-			if (!account) {
-				return null
-			}
-
-			const movedItems = new Map<string, Set<string>>()
-
-			for (const item of items) {
-				if (item.parentId) {
-					const s = movedItems.get(item.parentId)
-					if (!s) {
-						movedItems.set(item.parentId, new Set([item.id]))
-					} else {
-						s.add(item.id)
-					}
-				}
-			}
-
-			const prevDirContentMap = new Map<
-				string,
-				InfiniteData<typeof DirectoryContentResponse.infer> | undefined
-			>()
-
-			movedItems.forEach((s, parentId) => {
-				const key = directoryContentQueryKey(account.id, parentId)
-				const prevDirContent =
-					client.getQueryData<
-						InfiniteData<typeof DirectoryContentResponse.infer>
-					>(key)
-				client.setQueryData<
-					InfiniteData<typeof DirectoryContentResponse.infer>
-				>(key, (prev) => {
-					if (!prev) return prev
-					return {
-						...prev,
-						pages: prev.pages.map((page) => ({
-							...page,
-							items: page.items.filter((it) => !s.has(it.id)),
-						})),
-					}
-				})
-				prevDirContentMap.set(parentId, prevDirContent)
-			})
-
-			return { prevDirContentMap }
-		},
 		onSuccess: (_data, { targetDirectory, items }, _result, { client }) => {
 			const account = get(currentAccountAtom)
 			if (!account) return
@@ -276,6 +238,7 @@ export const moveDirectoryItemsMutationAtom = atom((get) =>
 				typeof targetDirectory === "string"
 					? targetDirectory
 					: targetDirectory.id
+			// Invalidate using base key (without params) to invalidate all queries for these directories
 			client.invalidateQueries({
 				queryKey: directoryContentQueryKey(account.id, dirId),
 			})
@@ -287,21 +250,6 @@ export const moveDirectoryItemsMutationAtom = atom((get) =>
 							item.parentId,
 						),
 					})
-				}
-			}
-		},
-		onError: (_error, _vars, context, { client }) => {
-			if (context) {
-				const account = get(currentAccountAtom)
-				if (account) {
-					context.prevDirContentMap.forEach(
-						(prevDirContent, parentId) => {
-							client.setQueryData(
-								directoryContentQueryKey(account.id, parentId),
-								prevDirContent,
-							)
-						},
-					)
 				}
 			}
 		},
@@ -368,53 +316,10 @@ export const moveToTrashMutationAtom = atom((get) =>
 
 			return [...deletedFiles, ...deletedDirectories]
 		},
-		onMutate: (items, { client }) => {
-			const account = get(currentAccountAtom)
-			if (!account) {
-				return null
-			}
-
-			const trashedItems = new Map<string, Set<string>>()
-			for (const item of items) {
-				if (item.parentId) {
-					const s = trashedItems.get(item.parentId)
-					if (!s) {
-						trashedItems.set(item.parentId, new Set([item.id]))
-					} else {
-						s.add(item.id)
-					}
-				}
-			}
-
-			const prevDirContentMap = new Map<
-				string,
-				InfiniteData<typeof DirectoryContentResponse.infer> | undefined
-			>()
-			trashedItems.forEach((s, parentId) => {
-				const key = directoryContentQueryKey(account.id, parentId)
-				const prevDirContent =
-					client.getQueryData<
-						InfiniteData<typeof DirectoryContentResponse.infer>
-					>(key)
-				client.setQueryData<
-					InfiniteData<typeof DirectoryContentResponse.infer>
-				>(key, (prev) => {
-					if (!prev) return prev
-					return {
-						...prev,
-						pages: prev.pages.map((page) => ({
-							...page,
-							items: page.items.filter((it) => !s.has(it.id)),
-						})),
-					}
-				})
-				prevDirContentMap.set(parentId, prevDirContent)
-			})
-			return { prevDirContentMap }
-		},
 		onSuccess: (_data, items, _result, { client }) => {
 			const account = get(currentAccountAtom)
 			if (account) {
+				// Invalidate using base key (without params) to invalidate all queries for these directories
 				for (const item of items) {
 					if (item.parentId) {
 						client.invalidateQueries({
@@ -424,21 +329,6 @@ export const moveToTrashMutationAtom = atom((get) =>
 							),
 						})
 					}
-				}
-			}
-		},
-		onError: (_error, _items, context, { client }) => {
-			if (context) {
-				const account = get(currentAccountAtom)
-				if (account) {
-					context.prevDirContentMap.forEach(
-						(prevDirContent, parentId) => {
-							client.setQueryData(
-								directoryContentQueryKey(account.id, parentId),
-								prevDirContent,
-							)
-						},
-					)
 				}
 			}
 		},
