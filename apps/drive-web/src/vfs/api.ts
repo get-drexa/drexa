@@ -10,6 +10,7 @@ import { atom } from "jotai"
 import { atomFamily } from "jotai/utils"
 import { currentAccountAtom } from "@/account/account"
 import { fetchApi } from "@/lib/api"
+import type { AtomValue } from "@/lib/jotai-utils"
 import {
 	DirectoryContent,
 	DirectoryInfo,
@@ -179,11 +180,12 @@ export const createDirectoryMutationAtom = atom((get) => {
 				},
 			).then(([_, result]) => result)
 		},
-		onSuccess: (data, _variables, _context, { client }) => {
-			client.setQueryData(
-				get(directoryInfoQueryAtom(data.id)).queryKey,
-				data,
-			)
+		onSuccess: (_data, { parentId }, _context, { client }) => {
+			if (account) {
+				client.invalidateQueries({
+					queryKey: directoryContentQueryKey(account.id, parentId),
+				})
+			}
 		},
 	})
 })
