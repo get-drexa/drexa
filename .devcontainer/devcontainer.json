@@ -21,7 +21,8 @@
 				"biomejs.biome",
 				"bradlc.vscode-tailwindcss",
 				"christian-kohler.path-intellisense",
-				"golang.go"
+				"golang.go",
+				"openai.chatgpt"
 			],
 			"settings": {
 				"editor.formatOnSave": true,
