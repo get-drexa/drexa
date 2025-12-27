@@ -1,5 +1,3 @@
-// TODO: make table sorting work (right now not working probably because different params share same query key)
-
 import { useInfiniteQuery, useMutation } from "@tanstack/react-query"
 import { Link, useNavigate } from "@tanstack/react-router"
 import {
@@ -101,96 +99,89 @@ function useTableColumns(
 	directoryUrlFn: (directory: DirectoryInfo) => string,
 	readOnly: boolean,
 ): ColumnDef<DirectoryItem>[] {
-	return useMemo(
-		() => {
-			const columns: ColumnDef<DirectoryItem>[] = []
-			if (!readOnly) {
-				columns.push({
-					id: "select",
-					header: ({ table }) => (
-						<Checkbox
-							checked={table.getIsAllPageRowsSelected()}
-							onCheckedChange={(value) => {
-								table.toggleAllPageRowsSelected(!!value)
-							}}
-							aria-label="Select all"
-						/>
-					),
-					cell: ({ row }) => (
-						<Checkbox
-							checked={row.getIsSelected()}
-							onClick={(e) => {
-								e.stopPropagation()
-							}}
-							onCheckedChange={row.getToggleSelectedHandler()}
-							aria-label="Select row"
-						/>
-					),
-					enableSorting: false,
-					enableHiding: false,
-					size: 24,
-				})
-			}
+	return useMemo(() => {
+		const columns: ColumnDef<DirectoryItem>[] = []
+		if (!readOnly) {
+			columns.push({
+				id: "select",
+				header: ({ table }) => (
+					<Checkbox
+						checked={table.getIsAllPageRowsSelected()}
+						onCheckedChange={(value) => {
+							table.toggleAllPageRowsSelected(!!value)
+						}}
+						aria-label="Select all"
+					/>
+				),
+				cell: ({ row }) => (
+					<Checkbox
+						checked={row.getIsSelected()}
+						onClick={(e) => {
+							e.stopPropagation()
+						}}
+						onCheckedChange={row.getToggleSelectedHandler()}
+						aria-label="Select row"
+					/>
+				),
+				enableSorting: false,
+				enableHiding: false,
+				size: 24,
+			})
+		}
 
-			columns.push(
-				{
-					header: () => <NameHeaderCell />,
-					accessorKey: "doc.name",
-					cell: ({ row }) => {
-						switch (row.original.kind) {
-							case "file":
-								return (
-									<FileNameCell
-										file={row.original}
-										onOpenFile={onOpenFile}
-									/>
-								)
-							case "directory":
-								return (
-									<DirectoryNameCell
-										directory={row.original}
-										directoryUrlFn={directoryUrlFn}
-									/>
-								)
-						}
-					},
-					size: 1000,
+		columns.push(
+			{
+				header: () => <NameHeaderCell />,
+				accessorKey: "doc.name",
+				cell: ({ row }) => {
+					switch (row.original.kind) {
+						case "file":
+							return (
+								<FileNameCell
+									file={row.original}
+									onOpenFile={onOpenFile}
+								/>
+							)
+						case "directory":
+							return (
+								<DirectoryNameCell
+									directory={row.original}
+									directoryUrlFn={directoryUrlFn}
+								/>
+							)
+					}
 				},
-				{
-					header: "Size",
-					accessorKey: "size",
-					cell: ({ row }) => {
-						switch (row.original.kind) {
-							case "file":
-								return (
-									<div>
-										{formatFileSize(row.original.size)}
-									</div>
-								)
-							case "directory":
-								return <div className="font-mono">-</div>
-						}
-					},
+				size: 1000,
+			},
+			{
+				header: "Size",
+				accessorKey: "size",
+				cell: ({ row }) => {
+					switch (row.original.kind) {
+						case "file":
+							return (
+								<div>{formatFileSize(row.original.size)}</div>
+							)
+						case "directory":
+							return <div className="font-mono">-</div>
+					}
 				},
-				{
-					header: "Created At",
-					accessorKey: "createdAt",
-					cell: ({ row }) => {
-						return (
-							<div>
-								{new Date(
-									row.original.createdAt,
-								).toLocaleString()}
-							</div>
-						)
-					},
+			},
+			{
+				header: "Created At",
+				accessorKey: "createdAt",
+				cell: ({ row }) => {
+					return (
+						<div>
+							{new Date(row.original.createdAt).toLocaleString()}
+						</div>
+					)
 				},
-			)
+			},
+		)
 
-			return columns
-		},
-		[onOpenFile, directoryUrlFn, readOnly],
-	)
+		return columns
+	}, [onOpenFile, directoryUrlFn, readOnly])
 }
 
 export function DirectoryContentTable({
