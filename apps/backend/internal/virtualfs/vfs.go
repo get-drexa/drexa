@@ -823,7 +823,7 @@ func (vfs *VirtualFS) RealPath(ctx context.Context, db bun.IDB, node *Node, scop
 	} else if !ok {
 		return nil, ErrAccessDenied
 	}
-	return buildNoteAbsolutePath(ctx, db, node)
+	return buildNodeAbsolutePath(ctx, db, node, scope.RootNodeID)
 }
 
 func (vfs *VirtualFS) PermanentlyDeleteFiles(ctx context.Context, db bun.IDB, nodes []*Node, scope *Scope) error {

@@ -33,9 +33,10 @@ const absolutePathWithPublicIDQuery = `WITH RECURSIVE path AS (
     SELECT n.id, n.parent_id, n.name, n.public_id, p.depth + 1
     FROM vfs_nodes n
     JOIN path p ON n.id = p.parent_id
+    WHERE p.id != ?
 )
 SELECT name, public_id FROM path 
-WHERE EXISTS (SELECT 1 FROM path WHERE parent_id IS NULL)
+WHERE EXISTS (SELECT 1 FROM path WHERE id = ?)
 ORDER BY depth DESC;`
 
 // Path represents a path to a node.
@@ -67,9 +68,9 @@ func buildPathFromNodeID(ctx context.Context, db bun.IDB, nodeID uuid.UUID) (str
 	return JoinPath(path...), nil
 }
 
-func buildNoteAbsolutePath(ctx context.Context, db bun.IDB, node *Node) (Path, error) {
+func buildNodeAbsolutePath(ctx context.Context, db bun.IDB, node *Node, rootID uuid.UUID) (Path, error) {
 	var segments []PathSegment
-	err := db.NewRaw(absolutePathWithPublicIDQuery, node.ID).Scan(ctx, &segments)
+	err := db.NewRaw(absolutePathWithPublicIDQuery, node.ID, rootID, rootID).Scan(ctx, &segments)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrNodeNotFound
