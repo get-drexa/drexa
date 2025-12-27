@@ -8,6 +8,7 @@ import {
 	ChevronDownIcon,
 	PlusIcon,
 	ScissorsIcon,
+	Share2Icon,
 	TextCursorInputIcon,
 	TrashIcon,
 } from "lucide-react"
@@ -68,6 +69,7 @@ import type {
 	DirectoryItem,
 	FileInfo,
 } from "@/vfs/vfs"
+import { ItemShareDialog } from "../../../sharing/item-share-dialog"
 
 // Conditional lazy import - Vite will tree-shake this entire import in production
 // because import.meta.env.DEV is evaluated at build time
@@ -100,6 +102,7 @@ export const Route = createFileRoute(
 enum DialogKind {
 	NewDirectory = "NewDirectory",
 	UploadFile = "UploadFile",
+	ItemShare = "ItemShare",
 }
 
 type NewDirectoryDialogData = {
@@ -111,7 +114,15 @@ type UploadFileDialogData = {
 	directory: DirectoryInfoWithPath
 }
 
-type ActiveDialogData = NewDirectoryDialogData | UploadFileDialogData
+type ItemShareDialogData = {
+	kind: DialogKind.ItemShare
+	item: DirectoryItem
+}
+
+type ActiveDialogData =
+	| NewDirectoryDialogData
+	| UploadFileDialogData
+	| ItemShareDialogData
 
 // MARK: atoms
 const contextMenuTargetItemsAtom = atom<DirectoryItem[]>([])
@@ -195,6 +206,22 @@ function RouteComponent() {
 						)}
 					</>
 				)}
+			</WithAtom>
+
+			<WithAtom atom={activeDialogDataAtom}>
+				{(data, setData) => {
+					return (
+						<ItemShareDialog
+							item={
+								data?.kind === DialogKind.ItemShare
+									? data.item
+									: null
+							}
+							open={data?.kind === DialogKind.ItemShare}
+							onClose={() => setData(null)}
+						/>
+					)
+				}}
 			</WithAtom>
 
 			<WithAtom atom={itemBeingRenamedAtom}>
@@ -354,6 +381,7 @@ function DirectoryContentContextMenu({
 	const account = useAtomValue(currentAccountAtom)
 	const { directory } = useContext(DirectoryPageContext)
 	const search = Route.useSearch()
+	const setActiveDialogData = useSetAtom(activeDialogDataAtom)
 
 	const moveToTrashMutation = useAtomValue(moveToTrashMutationAtom)
 	const { mutate: moveToTrash } = useMutation({
@@ -398,6 +426,14 @@ function DirectoryContentContextMenu({
 		}
 	}
 
+	const openShareDialog = () => {
+		const selectedItems = store.get(contextMenuTargetItemsAtom)
+		setActiveDialogData({
+			kind: DialogKind.ItemShare,
+			item: selectedItems[0]!,
+		})
+	}
+
 	return (
 		<ContextMenu
 			onOpenChange={(open) => {
@@ -413,6 +449,10 @@ function DirectoryContentContextMenu({
 					<ContextMenuItem onClick={handleCut}>
 						<ScissorsIcon />
 						Cut
+					</ContextMenuItem>
+					<ContextMenuItem onClick={openShareDialog}>
+						<Share2Icon />
+						Share
 					</ContextMenuItem>
 					<ContextMenuItem
 						variant="destructive"
@@ -492,6 +532,7 @@ function UploadFileButton() {
 function NewDirectoryItemDropdown() {
 	const [activeDialogData, setActiveDialogData] =
 		useAtom(activeDialogDataAtom)
+	const store = useStore()
 
 	const addNewDirectory = () => {
 		setActiveDialogData({

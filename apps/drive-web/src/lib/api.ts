@@ -14,6 +14,9 @@ export type ApiRoute =
 	| `/accounts/${string}/directories`
 	| `/accounts/${string}/directories/${string}`
 	| `/accounts/${string}/directories/${string}/content`
+	| `/shares/${string}`
+	| `/shares/${string}/directories${string}`
+	| `/shares/${string}/files${string}`
 	| "/users/me"
 
 export type HttpMethod = "GET" | "POST" | "PUT" | "DELETE" | "PATCH"
@@ -62,10 +65,14 @@ export async function fetchApi<Schema extends type.Any>(
 	if (!response.ok) {
 		throw new ApiError(response.status, await response.text())
 	}
-	const body = await response.json()
-	const result = init.returns(body)
-	if (result instanceof type.errors) {
-		throw result
+	// @ts-expect-error if the response returns nothing, then init.returns *is Nothing*, but typescript thinks its not right for some reason
+	if (init.returns !== Nothing) {
+		const body = await response.json()
+		const result = init.returns(body)
+		if (result instanceof type.errors) {
+			throw result
+		}
+		return [response, result]
 	}
-	return [response, result]
+	return [response, null]
 }

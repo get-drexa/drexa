@@ -64,6 +64,7 @@ export type DirectoryContentTableProps = {
 	fileDragInfoAtom: PrimitiveAtom<FileDragInfo | null>
 	loadingComponent?: React.ReactNode
 	debugBanner?: React.ReactNode
+	readOnly?: boolean
 
 	onContextMenu: (
 		row: Row<DirectoryItem>,
@@ -98,84 +99,97 @@ function formatFileSize(bytes: number): string {
 function useTableColumns(
 	onOpenFile: (file: FileInfo) => void,
 	directoryUrlFn: (directory: DirectoryInfo) => string,
+	readOnly: boolean,
 ): ColumnDef<DirectoryItem>[] {
 	return useMemo(
-		() => [
-			{
-				id: "select",
-				header: ({ table }) => (
-					<Checkbox
-						checked={table.getIsAllPageRowsSelected()}
-						onCheckedChange={(value) => {
-							table.toggleAllPageRowsSelected(!!value)
-						}}
-						aria-label="Select all"
-					/>
-				),
-				cell: ({ row }) => (
-					<Checkbox
-						checked={row.getIsSelected()}
-						onClick={(e) => {
-							e.stopPropagation()
-						}}
-						onCheckedChange={row.getToggleSelectedHandler()}
-						aria-label="Select row"
-					/>
-				),
-				enableSorting: false,
-				enableHiding: false,
-				size: 24,
-			},
-			{
-				header: () => <NameHeaderCell />,
-				accessorKey: "doc.name",
-				cell: ({ row }) => {
-					switch (row.original.kind) {
-						case "file":
-							return (
-								<FileNameCell
-									file={row.original}
-									onOpenFile={onOpenFile}
-								/>
-							)
-						case "directory":
-							return (
-								<DirectoryNameCell
-									directory={row.original}
-									directoryUrlFn={directoryUrlFn}
-								/>
-							)
-					}
+		() => {
+			const columns: ColumnDef<DirectoryItem>[] = []
+			if (!readOnly) {
+				columns.push({
+					id: "select",
+					header: ({ table }) => (
+						<Checkbox
+							checked={table.getIsAllPageRowsSelected()}
+							onCheckedChange={(value) => {
+								table.toggleAllPageRowsSelected(!!value)
+							}}
+							aria-label="Select all"
+						/>
+					),
+					cell: ({ row }) => (
+						<Checkbox
+							checked={row.getIsSelected()}
+							onClick={(e) => {
+								e.stopPropagation()
+							}}
+							onCheckedChange={row.getToggleSelectedHandler()}
+							aria-label="Select row"
+						/>
+					),
+					enableSorting: false,
+					enableHiding: false,
+					size: 24,
+				})
+			}
+
+			columns.push(
+				{
+					header: () => <NameHeaderCell />,
+					accessorKey: "doc.name",
+					cell: ({ row }) => {
+						switch (row.original.kind) {
+							case "file":
+								return (
+									<FileNameCell
+										file={row.original}
+										onOpenFile={onOpenFile}
+									/>
+								)
+							case "directory":
+								return (
+									<DirectoryNameCell
+										directory={row.original}
+										directoryUrlFn={directoryUrlFn}
+									/>
+								)
+						}
+					},
+					size: 1000,
 				},
-				size: 1000,
-			},
-			{
-				header: "Size",
-				accessorKey: "size",
-				cell: ({ row }) => {
-					switch (row.original.kind) {
-						case "file":
-							return (
-								<div>{formatFileSize(row.original.size)}</div>
-							)
-						case "directory":
-							return <div className="font-mono">-</div>
-					}
+				{
+					header: "Size",
+					accessorKey: "size",
+					cell: ({ row }) => {
+						switch (row.original.kind) {
+							case "file":
+								return (
+									<div>
+										{formatFileSize(row.original.size)}
+									</div>
+								)
+							case "directory":
+								return <div className="font-mono">-</div>
+						}
+					},
 				},
-			},
-			{
-				header: "Created At",
-				accessorKey: "createdAt",
-				cell: ({ row }) => {
-					return (
-						<div>
-							{new Date(row.original.createdAt).toLocaleString()}
-						</div>
-					)
+				{
+					header: "Created At",
+					accessorKey: "createdAt",
+					cell: ({ row }) => {
+						return (
+							<div>
+								{new Date(
+									row.original.createdAt,
+								).toLocaleString()}
+							</div>
+						)
+					},
 				},
-			},
-		],
-		[onOpenFile, directoryUrlFn],
+			)
+
+			return columns
+		},
+		[onOpenFile, directoryUrlFn, readOnly],
 	)
 }
 
@@ -188,6 +202,7 @@ export function DirectoryContentTable({
 	onOpenFile,
 	onContextMenu,
 	onSortChange,
+	readOnly = false,
 }: DirectoryContentTableProps) {
 	const {
 		data: directoryContent,
@@ -221,6 +236,7 @@ export function DirectoryContentTable({
 		items: import("@/vfs/vfs").DirectoryItem[],
 		targetDirectory: import("@/vfs/vfs").DirectoryInfo | string,
 	) => {
+		if (readOnly) return
 		moveDroppedItems({
 			targetDirectory,
 			items,
@@ -235,10 +251,10 @@ export function DirectoryContentTable({
 				) || [],
 			[directoryContent],
 		),
-		columns: useTableColumns(onOpenFile, directoryUrlFn),
+		columns: useTableColumns(onOpenFile, directoryUrlFn, readOnly),
 		getCoreRowModel: getCoreRowModel(),
 		getFilteredRowModel: getFilteredRowModel(),
-		enableRowSelection: true,
+		enableRowSelection: !readOnly,
 		enableGlobalFilter: true,
 		globalFilterFn: (
 			row,
@@ -298,6 +314,7 @@ export function DirectoryContentTable({
 		row: Row<DirectoryItem>,
 		_event: React.MouseEvent,
 	) => {
+		if (readOnly) return
 		if (!row.getIsSelected()) {
 			selectRow(row)
 		}
@@ -305,6 +322,7 @@ export function DirectoryContentTable({
 	}
 
 	const selectRow = (row: Row<DirectoryItem>) => {
+		if (readOnly) return
 		const keyboardModifiers = store.get(keyboardModifierAtom)
 		const isMultiSelectMode = isControlOrCommandKeyActive(keyboardModifiers)
 		const isRowSelected = row.getIsSelected()
@@ -329,7 +347,7 @@ export function DirectoryContentTable({
 	const handleRowDoubleClick = (row: Row<DirectoryItem>) => {
 		if (row.original.kind === "directory") {
 			navigate({
-				to: `/directories/${row.original.id}`,
+				to: directoryUrlFn(row.original),
 			})
 		}
 	}
@@ -349,6 +367,7 @@ export function DirectoryContentTable({
 				table={table}
 				row={row}
 				onClick={() => selectRow(row)}
+				readOnly={readOnly}
 				fileDragInfoAtom={fileDragInfoAtom}
 				onContextMenu={(e) => handleRowContextMenu(row, e)}
 				onDoubleClick={() => {
@@ -402,7 +421,9 @@ export function DirectoryContentTable({
 							{rows.length > 0 ? (
 								virtualItems.map(renderRow)
 							) : (
-								<NoResultsRow />
+								<NoResultsRow
+									colSpan={table.getAllLeafColumns().length}
+								/>
 							)}
 						</TableBody>
 					</Table>
@@ -412,10 +433,10 @@ export function DirectoryContentTable({
 	)
 }
 
-function NoResultsRow() {
+function NoResultsRow({ colSpan }: { colSpan: number }) {
 	return (
 		<TableRow className="hover:bg-transparent">
-			<TableCell colSpan={4} className="text-center">
+			<TableCell colSpan={colSpan} className="text-center">
 				No results.
 			</TableCell>
 		</TableRow>
@@ -428,6 +449,7 @@ function FileItemRow({
 	onClick,
 	onContextMenu,
 	onDoubleClick,
+	readOnly,
 	fileDragInfoAtom,
 	onFileDrop,
 	...rowProps
@@ -437,6 +459,7 @@ function FileItemRow({
 	onClick: () => void
 	onContextMenu: (e: React.MouseEvent) => void
 	onDoubleClick: () => void
+	readOnly: boolean
 	fileDragInfoAtom: PrimitiveAtom<FileDragInfo | null>
 	onFileDrop: (
 		items: import("@/vfs/vfs").DirectoryItem[],
@@ -447,13 +470,14 @@ function FileItemRow({
 	const setFileDragInfo = useSetAtom(fileDragInfoAtom)
 
 	const { isDraggedOver, dropHandlers } = useFileDrop({
-		enabled: row.original.kind === "directory",
+		enabled: !readOnly && row.original.kind === "directory",
 		destDir: row.original.kind === "directory" ? row.original : undefined,
 		dragInfoAtom: fileDragInfoAtom,
 		onDrop: onFileDrop,
 	})
 
 	const handleDragStart = (_e: React.DragEvent) => {
+		if (readOnly) return
 		let draggedItems: DirectoryItem[]
 		// drag all selections, but only if the currently dragged row is also selected
 		if (row.getIsSelected()) {
@@ -479,12 +503,13 @@ function FileItemRow({
 	}
 
 	const handleDragEnd = () => {
+		if (readOnly) return
 		setFileDragInfo(null)
 	}
 
 	return (
 		<TableRow
-			draggable
+			draggable={!readOnly}
 			ref={ref}
 			key={row.id}
 			data-state={row.getIsSelected() && "selected"}

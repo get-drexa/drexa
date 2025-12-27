@@ -16,6 +16,7 @@ import { Route as AuthenticatedIndexRouteImport } from './routes/_authenticated/
 import { Route as LoginCallbackRouteImport } from './routes/login_.callback'
 import { Route as AuthenticatedSidebarLayoutRouteImport } from './routes/_authenticated/_sidebar-layout'
 import { Route as AuthenticatedSidebarLayoutHomeRouteImport } from './routes/_authenticated/_sidebar-layout/home'
+import { Route as SharesShareIdDirectoriesDirectoryIdRouteImport } from './routes/shares/$shareId.directories.$directoryId'
 import { Route as AuthenticatedSidebarLayoutDirectoriesDirectoryIdRouteImport } from './routes/_authenticated/_sidebar-layout/directories.$directoryId'
 
 const SignUpRoute = SignUpRouteImport.update({
@@ -53,6 +54,12 @@ const AuthenticatedSidebarLayoutHomeRoute =
     path: '/home',
     getParentRoute: () => AuthenticatedSidebarLayoutRoute,
   } as any)
+const SharesShareIdDirectoriesDirectoryIdRoute =
+  SharesShareIdDirectoriesDirectoryIdRouteImport.update({
+    id: '/shares/$shareId/directories/$directoryId',
+    path: '/shares/$shareId/directories/$directoryId',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const AuthenticatedSidebarLayoutDirectoriesDirectoryIdRoute =
   AuthenticatedSidebarLayoutDirectoriesDirectoryIdRouteImport.update({
     id: '/directories/$directoryId',
@@ -67,6 +74,7 @@ export interface FileRoutesByFullPath {
   '/': typeof AuthenticatedIndexRoute
   '/home': typeof AuthenticatedSidebarLayoutHomeRoute
   '/directories/$directoryId': typeof AuthenticatedSidebarLayoutDirectoriesDirectoryIdRoute
+  '/shares/$shareId/directories/$directoryId': typeof SharesShareIdDirectoriesDirectoryIdRoute
 }
 export interface FileRoutesByTo {
   '/login': typeof LoginRoute
@@ -75,6 +83,7 @@ export interface FileRoutesByTo {
   '/': typeof AuthenticatedIndexRoute
   '/home': typeof AuthenticatedSidebarLayoutHomeRoute
   '/directories/$directoryId': typeof AuthenticatedSidebarLayoutDirectoriesDirectoryIdRoute
+  '/shares/$shareId/directories/$directoryId': typeof SharesShareIdDirectoriesDirectoryIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -86,6 +95,7 @@ export interface FileRoutesById {
   '/_authenticated/': typeof AuthenticatedIndexRoute
   '/_authenticated/_sidebar-layout/home': typeof AuthenticatedSidebarLayoutHomeRoute
   '/_authenticated/_sidebar-layout/directories/$directoryId': typeof AuthenticatedSidebarLayoutDirectoriesDirectoryIdRoute
+  '/shares/$shareId/directories/$directoryId': typeof SharesShareIdDirectoriesDirectoryIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -96,6 +106,7 @@ export interface FileRouteTypes {
     | '/'
     | '/home'
     | '/directories/$directoryId'
+    | '/shares/$shareId/directories/$directoryId'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/login'
@@ -104,6 +115,7 @@ export interface FileRouteTypes {
     | '/'
     | '/home'
     | '/directories/$directoryId'
+    | '/shares/$shareId/directories/$directoryId'
   id:
     | '__root__'
     | '/_authenticated'
@@ -114,6 +126,7 @@ export interface FileRouteTypes {
     | '/_authenticated/'
     | '/_authenticated/_sidebar-layout/home'
     | '/_authenticated/_sidebar-layout/directories/$directoryId'
+    | '/shares/$shareId/directories/$directoryId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -121,6 +134,7 @@ export interface RootRouteChildren {
   LoginRoute: typeof LoginRoute
   SignUpRoute: typeof SignUpRoute
   LoginCallbackRoute: typeof LoginCallbackRoute
+  SharesShareIdDirectoriesDirectoryIdRoute: typeof SharesShareIdDirectoriesDirectoryIdRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -174,6 +188,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedSidebarLayoutHomeRouteImport
       parentRoute: typeof AuthenticatedSidebarLayoutRoute
     }
+    '/shares/$shareId/directories/$directoryId': {
+      id: '/shares/$shareId/directories/$directoryId'
+      path: '/shares/$shareId/directories/$directoryId'
+      fullPath: '/shares/$shareId/directories/$directoryId'
+      preLoaderRoute: typeof SharesShareIdDirectoriesDirectoryIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/_authenticated/_sidebar-layout/directories/$directoryId': {
       id: '/_authenticated/_sidebar-layout/directories/$directoryId'
       path: '/directories/$directoryId'
@@ -220,6 +241,8 @@ const rootRouteChildren: RootRouteChildren = {
   LoginRoute: LoginRoute,
   SignUpRoute: SignUpRoute,
   LoginCallbackRoute: LoginCallbackRoute,
+  SharesShareIdDirectoriesDirectoryIdRoute:
+    SharesShareIdDirectoriesDirectoryIdRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
