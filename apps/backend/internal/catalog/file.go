@@ -5,8 +5,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/get-drexa/drexa/internal/account"
 	"github.com/get-drexa/drexa/internal/httperr"
+	"github.com/get-drexa/drexa/internal/sharing"
 	"github.com/get-drexa/drexa/internal/virtualfs"
 	"github.com/gofiber/fiber/v2"
 )
@@ -39,13 +39,13 @@ func mustCurrentFileNode(c *fiber.Ctx) *virtualfs.Node {
 }
 
 func (h *HTTPHandler) currentFileMiddleware(c *fiber.Ctx) error {
-	account := account.CurrentAccount(c)
-	if account == nil {
+	scope, ok := scopeFromCtx(c)
+	if !ok {
 		return c.SendStatus(fiber.StatusUnauthorized)
 	}
 
 	fileID := c.Params("fileID")
-	node, err := h.vfs.FindNodeByPublicID(c.Context(), h.db, account.ID, fileID)
+	node, err := h.vfs.FindNodeByPublicID(c.Context(), h.db, fileID, scope)
 	if err != nil {
 		if errors.Is(err, virtualfs.ErrNodeNotFound) {
 			return c.SendStatus(fiber.StatusNotFound)
@@ -100,9 +100,16 @@ func (h *HTTPHandler) fetchFile(c *fiber.Ctx) error {
 // @Router /accounts/{accountID}/files/{fileID}/content [get]
 func (h *HTTPHandler) downloadFile(c *fiber.Ctx) error {
 	node := mustCurrentFileNode(c)
+	scope, ok := scopeFromCtx(c)
+	if !ok {
+		return c.SendStatus(fiber.StatusUnauthorized)
+	}
 
-	content, err := h.vfs.ReadFile(c.Context(), h.db, node)
+	content, err := h.vfs.ReadFile(c.Context(), h.db, node, scope)
 	if err != nil {
+		if errors.Is(err, virtualfs.ErrAccessDenied) {
+			return c.SendStatus(fiber.StatusNotFound)
+		}
 		if errors.Is(err, virtualfs.ErrUnsupportedOperation) {
 			return c.SendStatus(fiber.StatusNotFound)
 		}
@@ -143,6 +150,10 @@ func (h *HTTPHandler) downloadFile(c *fiber.Ctx) error {
 // @Router /accounts/{accountID}/files/{fileID} [patch]
 func (h *HTTPHandler) patchFile(c *fiber.Ctx) error {
 	node := mustCurrentFileNode(c)
+	scope, ok := scopeFromCtx(c)
+	if !ok {
+		return c.SendStatus(fiber.StatusUnauthorized)
+	}
 
 	patch := new(patchFileRequest)
 	if err := c.BodyParser(patch); err != nil {
@@ -156,9 +167,12 @@ func (h *HTTPHandler) patchFile(c *fiber.Ctx) error {
 	defer tx.Rollback()
 
 	if patch.Name != "" {
-		err := h.vfs.RenameNode(c.Context(), tx, node, patch.Name)
+		err := h.vfs.RenameNode(c.Context(), tx, node, patch.Name, scope)
 		if err != nil {
 			if errors.Is(err, virtualfs.ErrNodeNotFound) {
+				return c.SendStatus(fiber.StatusNotFound)
+			}
+			if errors.Is(err, virtualfs.ErrAccessDenied) {
 				return c.SendStatus(fiber.StatusNotFound)
 			}
 			return httperr.Internal(err)
@@ -197,6 +211,10 @@ func (h *HTTPHandler) patchFile(c *fiber.Ctx) error {
 // @Router /accounts/{accountID}/files/{fileID} [delete]
 func (h *HTTPHandler) deleteFile(c *fiber.Ctx) error {
 	node := mustCurrentFileNode(c)
+	scope, ok := scopeFromCtx(c)
+	if !ok {
+		return c.SendStatus(fiber.StatusUnauthorized)
+	}
 
 	tx, err := h.db.BeginTx(c.Context(), nil)
 	if err != nil {
@@ -206,9 +224,12 @@ func (h *HTTPHandler) deleteFile(c *fiber.Ctx) error {
 
 	shouldTrash := c.Query("trash") == "true"
 	if shouldTrash {
-		deleted, err := h.vfs.SoftDeleteNode(c.Context(), tx, node)
+		deleted, err := h.vfs.SoftDeleteNode(c.Context(), tx, node, scope)
 		if err != nil {
 			if errors.Is(err, virtualfs.ErrNodeNotFound) {
+				return c.SendStatus(fiber.StatusNotFound)
+			}
+			if errors.Is(err, virtualfs.ErrAccessDenied) {
 				return c.SendStatus(fiber.StatusNotFound)
 			}
 			return httperr.Internal(err)
@@ -221,8 +242,11 @@ func (h *HTTPHandler) deleteFile(c *fiber.Ctx) error {
 
 		return c.JSON(fileInfoFromNode(deleted))
 	} else {
-		err = h.vfs.PermanentlyDeleteNode(c.Context(), tx, node)
+		err = h.vfs.PermanentlyDeleteNode(c.Context(), tx, node, scope)
 		if err != nil {
+			if errors.Is(err, virtualfs.ErrAccessDenied) {
+				return c.SendStatus(fiber.StatusNotFound)
+			}
 			return httperr.Internal(err)
 		}
 
@@ -243,13 +267,14 @@ func (h *HTTPHandler) deleteFile(c *fiber.Ctx) error {
 // @Param accountID path string true "Account ID" format(uuid)
 // @Param id query string true "Comma-separated list of file IDs to delete" example:"mElnUNCm8F22,kRp2XYTq9A55"
 // @Param trash query bool false "Move to trash instead of permanent delete" default(false)
+// @Success 200 {array} FileInfo "Trashed files (when trash=true)"
 // @Success 204 {string} string "Files deleted"
 // @Failure 400 {object} map[string]string "All items must be files"
 // @Failure 401 {string} string "Not authenticated"
 // @Router /accounts/{accountID}/files [delete]
 func (h *HTTPHandler) deleteFiles(c *fiber.Ctx) error {
-	account := account.CurrentAccount(c)
-	if account == nil {
+	scope, ok := scopeFromCtx(c)
+	if !ok {
 		return c.SendStatus(fiber.StatusUnauthorized)
 	}
 
@@ -271,7 +296,7 @@ func (h *HTTPHandler) deleteFiles(c *fiber.Ctx) error {
 	}
 	defer tx.Rollback()
 
-	nodes, err := h.vfs.FindNodesByPublicID(c.Context(), tx, account.ID, ids)
+	nodes, err := h.vfs.FindNodesByPublicID(c.Context(), tx, ids, scope)
 	if err != nil {
 		return httperr.Internal(err)
 	}
@@ -281,8 +306,11 @@ func (h *HTTPHandler) deleteFiles(c *fiber.Ctx) error {
 	}
 
 	if shouldTrash {
-		deleted, err := h.vfs.SoftDeleteNodes(c.Context(), tx, nodes)
+		deleted, err := h.vfs.SoftDeleteNodes(c.Context(), tx, nodes, scope)
 		if err != nil {
+			if errors.Is(err, virtualfs.ErrAccessDenied) {
+				return c.SendStatus(fiber.StatusNotFound)
+			}
 			return httperr.Internal(err)
 		}
 
@@ -298,10 +326,13 @@ func (h *HTTPHandler) deleteFiles(c *fiber.Ctx) error {
 
 		return c.JSON(res)
 	} else {
-		err = h.vfs.PermanentlyDeleteFiles(c.Context(), tx, nodes)
+		err = h.vfs.PermanentlyDeleteFiles(c.Context(), tx, nodes, scope)
 		if err != nil {
 			if errors.Is(err, virtualfs.ErrUnsupportedOperation) {
 				return httperr.NewHTTPError(fiber.StatusBadRequest, "all items must be files", err)
+			}
+			if errors.Is(err, virtualfs.ErrAccessDenied) {
+				return c.SendStatus(fiber.StatusNotFound)
 			}
 			return httperr.Internal(err)
 		}
@@ -314,4 +345,29 @@ func (h *HTTPHandler) deleteFiles(c *fiber.Ctx) error {
 		return c.SendStatus(fiber.StatusNoContent)
 	}
 
+}
+
+// listFileShares returns all shares that include this file
+// @Summary List file shares
+// @Description Get all share links that include this file
+// @Tags files
+// @Produce json
+// @Param accountID path string true "Account ID" format(uuid)
+// @Param fileID path string true "File ID"
+// @Success 200 {array} sharing.Share "Array of shares"
+// @Failure 401 {string} string "Not authenticated"
+// @Failure 404 {string} string "File not found"
+// @Security BearerAuth
+// @Router /accounts/{accountID}/files/{fileID}/shares [get]
+func (h *HTTPHandler) listFileShares(c *fiber.Ctx) error {
+	node := mustCurrentFileNode(c)
+
+	shares, err := h.sharingService.ListShares(c.Context(), h.db, node.AccountID, sharing.ListSharesOptions{
+		Items: []*virtualfs.Node{node},
+	})
+	if err != nil {
+		return httperr.Internal(err)
+	}
+
+	return c.JSON(shares)
 }

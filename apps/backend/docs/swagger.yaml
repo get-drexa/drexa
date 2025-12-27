@@ -1,1154 +1,1602 @@
-basePath: /api
-definitions:
-  github_com_get-drexa_drexa_internal_user.User:
-    description: User account information
-    properties:
-      displayName:
-        description: User's display name
-        example: John Doe
-        type: string
-      email:
-        description: User's email address
-        example: john@example.com
-        type: string
-      id:
-        description: Unique user identifier
-        example: 550e8400-e29b-41d4-a716-446655440000
-        type: string
-    type: object
-  github_com_get-drexa_drexa_internal_virtualfs.PathSegment:
-    properties:
-      id:
-        type: string
-      name:
-        type: string
-    type: object
-  internal_account.Account:
-    description: Storage account with usage and quota details
-    properties:
-      createdAt:
-        description: When the account was created (ISO 8601)
-        example: "2024-12-13T15:04:05Z"
-        type: string
-      id:
-        description: Unique account identifier
-        example: 550e8400-e29b-41d4-a716-446655440000
-        type: string
-      storageQuotaBytes:
-        description: Maximum storage quota in bytes
-        example: 10737418240
-        type: integer
-      storageUsageBytes:
-        description: Current storage usage in bytes
-        example: 1073741824
-        type: integer
-      updatedAt:
-        description: When the account was last updated (ISO 8601)
-        example: "2024-12-13T16:30:00Z"
-        type: string
-      userId:
-        description: ID of the user who owns this account
-        example: 550e8400-e29b-41d4-a716-446655440001
-        type: string
-    type: object
-  internal_account.registerAccountRequest:
-    description: Request to create a new account and user
-    properties:
-      displayName:
-        description: Display name for the user
-        example: Jane Doe
-        type: string
-      email:
-        description: Email address for the new account
-        example: newuser@example.com
-        type: string
-      password:
-        description: Password for the new account (min 8 characters)
-        example: securepassword123
-        type: string
-    type: object
-  internal_account.registerAccountResponse:
-    description: Response after successful account registration
-    properties:
-      accessToken:
-        description: JWT access token for immediate authentication
-        example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI1NTBlODQwMC1lMjliLTQxZDQtYTcxNi00NDY2NTU0NDAwMDAifQ.signature
-        type: string
-      account:
-        allOf:
-        - $ref: '#/definitions/internal_account.Account'
-        description: The created account
-      refreshToken:
-        description: Base64 URL encoded refresh token
-        example: dR4nD0mUu1DkZXlCeXRlc0FuZFJhbmRvbURhdGFIZXJlMTIzNDU2Nzg5MGFi
-        type: string
-      user:
-        allOf:
-        - $ref: '#/definitions/github_com_get-drexa_drexa_internal_user.User'
-        description: The created user
-    type: object
-  internal_auth.loginRequest:
-    description: Login request with email, password, and token delivery preference
-    properties:
-      email:
-        description: User's email address
-        example: user@example.com
-        type: string
-      password:
-        description: User's password
-        example: secretpassword123
-        type: string
-      tokenDelivery:
-        description: 'How to deliver tokens: "cookie" (set HTTP-only cookies) or "body"
-          (include in response)'
-        enum:
-        - cookie
-        - body
-        example: body
-        type: string
-    type: object
-  internal_auth.loginResponse:
-    description: Login response containing user info and optionally tokens
-    properties:
-      accessToken:
-        description: JWT access token (only included when tokenDelivery is "body")
-        example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI1NTBlODQwMC1lMjliLTQxZDQtYTcxNi00NDY2NTU0NDAwMDAifQ.signature
-        type: string
-      refreshToken:
-        description: Base64 URL encoded refresh token (only included when tokenDelivery
-          is "body")
-        example: dR4nD0mUu1DkZXlCeXRlc0FuZFJhbmRvbURhdGFIZXJlMTIzNDU2Nzg5MGFi
-        type: string
-      user:
-        allOf:
-        - $ref: '#/definitions/github_com_get-drexa_drexa_internal_user.User'
-        description: Authenticated user information
-    type: object
-  internal_auth.refreshAccessTokenRequest:
-    description: Request to exchange a refresh token for new tokens
-    properties:
-      refreshToken:
-        description: Base64 URL encoded refresh token
-        example: dR4nD0mUu1DkZXlCeXRlc0FuZFJhbmRvbURhdGFIZXJlMTIzNDU2Nzg5MGFi
-        type: string
-    type: object
-  internal_auth.tokenResponse:
-    description: Response containing new access token and refresh token
-    properties:
-      accessToken:
-        description: New JWT access token
-        example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI1NTBlODQwMC1lMjliLTQxZDQtYTcxNi00NDY2NTU0NDAwMDAifQ.signature
-        type: string
-      refreshToken:
-        description: New base64 URL encoded refresh token
-        example: xK9mPqRsTuVwXyZ0AbCdEfGhIjKlMnOpQrStUvWxYz1234567890abcdefgh
-        type: string
-    type: object
-  internal_catalog.DirectoryInfo:
-    description: Directory information including path and timestamps
-    properties:
-      createdAt:
-        description: When the directory was created (ISO 8601)
-        example: "2024-12-13T15:04:05Z"
-        type: string
-      deletedAt:
-        description: When the directory was trashed, null if not trashed (ISO 8601)
-        example: "2024-12-14T10:00:00Z"
-        type: string
-      id:
-        description: Unique directory identifier
-        example: kRp2XYTq9A55
-        type: string
-      kind:
-        description: Item type, always "directory"
-        example: directory
-        type: string
-      name:
-        description: Directory name
-        example: My Documents
-        type: string
-      path:
-        description: Full path from root (included when ?include=path)
-        items:
-          $ref: '#/definitions/github_com_get-drexa_drexa_internal_virtualfs.PathSegment'
-        type: array
-      updatedAt:
-        description: When the directory was last updated (ISO 8601)
-        example: "2024-12-13T16:30:00Z"
-        type: string
-    type: object
-  internal_catalog.FileInfo:
-    description: File information including name, size, and timestamps
-    properties:
-      createdAt:
-        description: When the file was created (ISO 8601)
-        example: "2024-12-13T15:04:05Z"
-        type: string
-      deletedAt:
-        description: When the file was trashed, null if not trashed (ISO 8601)
-        example: "2024-12-14T10:00:00Z"
-        type: string
-      id:
-        description: Unique file identifier
-        example: mElnUNCm8F22
-        type: string
-      kind:
-        description: Item type, always "file"
-        example: file
-        type: string
-      mimeType:
-        description: MIME type of the file
-        example: application/pdf
-        type: string
-      name:
-        description: File name
-        example: document.pdf
-        type: string
-      size:
-        description: File size in bytes
-        example: 1048576
-        type: integer
-      updatedAt:
-        description: When the file was last updated (ISO 8601)
-        example: "2024-12-13T16:30:00Z"
-        type: string
-    type: object
-  internal_catalog.createDirectoryRequest:
-    description: Request to create a new directory
-    properties:
-      name:
-        description: Name for the new directory
-        example: New Folder
-        type: string
-      parentID:
-        description: ID of the parent directory
-        example: kRp2XYTq9A55
-        type: string
-    type: object
-  internal_catalog.moveItemError:
-    description: Error details for a failed item move
-    properties:
-      error:
-        description: Error message describing what went wrong
-        example: permission denied
-        type: string
-      id:
-        description: ID of the item that failed to move
-        example: mElnUNCm8F22
-        type: string
-    type: object
-  internal_catalog.moveItemsToDirectoryResponse:
-    description: Response from moving items to a directory with status for each item
-    properties:
-      conflicts:
-        description: Array of IDs of items that conflicted with existing items in
-          the target directory
-        example:
-        - xYz123AbC456
-        items:
-          type: string
-        type: array
-      errors:
-        description: Array of errors that occurred during the move operation
-        items:
-          $ref: '#/definitions/internal_catalog.moveItemError'
-        type: array
-      items:
-        description: Array of items included in the request (files and directories)
-        items:
-          $ref: '#/definitions/internal_catalog.moveResponseItem'
-        type: array
-      moved:
-        description: Array of IDs of successfully moved items
-        example:
-        - mElnUNCm8F22
-        - kRp2XYTq9A55
-        items:
-          type: string
-        type: array
-    type: object
-  internal_catalog.moveResponseItem:
-    description: 'Item included in the move operation. Check "kind" field to determine
-      type: "file" (has size, mimeType) or "directory"'
-    properties:
-      createdAt:
-        description: When the item was created (ISO 8601)
-        example: "2024-12-13T15:04:05Z"
-        type: string
-      deletedAt:
-        description: When the item was trashed, null if not trashed (ISO 8601)
-        example: "2024-12-14T10:00:00Z"
-        type: string
-      id:
-        description: Unique item identifier
-        example: mElnUNCm8F22
-        type: string
-      kind:
-        description: 'Item type: "file" or "directory"'
-        example: file
-        type: string
-      mimeType:
-        description: MIME type (only for files)
-        example: application/pdf
-        type: string
-      name:
-        description: Item name
-        example: document.pdf
-        type: string
-      size:
-        description: File size in bytes (only for files)
-        example: 1048576
-        type: integer
-      updatedAt:
-        description: When the item was last updated (ISO 8601)
-        example: "2024-12-13T16:30:00Z"
-        type: string
-    type: object
-  internal_catalog.patchDirectoryRequest:
-    description: Request to update directory properties
-    properties:
-      name:
-        description: New name for the directory
-        example: My Documents
-        type: string
-    type: object
-  internal_catalog.patchFileRequest:
-    description: Request to update file properties
-    properties:
-      name:
-        description: New name for the file
-        example: renamed-document.pdf
-        type: string
-    type: object
-  internal_catalog.postDirectoryContentRequest:
-    description: Request to move items into this directory
-    properties:
-      items:
-        description: Array of file/directory IDs to move
-        example:
-        - mElnUNCm8F22
-        - kRp2XYTq9A55
-        items:
-          type: string
-        type: array
-    type: object
-  internal_upload.Status:
-    description: Upload status enumeration
-    enum:
-    - pending
-    - completed
-    - failed
-    type: string
-    x-enum-varnames:
-    - StatusPending
-    - StatusCompleted
-    - StatusFailed
-  internal_upload.Upload:
-    description: File upload session with status and upload URL
-    properties:
-      id:
-        description: Unique upload session identifier
-        example: xNq5RVBt3K88
-        type: string
-      status:
-        allOf:
-        - $ref: '#/definitions/internal_upload.Status'
-        description: Current upload status
-        enum:
-        - pending
-        - completed
-        - failed
-        example: pending
-      uploadUrl:
-        description: URL to upload file content to
-        example: https://api.example.com/api/accounts/550e8400-e29b-41d4-a716-446655440000/uploads/xNq5RVBt3K88/content
-        type: string
-    type: object
-  internal_upload.createUploadRequest:
-    description: Request to initiate a file upload
-    properties:
-      name:
-        description: Name of the file being uploaded
-        example: document.pdf
-        type: string
-      parentId:
-        description: ID of the parent directory to upload into
-        example: kRp2XYTq9A55
-        type: string
-    type: object
-  internal_upload.updateUploadRequest:
-    description: Request to update upload status (e.g., mark as completed)
-    properties:
-      status:
-        allOf:
-        - $ref: '#/definitions/internal_upload.Status'
-        description: New status for the upload
-        enum:
-        - completed
-        example: completed
-    type: object
-  internal_user.User:
-    description: User account information
-    properties:
-      displayName:
-        description: User's display name
-        example: John Doe
-        type: string
-      email:
-        description: User's email address
-        example: john@example.com
-        type: string
-      id:
-        description: Unique user identifier
-        example: 550e8400-e29b-41d4-a716-446655440000
-        type: string
-    type: object
-host: localhost:8080
+swagger: "2.0"
 info:
+  description: "Drexa is a file storage and management API. It provides endpoints for authentication, user management, file uploads, and virtual filesystem operations."
+  title: "Drexa API"
   contact:
-    name: Drexa Support
-    url: https://github.com/get-drexa/drexa
-  description: Drexa is a file storage and management API. It provides endpoints for
-    authentication, user management, file uploads, and virtual filesystem operations.
+    name: "Drexa Support"
+    url: "https://github.com/get-drexa/drexa"
   license:
-    name: MIT
-    url: https://opensource.org/licenses/MIT
-  title: Drexa API
+    name: "MIT"
+    url: "https://opensource.org/licenses/MIT"
   version: "1.0"
+host: "localhost:8080"
+basePath: "/api"
 paths:
   /accounts:
-    post:
-      consumes:
-      - application/json
-      description: Create a new user account with email and password. Returns the
-        account, user, and authentication tokens.
-      parameters:
-      - description: Registration details
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/internal_account.registerAccountRequest'
+    get:
+      security:
+        -
+          BearerAuth: []
+      description: "Retrieve all accounts for the authenticated user"
       produces:
-      - application/json
-      responses:
-        "200":
-          description: Account created successfully
-          schema:
-            $ref: '#/definitions/internal_account.registerAccountResponse'
-        "400":
-          description: Invalid request body
-          schema:
-            type: string
-        "409":
-          description: Email already registered
-          schema:
-            type: string
-      summary: Register new account
+        - "application/json"
       tags:
-      - accounts
+        - "accounts"
+      summary: "List accounts"
+      responses:
+        200:
+          description: "List of accounts for the authenticated user"
+          schema:
+            type: "array"
+            items:
+              $ref: "#/definitions/internal_account.Account"
+        401:
+          description: "Not authenticated"
+          schema:
+            type: "string"
+    post:
+      description: "Create a new user account with email and password. Returns the account, user, and authentication tokens. Tokens can be delivered via HTTP-only cookies or in the response body based on the tokenDelivery field."
+      consumes:
+        - "application/json"
+      produces:
+        - "application/json"
+      tags:
+        - "accounts"
+      summary: "Register new account"
+      parameters:
+        -
+          description: "Registration details"
+          name: "request"
+          in: "body"
+          required: true
+          schema:
+            $ref: "#/definitions/internal_account.registerAccountRequest"
+      responses:
+        200:
+          description: "Account created successfully"
+          schema:
+            $ref: "#/definitions/internal_account.registerAccountResponse"
+        400:
+          description: "Invalid request body or token delivery method"
+          schema:
+            type: "string"
+        409:
+          description: "Email already registered"
+          schema:
+            type: "string"
   /accounts/{accountID}:
     get:
-      description: Retrieve account details including storage usage and quota
-      parameters:
-      - description: Account ID
-        format: uuid
-        in: path
-        name: accountID
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: Account details
-          schema:
-            $ref: '#/definitions/internal_account.Account'
-        "401":
-          description: Not authenticated
-          schema:
-            type: string
-        "404":
-          description: Account not found
-          schema:
-            type: string
       security:
-      - BearerAuth: []
-      summary: Get account
+        -
+          BearerAuth: []
+      description: "Retrieve account details including storage usage and quota"
+      produces:
+        - "application/json"
       tags:
-      - accounts
+        - "accounts"
+      summary: "Get account"
+      parameters:
+        -
+          type: "string"
+          format: "uuid"
+          description: "Account ID"
+          name: "accountID"
+          in: "path"
+          required: true
+      responses:
+        200:
+          description: "Account details"
+          schema:
+            $ref: "#/definitions/internal_account.Account"
+        401:
+          description: "Not authenticated"
+          schema:
+            type: "string"
+        404:
+          description: "Account not found"
+          schema:
+            type: "string"
   /accounts/{accountID}/directories:
     post:
-      consumes:
-      - application/json
-      description: Create a new directory within a parent directory
-      parameters:
-      - description: Account ID
-        format: uuid
-        in: path
-        name: accountID
-        required: true
-        type: string
-      - description: Directory details
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/internal_catalog.createDirectoryRequest'
-      - description: Include additional fields
-        enum:
-        - path
-        in: query
-        name: include
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: Created directory
-          schema:
-            $ref: '#/definitions/internal_catalog.DirectoryInfo'
-        "400":
-          description: Parent not found or not a directory
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "401":
-          description: Not authenticated
-          schema:
-            type: string
-        "409":
-          description: Directory already exists
-          schema:
-            additionalProperties:
-              type: string
-            type: object
       security:
-      - BearerAuth: []
-      summary: Create directory
+        -
+          BearerAuth: []
+      description: "Create a new directory within a parent directory"
+      consumes:
+        - "application/json"
+      produces:
+        - "application/json"
       tags:
-      - directories
-  /accounts/{accountID}/directories/{directoryID}:
+        - "directories"
+      summary: "Create directory"
+      parameters:
+        -
+          type: "string"
+          format: "uuid"
+          description: "Account ID"
+          name: "accountID"
+          in: "path"
+          required: true
+        -
+          description: "Directory details"
+          name: "request"
+          in: "body"
+          required: true
+          schema:
+            $ref: "#/definitions/internal_catalog.createDirectoryRequest"
+        -
+          enum:
+            - "path"
+          type: "string"
+          description: "Include additional fields"
+          name: "include"
+          in: "query"
+      responses:
+        200:
+          description: "Created directory"
+          schema:
+            $ref: "#/definitions/internal_catalog.DirectoryInfo"
+        400:
+          description: "Parent not found or not a directory"
+          schema:
+            type: "object"
+            additionalProperties:
+              type: "string"
+        401:
+          description: "Not authenticated"
+          schema:
+            type: "string"
+        409:
+          description: "Directory already exists"
+          schema:
+            type: "object"
+            additionalProperties:
+              type: "string"
     delete:
-      description: Delete a directory permanently or move it to trash. Deleting a
-        directory also affects all its contents.
-      parameters:
-      - description: Account ID
-        format: uuid
-        in: path
-        name: accountID
-        required: true
-        type: string
-      - description: Directory ID
-        in: path
-        name: directoryID
-        required: true
-        type: string
-      - default: false
-        description: Move to trash instead of permanent delete
-        in: query
-        name: trash
-        type: boolean
-      responses:
-        "204":
-          description: Directory deleted
-          schema:
-            type: string
-        "401":
-          description: Not authenticated
-          schema:
-            type: string
-        "404":
-          description: Directory not found
-          schema:
-            type: string
       security:
-      - BearerAuth: []
-      summary: Delete directory
+        -
+          BearerAuth: []
+      description: "Delete multiple directories permanently or move them to trash. Deleting directories also affects all their contents. All items must be directories."
       tags:
-      - directories
-    get:
-      description: Retrieve metadata for a specific directory
+        - "directories"
+      summary: "Bulk delete directories"
       parameters:
-      - description: Account ID
-        format: uuid
-        in: path
-        name: accountID
-        required: true
-        type: string
-      - description: Directory ID
-        in: path
-        name: directoryID
-        required: true
-        type: string
-      - description: Include additional fields
-        enum:
-        - path
-        in: query
-        name: include
-        type: string
-      produces:
-      - application/json
+        -
+          type: "string"
+          format: "uuid"
+          description: "Account ID"
+          name: "accountID"
+          in: "path"
+          required: true
+        -
+          type: "string"
+          description: "Comma-separated list of directory IDs to delete"
+          name: "id"
+          in: "query"
+          required: true
+        -
+          type: "boolean"
+          default: false
+          description: "Move to trash instead of permanent delete"
+          name: "trash"
+          in: "query"
       responses:
-        "200":
-          description: Directory metadata
+        200:
+          description: "Trashed directories (when trash=true)"
           schema:
-            $ref: '#/definitions/internal_catalog.DirectoryInfo'
-        "401":
-          description: Not authenticated
+            type: "array"
+            items:
+              $ref: "#/definitions/internal_catalog.DirectoryInfo"
+        204:
+          description: "Directories deleted"
           schema:
-            type: string
-        "404":
-          description: Directory not found
+            type: "string"
+        400:
+          description: "All items must be directories"
           schema:
-            type: string
-      security:
-      - BearerAuth: []
-      summary: Get directory info
-      tags:
-      - directories
-    patch:
-      consumes:
-      - application/json
-      description: Update directory properties such as name (rename)
-      parameters:
-      - description: Account ID
-        format: uuid
-        in: path
-        name: accountID
-        required: true
-        type: string
-      - description: Directory ID
-        in: path
-        name: directoryID
-        required: true
-        type: string
-      - description: Directory update
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/internal_catalog.patchDirectoryRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: Updated directory metadata
-          schema:
-            $ref: '#/definitions/internal_catalog.DirectoryInfo'
-        "400":
-          description: Invalid request
-          schema:
+            type: "object"
             additionalProperties:
-              type: string
-            type: object
-        "401":
-          description: Not authenticated
+              type: "string"
+        401:
+          description: "Not authenticated"
           schema:
-            type: string
-        "404":
-          description: Directory not found
-          schema:
-            type: string
+            type: "string"
+  /accounts/{accountID}/directories/{directoryID}:
+    get:
       security:
-      - BearerAuth: []
-      summary: Update directory
+        -
+          BearerAuth: []
+      description: "Retrieve metadata for a specific directory"
+      produces:
+        - "application/json"
       tags:
-      - directories
+        - "directories"
+      summary: "Get directory info"
+      parameters:
+        -
+          type: "string"
+          format: "uuid"
+          description: "Account ID"
+          name: "accountID"
+          in: "path"
+          required: true
+        -
+          type: "string"
+          description: "Directory ID"
+          name: "directoryID"
+          in: "path"
+          required: true
+        -
+          enum:
+            - "path"
+          type: "string"
+          description: "Include additional fields"
+          name: "include"
+          in: "query"
+      responses:
+        200:
+          description: "Directory metadata"
+          schema:
+            $ref: "#/definitions/internal_catalog.DirectoryInfo"
+        401:
+          description: "Not authenticated"
+          schema:
+            type: "string"
+        404:
+          description: "Directory not found"
+          schema:
+            type: "string"
+    delete:
+      security:
+        -
+          BearerAuth: []
+      description: "Delete a directory permanently or move it to trash. Deleting a directory also affects all its contents."
+      tags:
+        - "directories"
+      summary: "Delete directory"
+      parameters:
+        -
+          type: "string"
+          format: "uuid"
+          description: "Account ID"
+          name: "accountID"
+          in: "path"
+          required: true
+        -
+          type: "string"
+          description: "Directory ID"
+          name: "directoryID"
+          in: "path"
+          required: true
+        -
+          type: "boolean"
+          default: false
+          description: "Move to trash instead of permanent delete"
+          name: "trash"
+          in: "query"
+      responses:
+        200:
+          description: "Trashed directory info (when trash=true)"
+          schema:
+            $ref: "#/definitions/internal_catalog.DirectoryInfo"
+        204:
+          description: "Directory deleted"
+          schema:
+            type: "string"
+        401:
+          description: "Not authenticated"
+          schema:
+            type: "string"
+        404:
+          description: "Directory not found"
+          schema:
+            type: "string"
+    patch:
+      security:
+        -
+          BearerAuth: []
+      description: "Update directory properties such as name (rename)"
+      consumes:
+        - "application/json"
+      produces:
+        - "application/json"
+      tags:
+        - "directories"
+      summary: "Update directory"
+      parameters:
+        -
+          type: "string"
+          format: "uuid"
+          description: "Account ID"
+          name: "accountID"
+          in: "path"
+          required: true
+        -
+          type: "string"
+          description: "Directory ID"
+          name: "directoryID"
+          in: "path"
+          required: true
+        -
+          description: "Directory update"
+          name: "request"
+          in: "body"
+          required: true
+          schema:
+            $ref: "#/definitions/internal_catalog.patchDirectoryRequest"
+      responses:
+        200:
+          description: "Updated directory metadata"
+          schema:
+            $ref: "#/definitions/internal_catalog.DirectoryInfo"
+        400:
+          description: "Invalid request"
+          schema:
+            type: "object"
+            additionalProperties:
+              type: "string"
+        401:
+          description: "Not authenticated"
+          schema:
+            type: "string"
+        404:
+          description: "Directory not found"
+          schema:
+            type: "string"
   /accounts/{accountID}/directories/{directoryID}/content:
     get:
-      description: Get all files and subdirectories within a directory
-      parameters:
-      - description: Account ID
-        format: uuid
-        in: path
-        name: accountID
-        required: true
-        type: string
-      - description: Directory ID
-        in: path
-        name: directoryID
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: Array of FileInfo and DirectoryInfo objects
-          schema:
-            items: {}
-            type: array
-        "401":
-          description: Not authenticated
-          schema:
-            type: string
-        "404":
-          description: Directory not found
-          schema:
-            type: string
       security:
-      - BearerAuth: []
-      summary: List directory contents
+        -
+          BearerAuth: []
+      description: "Get all files and subdirectories within a directory with optional pagination and sorting"
+      produces:
+        - "application/json"
       tags:
-      - directories
+        - "directories"
+      summary: "List directory contents"
+      parameters:
+        -
+          type: "string"
+          format: "uuid"
+          description: "Account ID"
+          name: "accountID"
+          in: "path"
+          required: true
+        -
+          type: "string"
+          description: "Directory ID (use 'root' for the root directory)"
+          name: "directoryID"
+          in: "path"
+          required: true
+        -
+          enum:
+            - "name"
+            - "createdAt"
+            - "updatedAt"
+          type: "string"
+          description: "Sort field: name, createdAt, or updatedAt"
+          name: "orderBy"
+          in: "query"
+        -
+          enum:
+            - "asc"
+            - "desc"
+          type: "string"
+          description: "Sort direction: asc or desc"
+          name: "dir"
+          in: "query"
+        -
+          type: "integer"
+          description: "Maximum number of items to return (default: 100, min: 1)"
+          name: "limit"
+          in: "query"
+        -
+          type: "string"
+          description: "Cursor for pagination (base64-encoded cursor from previous response)"
+          name: "cursor"
+          in: "query"
+      responses:
+        200:
+          description: "Paginated list of FileInfo and DirectoryInfo objects"
+          schema:
+            $ref: "#/definitions/internal_catalog.listDirectoryResponse"
+        400:
+          description: "Invalid limit or cursor"
+          schema:
+            type: "object"
+            additionalProperties:
+              type: "string"
+        401:
+          description: "Not authenticated"
+          schema:
+            type: "string"
+        404:
+          description: "Directory not found"
+          schema:
+            type: "string"
     post:
+      security:
+        -
+          BearerAuth: []
+      description: "Move one or more files or directories into this directory. Returns detailed status for each item including which were successfully moved, which had conflicts, and which encountered errors."
       consumes:
-      - application/json
-      description: Move one or more files or directories into this directory. Returns
-        detailed status for each item including which were successfully moved, which
-        had conflicts, and which encountered errors.
-      parameters:
-      - description: Account ID
-        format: uuid
-        in: path
-        name: accountID
-        required: true
-        type: string
-      - description: Target directory ID
-        in: path
-        name: directoryID
-        required: true
-        type: string
-      - description: Items to move
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/internal_catalog.postDirectoryContentRequest'
+        - "application/json"
       produces:
-      - application/json
-      responses:
-        "200":
-          description: Move operation results with moved, conflict, and error states
-          schema:
-            $ref: '#/definitions/internal_catalog.moveItemsToDirectoryResponse'
-        "400":
-          description: Invalid request or items not in same directory
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "401":
-          description: Not authenticated
-          schema:
-            type: string
-        "404":
-          description: One or more items not found
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-      security:
-      - BearerAuth: []
-      summary: Move items to directory
+        - "application/json"
       tags:
-      - directories
-  /accounts/{accountID}/files/{fileID}:
-    delete:
-      description: Delete a file permanently or move it to trash
+        - "directories"
+      summary: "Move items to directory"
       parameters:
-      - description: Account ID
-        format: uuid
-        in: path
-        name: accountID
-        required: true
-        type: string
-      - description: File ID
-        in: path
-        name: fileID
-        required: true
-        type: string
-      - default: false
-        description: Move to trash instead of permanent delete
-        in: query
-        name: trash
-        type: boolean
-      produces:
-      - application/json
+        -
+          type: "string"
+          format: "uuid"
+          description: "Account ID"
+          name: "accountID"
+          in: "path"
+          required: true
+        -
+          type: "string"
+          description: "Target directory ID"
+          name: "directoryID"
+          in: "path"
+          required: true
+        -
+          description: "Items to move"
+          name: "request"
+          in: "body"
+          required: true
+          schema:
+            $ref: "#/definitions/internal_catalog.postDirectoryContentRequest"
       responses:
-        "200":
-          description: Trashed file info (when trash=true)
+        200:
+          description: "Move operation results with moved, conflict, and error states"
           schema:
-            $ref: '#/definitions/internal_catalog.FileInfo'
-        "204":
-          description: Permanently deleted (when trash=false)
+            $ref: "#/definitions/internal_catalog.moveItemsToDirectoryResponse"
+        400:
+          description: "Invalid request or items not in same directory"
           schema:
-            type: string
-        "401":
-          description: Not authenticated
+            type: "object"
+            additionalProperties:
+              type: "string"
+        401:
+          description: "Not authenticated"
           schema:
-            type: string
-        "404":
-          description: File not found
+            type: "string"
+        404:
+          description: "One or more items not found"
           schema:
-            type: string
-      security:
-      - BearerAuth: []
-      summary: Delete file
-      tags:
-      - files
+            type: "object"
+            additionalProperties:
+              type: "string"
+  /accounts/{accountID}/directories/{directoryID}/shares:
     get:
-      description: Retrieve metadata for a specific file
-      parameters:
-      - description: Account ID
-        format: uuid
-        in: path
-        name: accountID
-        required: true
-        type: string
-      - description: File ID
-        in: path
-        name: fileID
-        required: true
-        type: string
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: File metadata
-          schema:
-            $ref: '#/definitions/internal_catalog.FileInfo'
-        "401":
-          description: Not authenticated
-          schema:
-            type: string
-        "404":
-          description: File not found
-          schema:
-            type: string
       security:
-      - BearerAuth: []
-      summary: Get file info
-      tags:
-      - files
-    patch:
-      consumes:
-      - application/json
-      description: Update file properties such as name (rename)
-      parameters:
-      - description: Account ID
-        format: uuid
-        in: path
-        name: accountID
-        required: true
-        type: string
-      - description: File ID
-        in: path
-        name: fileID
-        required: true
-        type: string
-      - description: File update
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/internal_catalog.patchFileRequest'
+        -
+          BearerAuth: []
+      description: "Get all share links that include this directory"
       produces:
-      - application/json
+        - "application/json"
+      tags:
+        - "directories"
+      summary: "List directory shares"
+      parameters:
+        -
+          type: "string"
+          format: "uuid"
+          description: "Account ID"
+          name: "accountID"
+          in: "path"
+          required: true
+        -
+          type: "string"
+          description: "Directory ID"
+          name: "directoryID"
+          in: "path"
+          required: true
       responses:
-        "200":
-          description: Updated file metadata
+        200:
+          description: "Array of shares"
           schema:
-            $ref: '#/definitions/internal_catalog.FileInfo'
-        "400":
-          description: Invalid request
+            type: "array"
+            items:
+              $ref: "#/definitions/github_com_get-drexa_drexa_internal_sharing.Share"
+        401:
+          description: "Not authenticated"
           schema:
+            type: "string"
+        404:
+          description: "Directory not found"
+          schema:
+            type: "string"
+  /accounts/{accountID}/files:
+    delete:
+      security:
+        -
+          BearerAuth: []
+      description: "Delete multiple files permanently or move them to trash. All items must be files."
+      tags:
+        - "files"
+      summary: "Bulk delete files"
+      parameters:
+        -
+          type: "string"
+          format: "uuid"
+          description: "Account ID"
+          name: "accountID"
+          in: "path"
+          required: true
+        -
+          type: "string"
+          description: "Comma-separated list of file IDs to delete"
+          name: "id"
+          in: "query"
+          required: true
+        -
+          type: "boolean"
+          default: false
+          description: "Move to trash instead of permanent delete"
+          name: "trash"
+          in: "query"
+      responses:
+        200:
+          description: "Trashed files (when trash=true)"
+          schema:
+            type: "array"
+            items:
+              $ref: "#/definitions/internal_catalog.FileInfo"
+        204:
+          description: "Files deleted"
+          schema:
+            type: "string"
+        400:
+          description: "All items must be files"
+          schema:
+            type: "object"
             additionalProperties:
-              type: string
-            type: object
-        "401":
-          description: Not authenticated
+              type: "string"
+        401:
+          description: "Not authenticated"
           schema:
-            type: string
-        "404":
-          description: File not found
-          schema:
-            type: string
+            type: "string"
+  /accounts/{accountID}/files/{fileID}:
+    get:
       security:
-      - BearerAuth: []
-      summary: Update file
+        -
+          BearerAuth: []
+      description: "Retrieve metadata for a specific file"
+      produces:
+        - "application/json"
       tags:
-      - files
+        - "files"
+      summary: "Get file info"
+      parameters:
+        -
+          type: "string"
+          format: "uuid"
+          description: "Account ID"
+          name: "accountID"
+          in: "path"
+          required: true
+        -
+          type: "string"
+          description: "File ID"
+          name: "fileID"
+          in: "path"
+          required: true
+      responses:
+        200:
+          description: "File metadata"
+          schema:
+            $ref: "#/definitions/internal_catalog.FileInfo"
+        401:
+          description: "Not authenticated"
+          schema:
+            type: "string"
+        404:
+          description: "File not found"
+          schema:
+            type: "string"
+    delete:
+      security:
+        -
+          BearerAuth: []
+      description: "Delete a file permanently or move it to trash"
+      produces:
+        - "application/json"
+      tags:
+        - "files"
+      summary: "Delete file"
+      parameters:
+        -
+          type: "string"
+          format: "uuid"
+          description: "Account ID"
+          name: "accountID"
+          in: "path"
+          required: true
+        -
+          type: "string"
+          description: "File ID"
+          name: "fileID"
+          in: "path"
+          required: true
+        -
+          type: "boolean"
+          default: false
+          description: "Move to trash instead of permanent delete"
+          name: "trash"
+          in: "query"
+      responses:
+        200:
+          description: "Trashed file info (when trash=true)"
+          schema:
+            $ref: "#/definitions/internal_catalog.FileInfo"
+        204:
+          description: "Permanently deleted (when trash=false)"
+          schema:
+            type: "string"
+        401:
+          description: "Not authenticated"
+          schema:
+            type: "string"
+        404:
+          description: "File not found"
+          schema:
+            type: "string"
+    patch:
+      security:
+        -
+          BearerAuth: []
+      description: "Update file properties such as name (rename)"
+      consumes:
+        - "application/json"
+      produces:
+        - "application/json"
+      tags:
+        - "files"
+      summary: "Update file"
+      parameters:
+        -
+          type: "string"
+          format: "uuid"
+          description: "Account ID"
+          name: "accountID"
+          in: "path"
+          required: true
+        -
+          type: "string"
+          description: "File ID"
+          name: "fileID"
+          in: "path"
+          required: true
+        -
+          description: "File update"
+          name: "request"
+          in: "body"
+          required: true
+          schema:
+            $ref: "#/definitions/internal_catalog.patchFileRequest"
+      responses:
+        200:
+          description: "Updated file metadata"
+          schema:
+            $ref: "#/definitions/internal_catalog.FileInfo"
+        400:
+          description: "Invalid request"
+          schema:
+            type: "object"
+            additionalProperties:
+              type: "string"
+        401:
+          description: "Not authenticated"
+          schema:
+            type: "string"
+        404:
+          description: "File not found"
+          schema:
+            type: "string"
   /accounts/{accountID}/files/{fileID}/content:
     get:
-      description: Download the file content. May redirect to a signed URL for external
-        storage.
-      parameters:
-      - description: Account ID
-        format: uuid
-        in: path
-        name: accountID
-        required: true
-        type: string
-      - description: File ID
-        in: path
-        name: fileID
-        required: true
-        type: string
-      produces:
-      - application/octet-stream
-      responses:
-        "200":
-          description: File content stream
-          schema:
-            type: file
-        "307":
-          description: Redirect to download URL
-          schema:
-            type: string
-        "401":
-          description: Not authenticated
-          schema:
-            type: string
-        "404":
-          description: File not found
-          schema:
-            type: string
       security:
-      - BearerAuth: []
-      summary: Download file
+        -
+          BearerAuth: []
+      description: "Download the file content. May redirect to a signed URL for external storage."
+      produces:
+        - "application/octet-stream"
       tags:
-      - files
+        - "files"
+      summary: "Download file"
+      parameters:
+        -
+          type: "string"
+          format: "uuid"
+          description: "Account ID"
+          name: "accountID"
+          in: "path"
+          required: true
+        -
+          type: "string"
+          description: "File ID"
+          name: "fileID"
+          in: "path"
+          required: true
+      responses:
+        200:
+          description: "File content stream"
+          schema:
+            type: "file"
+        307:
+          description: "Redirect to download URL"
+          schema:
+            type: "string"
+        401:
+          description: "Not authenticated"
+          schema:
+            type: "string"
+        404:
+          description: "File not found"
+          schema:
+            type: "string"
+  /accounts/{accountID}/files/{fileID}/shares:
+    get:
+      security:
+        -
+          BearerAuth: []
+      description: "Get all share links that include this file"
+      produces:
+        - "application/json"
+      tags:
+        - "files"
+      summary: "List file shares"
+      parameters:
+        -
+          type: "string"
+          format: "uuid"
+          description: "Account ID"
+          name: "accountID"
+          in: "path"
+          required: true
+        -
+          type: "string"
+          description: "File ID"
+          name: "fileID"
+          in: "path"
+          required: true
+      responses:
+        200:
+          description: "Array of shares"
+          schema:
+            type: "array"
+            items:
+              $ref: "#/definitions/github_com_get-drexa_drexa_internal_sharing.Share"
+        401:
+          description: "Not authenticated"
+          schema:
+            type: "string"
+        404:
+          description: "File not found"
+          schema:
+            type: "string"
+  /accounts/{accountID}/shares:
+    post:
+      security:
+        -
+          BearerAuth: []
+      description: "Create a new share link for one or more files or directories"
+      consumes:
+        - "application/json"
+      produces:
+        - "application/json"
+      tags:
+        - "shares"
+      summary: "Create share"
+      parameters:
+        -
+          type: "string"
+          format: "uuid"
+          description: "Account ID"
+          name: "accountID"
+          in: "path"
+          required: true
+        -
+          description: "Share details"
+          name: "request"
+          in: "body"
+          required: true
+          schema:
+            $ref: "#/definitions/internal_sharing.createShareRequest"
+      responses:
+        200:
+          description: "Created share"
+          schema:
+            $ref: "#/definitions/internal_sharing.Share"
+        400:
+          description: "Invalid request or no items provided"
+          schema:
+            type: "object"
+            additionalProperties:
+              type: "string"
+        401:
+          description: "Not authenticated"
+          schema:
+            type: "string"
+        404:
+          description: "One or more items not found"
+          schema:
+            type: "object"
+            additionalProperties:
+              type: "string"
+  /accounts/{accountID}/shares/{shareID}:
+    get:
+      security:
+        -
+          BearerAuth: []
+      description: "Retrieve share link details by ID"
+      consumes:
+        - "application/json"
+      produces:
+        - "application/json"
+      tags:
+        - "shares"
+      summary: "Get share"
+      parameters:
+        -
+          type: "string"
+          format: "uuid"
+          description: "Account ID"
+          name: "accountID"
+          in: "path"
+          required: true
+        -
+          type: "string"
+          description: "Share ID"
+          name: "shareID"
+          in: "path"
+          required: true
+      responses:
+        200:
+          description: "Share details"
+          schema:
+            $ref: "#/definitions/internal_sharing.Share"
+        401:
+          description: "Not authenticated"
+          schema:
+            type: "string"
+        404:
+          description: "Share not found"
+          schema:
+            type: "string"
+    delete:
+      security:
+        -
+          BearerAuth: []
+      description: "Delete a share link, revoking access for all users"
+      tags:
+        - "shares"
+      summary: "Delete share"
+      parameters:
+        -
+          type: "string"
+          format: "uuid"
+          description: "Account ID"
+          name: "accountID"
+          in: "path"
+          required: true
+        -
+          type: "string"
+          description: "Share ID"
+          name: "shareID"
+          in: "path"
+          required: true
+      responses:
+        204:
+          description: "Share deleted"
+          schema:
+            type: "string"
+        401:
+          description: "Not authenticated"
+          schema:
+            type: "string"
+        404:
+          description: "Share not found"
+          schema:
+            type: "string"
   /accounts/{accountID}/uploads:
     post:
-      consumes:
-      - application/json
-      description: Start a new file upload session. Returns an upload URL to PUT file
-        content to.
-      parameters:
-      - description: Account ID
-        format: uuid
-        in: path
-        name: accountID
-        required: true
-        type: string
-      - description: Upload details
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/internal_upload.createUploadRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: Upload session created
-          schema:
-            $ref: '#/definitions/internal_upload.Upload'
-        "400":
-          description: Parent is not a directory
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "401":
-          description: Not authenticated
-          schema:
-            type: string
-        "404":
-          description: Parent directory not found
-          schema:
-            type: string
-        "409":
-          description: File with this name already exists
-          schema:
-            additionalProperties:
-              type: string
-            type: object
       security:
-      - BearerAuth: []
-      summary: Create upload session
+        -
+          BearerAuth: []
+      description: "Start a new file upload session. Returns an upload URL to PUT file content to."
+      consumes:
+        - "application/json"
+      produces:
+        - "application/json"
       tags:
-      - uploads
+        - "uploads"
+      summary: "Create upload session"
+      parameters:
+        -
+          type: "string"
+          format: "uuid"
+          description: "Account ID"
+          name: "accountID"
+          in: "path"
+          required: true
+        -
+          description: "Upload details"
+          name: "request"
+          in: "body"
+          required: true
+          schema:
+            $ref: "#/definitions/internal_upload.createUploadRequest"
+      responses:
+        200:
+          description: "Upload session created"
+          schema:
+            $ref: "#/definitions/internal_upload.Upload"
+        400:
+          description: "Parent is not a directory"
+          schema:
+            type: "object"
+            additionalProperties:
+              type: "string"
+        401:
+          description: "Not authenticated"
+          schema:
+            type: "string"
+        404:
+          description: "Parent directory not found"
+          schema:
+            type: "string"
+        409:
+          description: "File with this name already exists"
+          schema:
+            type: "object"
+            additionalProperties:
+              type: "string"
   /accounts/{accountID}/uploads/{uploadID}:
     patch:
-      consumes:
-      - application/json
-      description: Mark an upload as completed after content has been uploaded. This
-        finalizes the file in the filesystem.
-      parameters:
-      - description: Account ID
-        format: uuid
-        in: path
-        name: accountID
-        required: true
-        type: string
-      - description: Upload session ID
-        in: path
-        name: uploadID
-        required: true
-        type: string
-      - description: Status update
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/internal_upload.updateUploadRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: Upload completed
-          schema:
-            $ref: '#/definitions/internal_upload.Upload'
-        "400":
-          description: Content not uploaded yet or invalid status
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "401":
-          description: Not authenticated
-          schema:
-            type: string
-        "404":
-          description: Upload session not found
-          schema:
-            type: string
       security:
-      - BearerAuth: []
-      summary: Complete upload
+        -
+          BearerAuth: []
+      description: "Mark an upload as completed after content has been uploaded. This finalizes the file in the filesystem."
+      consumes:
+        - "application/json"
+      produces:
+        - "application/json"
       tags:
-      - uploads
+        - "uploads"
+      summary: "Complete upload"
+      parameters:
+        -
+          type: "string"
+          format: "uuid"
+          description: "Account ID"
+          name: "accountID"
+          in: "path"
+          required: true
+        -
+          type: "string"
+          description: "Upload session ID"
+          name: "uploadID"
+          in: "path"
+          required: true
+        -
+          description: "Status update"
+          name: "request"
+          in: "body"
+          required: true
+          schema:
+            $ref: "#/definitions/internal_upload.updateUploadRequest"
+      responses:
+        200:
+          description: "Upload completed"
+          schema:
+            $ref: "#/definitions/internal_upload.Upload"
+        400:
+          description: "Content not uploaded yet or invalid status"
+          schema:
+            type: "object"
+            additionalProperties:
+              type: "string"
+        401:
+          description: "Not authenticated"
+          schema:
+            type: "string"
+        404:
+          description: "Upload session not found"
+          schema:
+            type: "string"
   /accounts/{accountID}/uploads/{uploadID}/content:
     put:
-      consumes:
-      - application/octet-stream
-      description: Stream file content to complete an upload. Send raw binary data
-        in the request body.
-      parameters:
-      - description: Account ID
-        format: uuid
-        in: path
-        name: accountID
-        required: true
-        type: string
-      - description: Upload session ID
-        in: path
-        name: uploadID
-        required: true
-        type: string
-      - description: File content (binary)
-        in: body
-        name: file
-        required: true
-        schema:
-          items:
-            type: integer
-          type: array
-      responses:
-        "204":
-          description: Content received successfully
-          schema:
-            type: string
-        "401":
-          description: Not authenticated
-          schema:
-            type: string
-        "404":
-          description: Upload session not found
-          schema:
-            type: string
       security:
-      - BearerAuth: []
-      summary: Upload file content
+        -
+          BearerAuth: []
+      description: "Stream file content to complete an upload. Send raw binary data in the request body."
+      consumes:
+        - "application/octet-stream"
       tags:
-      - uploads
+        - "uploads"
+      summary: "Upload file content"
+      parameters:
+        -
+          type: "string"
+          format: "uuid"
+          description: "Account ID"
+          name: "accountID"
+          in: "path"
+          required: true
+        -
+          type: "string"
+          description: "Upload session ID"
+          name: "uploadID"
+          in: "path"
+          required: true
+        -
+          description: "File content (binary)"
+          name: "file"
+          in: "body"
+          required: true
+          schema:
+            type: "array"
+            items:
+              type: "integer"
+      responses:
+        204:
+          description: "Content received successfully"
+          schema:
+            type: "string"
+        401:
+          description: "Not authenticated"
+          schema:
+            type: "string"
+        404:
+          description: "Upload session not found"
+          schema:
+            type: "string"
   /auth/login:
     post:
+      description: "Authenticate with email and password to receive JWT tokens. Tokens can be delivered via HTTP-only cookies or in the response body based on the tokenDelivery field."
       consumes:
-      - application/json
-      description: Authenticate with email and password to receive JWT tokens. Tokens
-        can be delivered via HTTP-only cookies or in the response body based on the
-        tokenDelivery field.
-      parameters:
-      - description: Login credentials
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/internal_auth.loginRequest'
+        - "application/json"
       produces:
-      - application/json
-      responses:
-        "200":
-          description: Successful authentication
-          schema:
-            $ref: '#/definitions/internal_auth.loginResponse'
-        "400":
-          description: Invalid request body or token delivery method
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "401":
-          description: Invalid email or password
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-      summary: User login
+        - "application/json"
       tags:
-      - auth
+        - "auth"
+      summary: "User login"
+      parameters:
+        -
+          description: "Login credentials"
+          name: "request"
+          in: "body"
+          required: true
+          schema:
+            $ref: "#/definitions/internal_auth.loginRequest"
+      responses:
+        200:
+          description: "Successful authentication"
+          schema:
+            $ref: "#/definitions/internal_auth.loginResponse"
+        400:
+          description: "Invalid request body or token delivery method"
+          schema:
+            type: "object"
+            additionalProperties:
+              type: "string"
+        401:
+          description: "Invalid email or password"
+          schema:
+            type: "object"
+            additionalProperties:
+              type: "string"
   /auth/tokens:
     post:
+      description: "Exchange a valid refresh token for a new pair of access and refresh tokens. The old refresh token is invalidated (rotation)."
       consumes:
-      - application/json
-      description: Exchange a valid refresh token for a new pair of access and refresh
-        tokens. The old refresh token is invalidated (rotation).
-      parameters:
-      - description: Refresh token
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/internal_auth.refreshAccessTokenRequest'
+        - "application/json"
       produces:
-      - application/json
-      responses:
-        "200":
-          description: New tokens
-          schema:
-            $ref: '#/definitions/internal_auth.tokenResponse'
-        "400":
-          description: Invalid request body
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-        "401":
-          description: Invalid, expired, or reused refresh token
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-      summary: Refresh access token
+        - "application/json"
       tags:
-      - auth
+        - "auth"
+      summary: "Refresh access token"
+      parameters:
+        -
+          description: "Refresh token"
+          name: "request"
+          in: "body"
+          required: true
+          schema:
+            $ref: "#/definitions/internal_auth.refreshAccessTokenRequest"
+      responses:
+        200:
+          description: "New tokens"
+          schema:
+            $ref: "#/definitions/internal_auth.tokenResponse"
+        400:
+          description: "Invalid request body"
+          schema:
+            type: "object"
+            additionalProperties:
+              type: "string"
+        401:
+          description: "Invalid, expired, or reused refresh token"
+          schema:
+            type: "object"
+            additionalProperties:
+              type: "string"
   /users/me:
     get:
-      description: Retrieve the authenticated user's profile information
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: User profile
-          schema:
-            $ref: '#/definitions/internal_user.User'
-        "401":
-          description: Not authenticated
-          schema:
-            type: string
       security:
-      - BearerAuth: []
-      summary: Get current user
+        -
+          BearerAuth: []
+      description: "Retrieve the authenticated user's profile information"
+      produces:
+        - "application/json"
       tags:
-      - users
+        - "users"
+      summary: "Get current user"
+      responses:
+        200:
+          description: "User profile"
+          schema:
+            $ref: "#/definitions/internal_user.User"
+        401:
+          description: "Not authenticated"
+          schema:
+            type: "string"
+definitions:
+  github_com_get-drexa_drexa_internal_sharing.Share:
+    description: "Share link information including expiration and timestamps"
+    type: "object"
+    properties:
+      createdAt:
+        description: "When the share was created (ISO 8601)"
+        type: "string"
+        example: "2024-12-13T15:04:05Z"
+      expiresAt:
+        description: "When the share expires, null if it never expires (ISO 8601)"
+        type: "string"
+        example: "2025-01-15T00:00:00Z"
+      id:
+        description: "Unique share identifier (public ID)"
+        type: "string"
+        example: "kRp2XYTq9A55"
+      updatedAt:
+        description: "When the share was last updated (ISO 8601)"
+        type: "string"
+        example: "2024-12-13T16:30:00Z"
+  github_com_get-drexa_drexa_internal_user.User:
+    description: "User account information"
+    type: "object"
+    properties:
+      displayName:
+        description: "User's display name"
+        type: "string"
+        example: "John Doe"
+      email:
+        description: "User's email address"
+        type: "string"
+        example: "john@example.com"
+      id:
+        description: "Unique user identifier"
+        type: "string"
+        example: "550e8400-e29b-41d4-a716-446655440000"
+  github_com_get-drexa_drexa_internal_virtualfs.PathSegment:
+    type: "object"
+    properties:
+      id:
+        type: "string"
+      name:
+        type: "string"
+  internal_account.Account:
+    description: "Storage account with usage and quota details"
+    type: "object"
+    properties:
+      createdAt:
+        description: "When the account was created (ISO 8601)"
+        type: "string"
+        example: "2024-12-13T15:04:05Z"
+      id:
+        description: "Unique account identifier"
+        type: "string"
+        example: "550e8400-e29b-41d4-a716-446655440000"
+      storageQuotaBytes:
+        description: "Maximum storage quota in bytes"
+        type: "integer"
+        example: 10737418240
+      storageUsageBytes:
+        description: "Current storage usage in bytes"
+        type: "integer"
+        example: 1073741824
+      updatedAt:
+        description: "When the account was last updated (ISO 8601)"
+        type: "string"
+        example: "2024-12-13T16:30:00Z"
+      userId:
+        description: "ID of the user who owns this account"
+        type: "string"
+        example: "550e8400-e29b-41d4-a716-446655440001"
+  internal_account.registerAccountRequest:
+    description: "Request to create a new account and user"
+    type: "object"
+    properties:
+      displayName:
+        description: "Display name for the user"
+        type: "string"
+        example: "Jane Doe"
+      email:
+        description: "Email address for the new account"
+        type: "string"
+        example: "newuser@example.com"
+      password:
+        description: "Password for the new account (min 8 characters)"
+        type: "string"
+        example: "securepassword123"
+      tokenDelivery:
+        description: "How to deliver tokens: \"cookie\" (set HTTP-only cookies) or \"body\" (include in response)"
+        type: "string"
+        enum:
+          - "cookie"
+          - "body"
+        example: "body"
+  internal_account.registerAccountResponse:
+    description: "Response after successful account registration"
+    type: "object"
+    properties:
+      accessToken:
+        description: "JWT access token for immediate authentication (only included when tokenDelivery is \"body\")"
+        type: "string"
+        example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI1NTBlODQwMC1lMjliLTQxZDQtYTcxNi00NDY2NTU0NDAwMDAifQ.signature"
+      account:
+        description: "The created account"
+        allOf:
+          -
+            $ref: "#/definitions/internal_account.Account"
+      refreshToken:
+        description: "Base64 URL encoded refresh token (only included when tokenDelivery is \"body\")"
+        type: "string"
+        example: "dR4nD0mUu1DkZXlCeXRlc0FuZFJhbmRvbURhdGFIZXJlMTIzNDU2Nzg5MGFi"
+      user:
+        description: "The created user"
+        allOf:
+          -
+            $ref: "#/definitions/github_com_get-drexa_drexa_internal_user.User"
+  internal_auth.loginRequest:
+    description: "Login request with email, password, and token delivery preference"
+    type: "object"
+    properties:
+      email:
+        description: "User's email address"
+        type: "string"
+        example: "user@example.com"
+      password:
+        description: "User's password"
+        type: "string"
+        example: "secretpassword123"
+      tokenDelivery:
+        description: "How to deliver tokens: \"cookie\" (set HTTP-only cookies) or \"body\" (include in response)"
+        type: "string"
+        enum:
+          - "cookie"
+          - "body"
+        example: "body"
+  internal_auth.loginResponse:
+    description: "Login response containing user info and optionally tokens"
+    type: "object"
+    properties:
+      accessToken:
+        description: "JWT access token (only included when tokenDelivery is \"body\")"
+        type: "string"
+        example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI1NTBlODQwMC1lMjliLTQxZDQtYTcxNi00NDY2NTU0NDAwMDAifQ.signature"
+      refreshToken:
+        description: "Base64 URL encoded refresh token (only included when tokenDelivery is \"body\")"
+        type: "string"
+        example: "dR4nD0mUu1DkZXlCeXRlc0FuZFJhbmRvbURhdGFIZXJlMTIzNDU2Nzg5MGFi"
+      user:
+        description: "Authenticated user information"
+        allOf:
+          -
+            $ref: "#/definitions/github_com_get-drexa_drexa_internal_user.User"
+  internal_auth.refreshAccessTokenRequest:
+    description: "Request to exchange a refresh token for new tokens"
+    type: "object"
+    properties:
+      refreshToken:
+        description: "Base64 URL encoded refresh token"
+        type: "string"
+        example: "dR4nD0mUu1DkZXlCeXRlc0FuZFJhbmRvbURhdGFIZXJlMTIzNDU2Nzg5MGFi"
+  internal_auth.tokenResponse:
+    description: "Response containing new access token and refresh token"
+    type: "object"
+    properties:
+      accessToken:
+        description: "New JWT access token"
+        type: "string"
+        example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI1NTBlODQwMC1lMjliLTQxZDQtYTcxNi00NDY2NTU0NDAwMDAifQ.signature"
+      refreshToken:
+        description: "New base64 URL encoded refresh token"
+        type: "string"
+        example: "xK9mPqRsTuVwXyZ0AbCdEfGhIjKlMnOpQrStUvWxYz1234567890abcdefgh"
+  internal_catalog.DirectoryInfo:
+    description: "Directory information including path and timestamps"
+    type: "object"
+    properties:
+      createdAt:
+        description: "When the directory was created (ISO 8601)"
+        type: "string"
+        example: "2024-12-13T15:04:05Z"
+      deletedAt:
+        description: "When the directory was trashed, null if not trashed (ISO 8601)"
+        type: "string"
+        example: "2024-12-14T10:00:00Z"
+      id:
+        description: "Unique directory identifier"
+        type: "string"
+        example: "kRp2XYTq9A55"
+      kind:
+        description: "Item type, always \"directory\""
+        type: "string"
+        example: "directory"
+      name:
+        description: "Directory name"
+        type: "string"
+        example: "My Documents"
+      parentId:
+        description: "ParentID is the public ID of the directory this directory is in"
+        type: "string"
+        example: "kRp2XYTq9A55"
+      path:
+        description: "Full path from root (included when ?include=path)"
+        type: "array"
+        items:
+          $ref: "#/definitions/github_com_get-drexa_drexa_internal_virtualfs.PathSegment"
+      updatedAt:
+        description: "When the directory was last updated (ISO 8601)"
+        type: "string"
+        example: "2024-12-13T16:30:00Z"
+  internal_catalog.FileInfo:
+    description: "File information including name, size, and timestamps"
+    type: "object"
+    properties:
+      createdAt:
+        description: "When the file was created (ISO 8601)"
+        type: "string"
+        example: "2024-12-13T15:04:05Z"
+      deletedAt:
+        description: "When the file was trashed, null if not trashed (ISO 8601)"
+        type: "string"
+        example: "2024-12-14T10:00:00Z"
+      id:
+        description: "Unique file identifier"
+        type: "string"
+        example: "mElnUNCm8F22"
+      kind:
+        description: "Item type, always \"file\""
+        type: "string"
+        example: "file"
+      mimeType:
+        description: "MIME type of the file"
+        type: "string"
+        example: "application/pdf"
+      name:
+        description: "File name"
+        type: "string"
+        example: "document.pdf"
+      parentId:
+        description: "ParentID is the public ID of the directory this file is in"
+        type: "string"
+        example: "kRp2XYTq9A55"
+      size:
+        description: "File size in bytes"
+        type: "integer"
+        example: 1048576
+      updatedAt:
+        description: "When the file was last updated (ISO 8601)"
+        type: "string"
+        example: "2024-12-13T16:30:00Z"
+  internal_catalog.createDirectoryRequest:
+    description: "Request to create a new directory"
+    type: "object"
+    properties:
+      name:
+        description: "Name for the new directory"
+        type: "string"
+        example: "New Folder"
+      parentID:
+        description: "ID of the parent directory"
+        type: "string"
+        example: "kRp2XYTq9A55"
+  internal_catalog.listDirectoryResponse:
+    description: "Response to a request to list the contents of a directory"
+    type: "object"
+    properties:
+      items:
+        description: "Items is the list of items in the directory, limited to the limit specified in the request"
+        type: "array"
+        items: {}
+      nextCursor:
+        description: "NextCursor is the cursor to use to get the next page of results"
+        type: "string"
+  internal_catalog.moveItemError:
+    description: "Error details for a failed item move"
+    type: "object"
+    properties:
+      error:
+        description: "Error message describing what went wrong"
+        type: "string"
+        example: "permission denied"
+      id:
+        description: "ID of the item that failed to move"
+        type: "string"
+        example: "mElnUNCm8F22"
+  internal_catalog.moveItemsToDirectoryResponse:
+    description: "Response from moving items to a directory with status for each item"
+    type: "object"
+    properties:
+      conflicts:
+        description: "Array of IDs of items that conflicted with existing items in the target directory"
+        type: "array"
+        items:
+          type: "string"
+        example:
+          - "xYz123AbC456"
+      errors:
+        description: "Array of errors that occurred during the move operation"
+        type: "array"
+        items:
+          $ref: "#/definitions/internal_catalog.moveItemError"
+      items:
+        description: "Array of items included in the request (FileInfo or DirectoryInfo objects)"
+        type: "array"
+        items: {}
+      moved:
+        description: "Array of IDs of successfully moved items"
+        type: "array"
+        items:
+          type: "string"
+        example:
+          - "mElnUNCm8F22"
+          - "kRp2XYTq9A55"
+  internal_catalog.patchDirectoryRequest:
+    description: "Request to update directory properties"
+    type: "object"
+    properties:
+      name:
+        description: "New name for the directory"
+        type: "string"
+        example: "My Documents"
+  internal_catalog.patchFileRequest:
+    description: "Request to update file properties"
+    type: "object"
+    properties:
+      name:
+        description: "New name for the file"
+        type: "string"
+        example: "renamed-document.pdf"
+  internal_catalog.postDirectoryContentRequest:
+    description: "Request to move items into this directory"
+    type: "object"
+    properties:
+      items:
+        description: "Array of file/directory IDs to move"
+        type: "array"
+        items:
+          type: "string"
+        example:
+          - "mElnUNCm8F22"
+          - "kRp2XYTq9A55"
+  internal_sharing.Share:
+    description: "Share link information including expiration and timestamps"
+    type: "object"
+    properties:
+      createdAt:
+        description: "When the share was created (ISO 8601)"
+        type: "string"
+        example: "2024-12-13T15:04:05Z"
+      expiresAt:
+        description: "When the share expires, null if it never expires (ISO 8601)"
+        type: "string"
+        example: "2025-01-15T00:00:00Z"
+      id:
+        description: "Unique share identifier (public ID)"
+        type: "string"
+        example: "kRp2XYTq9A55"
+      updatedAt:
+        description: "When the share was last updated (ISO 8601)"
+        type: "string"
+        example: "2024-12-13T16:30:00Z"
+  internal_sharing.createShareRequest:
+    description: "Request to create a new share link for files or directories"
+    type: "object"
+    properties:
+      expiresAt:
+        description: "Optional expiration time for the share (ISO 8601)"
+        type: "string"
+        example: "2025-01-15T00:00:00Z"
+      items:
+        description: "Array of file/directory IDs to share"
+        type: "array"
+        items:
+          type: "string"
+        example:
+          - "mElnUNCm8F22"
+          - "kRp2XYTq9A55"
+  internal_upload.Status:
+    description: "Upload status enumeration"
+    type: "string"
+    enum:
+      - "pending"
+      - "completed"
+      - "failed"
+    x-enum-varnames:
+      - "StatusPending"
+      - "StatusCompleted"
+      - "StatusFailed"
+  internal_upload.Upload:
+    description: "File upload session with status and upload URL"
+    type: "object"
+    properties:
+      id:
+        description: "Unique upload session identifier"
+        type: "string"
+        example: "xNq5RVBt3K88"
+      status:
+        description: "Current upload status"
+        enum:
+          - "pending"
+          - "completed"
+          - "failed"
+        allOf:
+          -
+            $ref: "#/definitions/internal_upload.Status"
+        example: "pending"
+      uploadUrl:
+        description: "URL to upload file content to"
+        type: "string"
+        example: "https://api.example.com/api/accounts/550e8400-e29b-41d4-a716-446655440000/uploads/xNq5RVBt3K88/content"
+  internal_upload.createUploadRequest:
+    description: "Request to initiate a file upload"
+    type: "object"
+    properties:
+      name:
+        description: "Name of the file being uploaded"
+        type: "string"
+        example: "document.pdf"
+      parentId:
+        description: "ID of the parent directory to upload into"
+        type: "string"
+        example: "kRp2XYTq9A55"
+  internal_upload.updateUploadRequest:
+    description: "Request to update upload status (e.g., mark as completed)"
+    type: "object"
+    properties:
+      status:
+        description: "New status for the upload"
+        enum:
+          - "completed"
+        allOf:
+          -
+            $ref: "#/definitions/internal_upload.Status"
+        example: "completed"
+  internal_user.User:
+    description: "User account information"
+    type: "object"
+    properties:
+      displayName:
+        description: "User's display name"
+        type: "string"
+        example: "John Doe"
+      email:
+        description: "User's email address"
+        type: "string"
+        example: "john@example.com"
+      id:
+        description: "Unique user identifier"
+        type: "string"
+        example: "550e8400-e29b-41d4-a716-446655440000"
 securityDefinitions:
   BearerAuth:
-    description: 'JWT access token. Format: "Bearer {token}"'
-    in: header
-    name: Authorization
-    type: apiKey
-swagger: "2.0"
+    description: "JWT access token. Format: \"Bearer {token}\""
+    type: "apiKey"
+    name: "Authorization"
+    in: "header"

@@ -4,8 +4,9 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/get-drexa/drexa/internal/account"
 	"github.com/get-drexa/drexa/internal/httperr"
+	"github.com/get-drexa/drexa/internal/reqctx"
+	"github.com/get-drexa/drexa/internal/virtualfs"
 	"github.com/gofiber/fiber/v2"
 	"github.com/uptrace/bun"
 )
@@ -35,7 +36,7 @@ func NewHTTPHandler(s *Service, db *bun.DB) *HTTPHandler {
 	return &HTTPHandler{service: s, db: db}
 }
 
-func (h *HTTPHandler) RegisterRoutes(api fiber.Router) {
+func (h *HTTPHandler) RegisterRoutes(api *virtualfs.ScopedRouter) {
 	upload := api.Group("/uploads")
 
 	upload.Post("/", h.Create)
@@ -59,8 +60,9 @@ func (h *HTTPHandler) RegisterRoutes(api fiber.Router) {
 // @Failure 409 {object} map[string]string "File with this name already exists"
 // @Router /accounts/{accountID}/uploads [post]
 func (h *HTTPHandler) Create(c *fiber.Ctx) error {
-	account := account.CurrentAccount(c)
-	if account == nil {
+	scopeAny := reqctx.VFSAccessScope(c)
+	scope, ok := scopeAny.(*virtualfs.Scope)
+	if !ok || scope == nil {
 		return c.SendStatus(fiber.StatusUnauthorized)
 	}
 
@@ -69,11 +71,17 @@ func (h *HTTPHandler) Create(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid request"})
 	}
 
-	upload, err := h.service.CreateUpload(c.Context(), h.db, account.ID, CreateUploadOptions{
+	upload, err := h.service.CreateUpload(c.Context(), h.db, CreateUploadOptions{
 		ParentID: req.ParentID,
 		Name:     req.Name,
-	})
+	}, scope)
 	if err != nil {
+		if errors.Is(err, ErrUnauthorized) {
+			return c.SendStatus(fiber.StatusUnauthorized)
+		}
+		if errors.Is(err, virtualfs.ErrAccessDenied) {
+			return c.SendStatus(fiber.StatusNotFound)
+		}
 		if errors.Is(err, ErrNotFound) {
 			return c.SendStatus(fiber.StatusNotFound)
 		}
@@ -107,16 +115,23 @@ func (h *HTTPHandler) Create(c *fiber.Ctx) error {
 // @Failure 404 {string} string "Upload session not found"
 // @Router /accounts/{accountID}/uploads/{uploadID}/content [put]
 func (h *HTTPHandler) ReceiveContent(c *fiber.Ctx) error {
-	account := account.CurrentAccount(c)
-	if account == nil {
+	scopeAny := reqctx.VFSAccessScope(c)
+	scope, ok := scopeAny.(*virtualfs.Scope)
+	if !ok || scope == nil {
 		return c.SendStatus(fiber.StatusUnauthorized)
 	}
 
 	uploadID := c.Params("uploadID")
 
-	err := h.service.ReceiveUpload(c.Context(), h.db, account.ID, uploadID, c.Context().RequestBodyStream())
+	err := h.service.ReceiveUpload(c.Context(), h.db, uploadID, c.Context().RequestBodyStream(), scope)
 	defer c.Context().Request.CloseBodyStream()
 	if err != nil {
+		if errors.Is(err, ErrUnauthorized) {
+			return c.SendStatus(fiber.StatusUnauthorized)
+		}
+		if errors.Is(err, virtualfs.ErrAccessDenied) {
+			return c.SendStatus(fiber.StatusNotFound)
+		}
 		if errors.Is(err, ErrNotFound) {
 			return c.SendStatus(fiber.StatusNotFound)
 		}
@@ -142,8 +157,9 @@ func (h *HTTPHandler) ReceiveContent(c *fiber.Ctx) error {
 // @Failure 404 {string} string "Upload session not found"
 // @Router /accounts/{accountID}/uploads/{uploadID} [patch]
 func (h *HTTPHandler) Update(c *fiber.Ctx) error {
-	account := account.CurrentAccount(c)
-	if account == nil {
+	scopeAny := reqctx.VFSAccessScope(c)
+	scope, ok := scopeAny.(*virtualfs.Scope)
+	if !ok || scope == nil {
 		return c.SendStatus(fiber.StatusUnauthorized)
 	}
 
@@ -153,8 +169,14 @@ func (h *HTTPHandler) Update(c *fiber.Ctx) error {
 	}
 
 	if req.Status == StatusCompleted {
-		upload, err := h.service.CompleteUpload(c.Context(), h.db, account.ID, c.Params("uploadID"))
+		upload, err := h.service.CompleteUpload(c.Context(), h.db, c.Params("uploadID"), scope)
 		if err != nil {
+			if errors.Is(err, ErrUnauthorized) {
+				return c.SendStatus(fiber.StatusUnauthorized)
+			}
+			if errors.Is(err, virtualfs.ErrAccessDenied) {
+				return c.SendStatus(fiber.StatusNotFound)
+			}
 			if errors.Is(err, ErrNotFound) {
 				return c.SendStatus(fiber.StatusNotFound)
 			}

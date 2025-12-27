@@ -44,12 +44,6 @@ type VirtualFS struct {
 	sqid *sqids.Sqids
 }
 
-type CreateNodeOptions struct {
-	ParentID uuid.UUID
-	Kind     NodeKind
-	Name     string
-}
-
 type CreateFileOptions struct {
 	ParentID uuid.UUID
 	Name     string
@@ -93,10 +87,14 @@ func New(blobStore blob.Store, keyResolver BlobKeyResolver) (*VirtualFS, error) 
 	}, nil
 }
 
-func (vfs *VirtualFS) FindNode(ctx context.Context, db bun.IDB, accountID, fileID string) (*Node, error) {
+func (vfs *VirtualFS) FindNode(ctx context.Context, db bun.IDB, fileID string, scope *Scope) (*Node, error) {
+	if !isScopeSet(scope) {
+		return nil, ErrAccessDenied
+	}
+
 	var node Node
 	err := db.NewSelect().Model(&node).
-		Where("account_id = ?", accountID).
+		Where("account_id = ?", scope.AccountID).
 		Where("id = ?", fileID).
 		Where("status = ?", NodeStatusReady).
 		Where("deleted_at IS NULL").
@@ -107,11 +105,17 @@ func (vfs *VirtualFS) FindNode(ctx context.Context, db bun.IDB, accountID, fileI
 		}
 		return nil, err
 	}
+
+	if ok, err := vfs.canAccessNode(ctx, db, scope, OperationRead, node.ID); err != nil {
+		return nil, err
+	} else if !ok {
+		return nil, ErrAccessDenied
+	}
 	return &node, nil
 }
 
-func (vfs *VirtualFS) FindNodeByPublicID(ctx context.Context, db bun.IDB, accountID uuid.UUID, publicID string) (*Node, error) {
-	nodes, err := vfs.FindNodesByPublicID(ctx, db, accountID, []string{publicID})
+func (vfs *VirtualFS) FindNodeByPublicID(ctx context.Context, db bun.IDB, publicID string, scope *Scope) (*Node, error) {
+	nodes, err := vfs.FindNodesByPublicID(ctx, db, []string{publicID}, scope)
 	if err != nil {
 		return nil, err
 	}
@@ -121,14 +125,17 @@ func (vfs *VirtualFS) FindNodeByPublicID(ctx context.Context, db bun.IDB, accoun
 	return nodes[0], nil
 }
 
-func (vfs *VirtualFS) FindNodesByPublicID(ctx context.Context, db bun.IDB, accountID uuid.UUID, publicIDs []string) ([]*Node, error) {
+func (vfs *VirtualFS) FindNodesByPublicID(ctx context.Context, db bun.IDB, publicIDs []string, scope *Scope) ([]*Node, error) {
 	if len(publicIDs) == 0 {
 		return nil, nil
+	}
+	if !isScopeSet(scope) {
+		return nil, ErrAccessDenied
 	}
 
 	var nodes []*Node
 	err := db.NewSelect().Model(&nodes).
-		Where("account_id = ?", accountID).
+		Where("account_id = ?", scope.AccountID).
 		Where("public_id IN (?)", bun.In(publicIDs)).
 		Where("status = ?", NodeStatusReady).
 		Scan(ctx)
@@ -136,7 +143,7 @@ func (vfs *VirtualFS) FindNodesByPublicID(ctx context.Context, db bun.IDB, accou
 		return nil, err
 	}
 
-	return nodes, nil
+	return vfs.filterNodesByScope(ctx, db, scope, nodes)
 }
 
 func (vfs *VirtualFS) FindRootDirectory(ctx context.Context, db bun.IDB, accountID uuid.UUID) (*Node, error) {
@@ -159,10 +166,48 @@ func (vfs *VirtualFS) FindRootDirectory(ctx context.Context, db bun.IDB, account
 	return root, nil
 }
 
+// CreateRootDirectory creates the account root directory node.
+func (vfs *VirtualFS) CreateRootDirectory(ctx context.Context, db bun.IDB, accountID uuid.UUID) (*Node, error) {
+	pid, err := vfs.generatePublicID()
+	if err != nil {
+		return nil, err
+	}
+
+	id, err := newNodeID()
+	if err != nil {
+		return nil, err
+	}
+
+	node := &Node{
+		ID:        id,
+		PublicID:  pid,
+		AccountID: accountID,
+		ParentID:  uuid.Nil,
+		Kind:      NodeKindDirectory,
+		Status:    NodeStatusReady,
+		Name:      RootDirectoryName,
+	}
+
+	_, err = db.NewInsert().Model(node).Exec(ctx)
+	if err != nil {
+		if database.IsUniqueViolation(err) {
+			return nil, ErrNodeConflict
+		}
+		return nil, err
+	}
+
+	return node, nil
+}
+
 // ListChildren returns the children of a directory node with optional sorting and cursor-based pagination.
-func (vfs *VirtualFS) ListChildren(ctx context.Context, db bun.IDB, node *Node, opts ListChildrenOptions) ([]*Node, *ListChildrenCursor, error) {
+func (vfs *VirtualFS) ListChildren(ctx context.Context, db bun.IDB, node *Node, opts ListChildrenOptions, scope *Scope) ([]*Node, *ListChildrenCursor, error) {
 	if !node.IsAccessible() {
 		return nil, nil, ErrNodeNotFound
+	}
+	if ok, err := vfs.canAccessNode(ctx, db, scope, OperationRead, node.ID); err != nil {
+		return nil, nil, err
+	} else if !ok {
+		return nil, nil, ErrAccessDenied
 	}
 
 	var nodes []*Node
@@ -172,16 +217,9 @@ func (vfs *VirtualFS) ListChildren(ctx context.Context, db bun.IDB, node *Node, 
 		Where("status = ?", NodeStatusReady).
 		Where("deleted_at IS NULL")
 
-	var dir string
-	if opts.OrderBy != "" {
-		switch opts.OrderDirection {
-		default:
-			dir = "ASC"
-		case ListChildrenDirectionAsc:
-			dir = "ASC"
-		case ListChildrenDirectionDesc:
-			dir = "DESC"
-		}
+	dir := "ASC"
+	if opts.OrderDirection == ListChildrenDirectionDesc {
+		dir = "DESC"
 	}
 
 	// Apply sorting with directories always first, then ID as tiebreaker.
@@ -267,7 +305,16 @@ func (vfs *VirtualFS) ListChildren(ctx context.Context, db bun.IDB, node *Node, 
 	return nodes, c, nil
 }
 
-func (vfs *VirtualFS) CreateFile(ctx context.Context, db bun.IDB, accountID uuid.UUID, opts CreateFileOptions) (*Node, error) {
+func (vfs *VirtualFS) CreateFile(ctx context.Context, db bun.IDB, opts CreateFileOptions, scope *Scope) (*Node, error) {
+	if !isScopeSet(scope) {
+		return nil, ErrAccessDenied
+	}
+	if ok, err := vfs.canAccessNode(ctx, db, scope, OperationUpload, opts.ParentID); err != nil {
+		return nil, err
+	} else if !ok {
+		return nil, ErrAccessDenied
+	}
+
 	pid, err := vfs.generatePublicID()
 	if err != nil {
 		return nil, err
@@ -281,7 +328,7 @@ func (vfs *VirtualFS) CreateFile(ctx context.Context, db bun.IDB, accountID uuid
 	node := Node{
 		ID:        id,
 		PublicID:  pid,
-		AccountID: accountID,
+		AccountID: scope.AccountID,
 		ParentID:  opts.ParentID,
 		Kind:      NodeKindFile,
 		Status:    NodeStatusPending,
@@ -306,7 +353,12 @@ func (vfs *VirtualFS) CreateFile(ctx context.Context, db bun.IDB, accountID uuid
 	return &node, nil
 }
 
-func (vfs *VirtualFS) WriteFile(ctx context.Context, db bun.IDB, node *Node, content FileContent) error {
+func (vfs *VirtualFS) WriteFile(ctx context.Context, db bun.IDB, node *Node, content FileContent, scope *Scope) error {
+	if ok, err := vfs.canAccessNode(ctx, db, scope, OperationUpload, node.ID); err != nil {
+		return err
+	} else if !ok {
+		return ErrAccessDenied
+	}
 	if content.Reader == nil && content.BlobKey.IsNil() {
 		return blob.ErrInvalidFileContent
 	}
@@ -376,18 +428,22 @@ func (vfs *VirtualFS) WriteFile(ctx context.Context, db bun.IDB, node *Node, con
 		setCols = append(setCols, "mime_type", "blob_key", "size", "status")
 	}
 
-	_, err := db.NewUpdate().Model(node).
+	if _, err := db.NewUpdate().Model(node).
 		Column(setCols...).
 		WherePK().
-		Exec(ctx)
-	if err != nil {
+		Exec(ctx); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func (vfs *VirtualFS) ReadFile(ctx context.Context, db bun.IDB, node *Node) (FileContent, error) {
+func (vfs *VirtualFS) ReadFile(ctx context.Context, db bun.IDB, node *Node, scope *Scope) (FileContent, error) {
+	if ok, err := vfs.canAccessNode(ctx, db, scope, OperationRead, node.ID); err != nil {
+		return EmptyFileContent(), err
+	} else if !ok {
+		return EmptyFileContent(), ErrAccessDenied
+	}
 	if node.Kind != NodeKindFile {
 		return EmptyFileContent(), ErrUnsupportedOperation
 	}
@@ -415,7 +471,16 @@ func (vfs *VirtualFS) ReadFile(ctx context.Context, db bun.IDB, node *Node) (Fil
 	return FileContentFromReaderWithSize(reader, node.Size), nil
 }
 
-func (vfs *VirtualFS) CreateDirectory(ctx context.Context, db bun.IDB, accountID uuid.UUID, parentID uuid.UUID, name string) (*Node, error) {
+func (vfs *VirtualFS) CreateDirectory(ctx context.Context, db bun.IDB, parentID uuid.UUID, name string, scope *Scope) (*Node, error) {
+	if !isScopeSet(scope) {
+		return nil, ErrAccessDenied
+	}
+	if ok, err := vfs.canAccessNode(ctx, db, scope, OperationWrite, parentID); err != nil {
+		return nil, err
+	} else if !ok {
+		return nil, ErrAccessDenied
+	}
+
 	pid, err := vfs.generatePublicID()
 	if err != nil {
 		return nil, err
@@ -429,7 +494,7 @@ func (vfs *VirtualFS) CreateDirectory(ctx context.Context, db bun.IDB, accountID
 	node := &Node{
 		ID:        id,
 		PublicID:  pid,
-		AccountID: accountID,
+		AccountID: scope.AccountID,
 		ParentID:  parentID,
 		Kind:      NodeKindDirectory,
 		Status:    NodeStatusReady,
@@ -447,8 +512,8 @@ func (vfs *VirtualFS) CreateDirectory(ctx context.Context, db bun.IDB, accountID
 	return node, nil
 }
 
-func (vfs *VirtualFS) SoftDeleteNode(ctx context.Context, db bun.IDB, node *Node) (*Node, error) {
-	deleted, err := vfs.SoftDeleteNodes(ctx, db, []*Node{node})
+func (vfs *VirtualFS) SoftDeleteNode(ctx context.Context, db bun.IDB, node *Node, scope *Scope) (*Node, error) {
+	deleted, err := vfs.SoftDeleteNodes(ctx, db, []*Node{node}, scope)
 	if err != nil {
 		return nil, err
 	}
@@ -458,21 +523,32 @@ func (vfs *VirtualFS) SoftDeleteNode(ctx context.Context, db bun.IDB, node *Node
 	return deleted[0], nil
 }
 
-func (vfs *VirtualFS) SoftDeleteNodes(ctx context.Context, db bun.IDB, nodes []*Node) ([]*Node, error) {
+func (vfs *VirtualFS) SoftDeleteNodes(ctx context.Context, db bun.IDB, nodes []*Node, scope *Scope) ([]*Node, error) {
+	if !scope.Allows(OperationDelete) {
+		return nil, ErrAccessDenied
+	}
 	if len(nodes) == 0 {
 		return nil, nil
 	}
 
-	deletableNodes := make([]*Node, 0, len(nodes))
-	nodeIDs := make([]uuid.UUID, 0, len(nodes))
-	for _, node := range nodes {
+	allowed, err := vfs.filterNodesByScope(ctx, db, scope, nodes)
+	if err != nil {
+		return nil, err
+	}
+	if len(allowed) == 0 {
+		return nil, ErrNodeNotFound
+	}
+
+	deletableNodes := make([]*Node, 0, len(allowed))
+	nodeIDs := make([]uuid.UUID, 0, len(allowed))
+	for _, node := range allowed {
 		if node.IsAccessible() {
 			nodeIDs = append(nodeIDs, node.ID)
 			deletableNodes = append(deletableNodes, node)
 		}
 	}
 
-	_, err := db.NewUpdate().Model(&deletableNodes).
+	_, err = db.NewUpdate().Model(&deletableNodes).
 		Where("id IN (?)", bun.In(nodeIDs)).
 		Where("status = ?", NodeStatusReady).
 		Where("deleted_at IS NULL").
@@ -486,7 +562,12 @@ func (vfs *VirtualFS) SoftDeleteNodes(ctx context.Context, db bun.IDB, nodes []*
 	return deletableNodes, nil
 }
 
-func (vfs *VirtualFS) RestoreNode(ctx context.Context, db bun.IDB, node *Node) error {
+func (vfs *VirtualFS) RestoreNode(ctx context.Context, db bun.IDB, node *Node, scope *Scope) error {
+	if ok, err := vfs.canAccessNode(ctx, db, scope, OperationDelete, node.ID); err != nil {
+		return err
+	} else if !ok {
+		return ErrAccessDenied
+	}
 	if node.Status != NodeStatusReady {
 		return ErrNodeNotFound
 	}
@@ -507,9 +588,14 @@ func (vfs *VirtualFS) RestoreNode(ctx context.Context, db bun.IDB, node *Node) e
 	return nil
 }
 
-func (vfs *VirtualFS) RenameNode(ctx context.Context, db bun.IDB, node *Node, name string) error {
+func (vfs *VirtualFS) RenameNode(ctx context.Context, db bun.IDB, node *Node, name string, scope *Scope) error {
 	if !node.IsAccessible() {
 		return ErrNodeNotFound
+	}
+	if ok, err := vfs.canAccessNode(ctx, db, scope, OperationWrite, node.ID); err != nil {
+		return err
+	} else if !ok {
+		return ErrAccessDenied
 	}
 
 	oldKey, err := vfs.keyResolver.Resolve(ctx, db, node)
@@ -557,9 +643,23 @@ func (vfs *VirtualFS) RenameNode(ctx context.Context, db bun.IDB, node *Node, na
 	return nil
 }
 
-func (vfs *VirtualFS) MoveNode(ctx context.Context, db bun.IDB, node *Node, parentID uuid.UUID) error {
+func (vfs *VirtualFS) MoveNode(ctx context.Context, db bun.IDB, node *Node, parentID uuid.UUID, scope *Scope) error {
 	if !node.IsAccessible() {
 		return ErrNodeNotFound
+	}
+
+	// check if the node is accessible
+	if ok, err := vfs.canAccessNode(ctx, db, scope, OperationWrite, node.ID); err != nil {
+		return err
+	} else if !ok {
+		return ErrAccessDenied
+	}
+
+	// check if the new parent is accessible
+	if ok, err := vfs.canAccessNode(ctx, db, scope, OperationWrite, parentID); err != nil {
+		return err
+	} else if !ok {
+		return ErrAccessDenied
 	}
 
 	oldKey, err := vfs.keyResolver.Resolve(ctx, db, node)
@@ -612,15 +712,28 @@ func (vfs *VirtualFS) MoveNode(ctx context.Context, db bun.IDB, node *Node, pare
 // All nodes MUST have the same current parent directory; this constraint enables an
 // optimization where parent paths are computed only once (2 recursive queries total)
 // rather than computing full paths for each node individually (N queries).
-func (vfs *VirtualFS) MoveNodesInSameDirectory(ctx context.Context, db bun.IDB, nodes []*Node, newParentID uuid.UUID) (*MoveFilesResult, error) {
+func (vfs *VirtualFS) MoveNodesInSameDirectory(ctx context.Context, db bun.IDB, nodes []*Node, newParentID uuid.UUID, scope *Scope) (*MoveFilesResult, error) {
 	if len(nodes) == 0 {
 		return nil, nil
 	}
+	if ok, err := vfs.canAccessNode(ctx, db, scope, OperationWrite, newParentID); err != nil {
+		return nil, err
+	} else if !ok {
+		return nil, ErrAccessDenied
+	}
+
+	allowedNodes, err := vfs.filterNodesByScope(ctx, db, scope, nodes)
+	if err != nil {
+		return nil, err
+	}
+	if len(allowedNodes) == 0 {
+		return nil, ErrNodeNotFound
+	}
 
 	// Validate all nodes are accessible
-	nodeIDs := make([]uuid.UUID, len(nodes))
-	nodeNames := make([]string, len(nodes))
-	for i, node := range nodes {
+	nodeIDs := make([]uuid.UUID, len(allowedNodes))
+	nodeNames := make([]string, len(allowedNodes))
+	for i, node := range allowedNodes {
 		if !node.IsAccessible() {
 			return nil, ErrNodeNotFound
 		}
@@ -629,8 +742,8 @@ func (vfs *VirtualFS) MoveNodesInSameDirectory(ctx context.Context, db bun.IDB, 
 	}
 
 	var conflicts []*Node
-	err := db.NewSelect().Model(&conflicts).
-		Where("account_id = ?", nodes[0].AccountID).
+	err = db.NewSelect().Model(&conflicts).
+		Where("account_id = ?", allowedNodes[0].AccountID).
 		Where("parent_id = ?", newParentID).
 		Where("name IN (?)", bun.In(nodeNames)).
 		Scan(ctx)
@@ -643,8 +756,8 @@ func (vfs *VirtualFS) MoveNodesInSameDirectory(ctx context.Context, db bun.IDB, 
 		conflictID[c.ID] = struct{}{}
 	}
 
-	movableNodes := make([]*Node, 0, len(nodes)-len(conflicts))
-	for _, node := range nodes {
+	movableNodes := make([]*Node, 0, len(allowedNodes)-len(conflicts))
+	for _, node := range allowedNodes {
 		if _, ok := conflictID[node.ID]; !ok {
 			movableNodes = append(movableNodes, node)
 		}
@@ -690,7 +803,7 @@ func (vfs *VirtualFS) MoveNodesInSameDirectory(ctx context.Context, db bun.IDB, 
 		}
 	}
 
-	for _, node := range nodes {
+	for _, node := range allowedNodes {
 		node.ParentID = newParentID
 	}
 
@@ -701,26 +814,42 @@ func (vfs *VirtualFS) MoveNodesInSameDirectory(ctx context.Context, db bun.IDB, 
 	}, nil
 }
 
-func (vfs *VirtualFS) RealPath(ctx context.Context, db bun.IDB, node *Node) (Path, error) {
+func (vfs *VirtualFS) RealPath(ctx context.Context, db bun.IDB, node *Node, scope *Scope) (Path, error) {
 	if !node.IsAccessible() {
 		return nil, ErrNodeNotFound
+	}
+	if ok, err := vfs.canAccessNode(ctx, db, scope, OperationRead, node.ID); err != nil {
+		return nil, err
+	} else if !ok {
+		return nil, ErrAccessDenied
 	}
 	return buildNoteAbsolutePath(ctx, db, node)
 }
 
-func (vfs *VirtualFS) PermanentlyDeleteFiles(ctx context.Context, db bun.IDB, nodes []*Node) error {
+func (vfs *VirtualFS) PermanentlyDeleteFiles(ctx context.Context, db bun.IDB, nodes []*Node, scope *Scope) error {
+	if !scope.Allows(OperationDelete) {
+		return ErrAccessDenied
+	}
 	if len(nodes) == 0 {
 		return nil
 	}
 
-	for _, n := range nodes {
+	allowed, err := vfs.filterNodesByScope(ctx, db, scope, nodes)
+	if err != nil {
+		return err
+	}
+	if len(allowed) == 0 {
+		return ErrNodeNotFound
+	}
+
+	for _, n := range allowed {
 		if n.Kind != NodeKindFile {
 			return ErrUnsupportedOperation
 		}
 	}
 
-	deletedIDs := make([]uuid.UUID, 0, len(nodes))
-	for _, n := range nodes {
+	deletedIDs := make([]uuid.UUID, 0, len(allowed))
+	for _, n := range allowed {
 		err := vfs.permanentlyDeleteFileNode(ctx, db, n)
 		if err != nil {
 			if errors.Is(err, blob.ErrNotFound) {
@@ -737,7 +866,7 @@ func (vfs *VirtualFS) PermanentlyDeleteFiles(ctx context.Context, db bun.IDB, no
 		return nil
 	}
 
-	_, err := db.NewDelete().Model((*Node)(nil)).
+	_, err = db.NewDelete().Model((*Node)(nil)).
 		Where("id IN (?)", bun.In(deletedIDs)).
 		Exec(ctx)
 	if err != nil {
@@ -747,7 +876,13 @@ func (vfs *VirtualFS) PermanentlyDeleteFiles(ctx context.Context, db bun.IDB, no
 	return nil
 }
 
-func (vfs *VirtualFS) PermanentlyDeleteNode(ctx context.Context, db bun.IDB, node *Node) error {
+func (vfs *VirtualFS) PermanentlyDeleteNode(ctx context.Context, db bun.IDB, node *Node, scope *Scope) error {
+	if ok, err := vfs.canAccessNode(ctx, db, scope, OperationDelete, node.ID); err != nil {
+		return err
+	} else if !ok {
+		return ErrAccessDenied
+	}
+
 	switch node.Kind {
 	case NodeKindFile:
 		return vfs.permanentlyDeleteFileNode(ctx, db, node)

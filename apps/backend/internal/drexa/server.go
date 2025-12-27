@@ -11,6 +11,7 @@ import (
 	"github.com/get-drexa/drexa/internal/catalog"
 	"github.com/get-drexa/drexa/internal/database"
 	"github.com/get-drexa/drexa/internal/httperr"
+	"github.com/get-drexa/drexa/internal/sharing"
 	"github.com/get-drexa/drexa/internal/upload"
 	"github.com/get-drexa/drexa/internal/user"
 	"github.com/get-drexa/drexa/internal/virtualfs"
@@ -93,6 +94,11 @@ func NewServer(c Config) (*Server, error) {
 		return nil, fmt.Errorf("failed to create virtual file system: %w", err)
 	}
 
+	sharingService, err := sharing.NewService(vfs)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create sharing service: %w", err)
+	}
+
 	userService := user.NewService()
 	authService := auth.NewService(userService, auth.TokenConfig{
 		Issuer:    c.JWT.Issuer,
@@ -113,9 +119,16 @@ func NewServer(c Config) (*Server, error) {
 	auth.NewHTTPHandler(authService, db, cookieConfig).RegisterRoutes(api)
 	user.NewHTTPHandler(userService, db, authMiddleware).RegisterRoutes(api)
 
-	accountRouter := account.NewHTTPHandler(accountService, authService, db, authMiddleware, cookieConfig).RegisterRoutes(api)
-	upload.NewHTTPHandler(uploadService, db).RegisterRoutes(accountRouter)
-	catalog.NewHTTPHandler(vfs, db).RegisterRoutes(accountRouter)
+	accountRouter := account.NewHTTPHandler(accountService, authService, vfs, db, authMiddleware, cookieConfig).RegisterRoutes(api)
+	upload.NewHTTPHandler(uploadService, db).RegisterRoutes(accountRouter.VFSRouter())
+
+	shareHTTP := sharing.NewHTTPHandler(sharingService, accountService, vfs, db, authMiddleware)
+	shareRoutes := shareHTTP.RegisterShareConsumeRoutes(api)
+	shareHTTP.RegisterShareManagementRoutes(accountRouter)
+
+	catalogHTTP := catalog.NewHTTPHandler(sharingService, vfs, db)
+	catalogHTTP.RegisterRoutes(accountRouter.VFSRouter())
+	catalogHTTP.RegisterRoutes(shareRoutes)
 
 	s := &Server{
 		config:         c,

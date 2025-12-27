@@ -7,6 +7,7 @@ import (
 	"github.com/get-drexa/drexa/internal/httperr"
 	"github.com/get-drexa/drexa/internal/reqctx"
 	"github.com/get-drexa/drexa/internal/user"
+	"github.com/get-drexa/drexa/internal/virtualfs"
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
 	"github.com/uptrace/bun"
@@ -15,6 +16,7 @@ import (
 type HTTPHandler struct {
 	accountService *Service
 	authService    *auth.Service
+	vfs            *virtualfs.VirtualFS
 	db             *bun.DB
 	authMiddleware fiber.Handler
 	cookieConfig   auth.CookieConfig
@@ -46,17 +48,11 @@ type registerAccountResponse struct {
 	RefreshToken string `json:"refreshToken,omitempty" example:"dR4nD0mUu1DkZXlCeXRlc0FuZFJhbmRvbURhdGFIZXJlMTIzNDU2Nzg5MGFi"`
 }
 
-const currentAccountKey = "currentAccount"
-
-func CurrentAccount(c *fiber.Ctx) *Account {
-	return c.Locals(currentAccountKey).(*Account)
-}
-
-func NewHTTPHandler(accountService *Service, authService *auth.Service, db *bun.DB, authMiddleware fiber.Handler, cookieConfig auth.CookieConfig) *HTTPHandler {
+func NewHTTPHandler(accountService *Service, authService *auth.Service, vfs *virtualfs.VirtualFS, db *bun.DB, authMiddleware fiber.Handler, cookieConfig auth.CookieConfig) *HTTPHandler {
 	return &HTTPHandler{accountService: accountService, authService: authService, db: db, authMiddleware: authMiddleware, cookieConfig: cookieConfig}
 }
 
-func (h *HTTPHandler) RegisterRoutes(api fiber.Router) fiber.Router {
+func (h *HTTPHandler) RegisterRoutes(api fiber.Router) *ScopedRouter {
 	api.Get("/accounts", h.authMiddleware, h.listAccounts)
 	api.Post("/accounts", h.registerAccount)
 
@@ -66,7 +62,7 @@ func (h *HTTPHandler) RegisterRoutes(api fiber.Router) fiber.Router {
 
 	account.Get("/", h.getAccount)
 
-	return account
+	return &ScopedRouter{virtualfs.ScopedRouter{account}}
 }
 
 func (h *HTTPHandler) accountMiddleware(c *fiber.Ctx) error {
@@ -85,7 +81,22 @@ func (h *HTTPHandler) accountMiddleware(c *fiber.Ctx) error {
 		return httperr.Internal(err)
 	}
 
-	c.Locals(currentAccountKey, account)
+	root, err := h.vfs.FindRootDirectory(c.Context(), h.db, account.ID)
+	if err != nil {
+		return httperr.Internal(err)
+	}
+
+	scope := &virtualfs.Scope{
+		AccountID:    account.ID,
+		RootNodeID:   root.ID,
+		AllowedOps:   virtualfs.AllAllowedOps,
+		AllowedNodes: nil,
+		ActorKind:    virtualfs.ScopeActorAccount,
+		ActorID:      u.ID,
+	}
+
+	reqctx.SetVFSAccessScope(c, scope)
+	reqctx.SetCurrentAccount(c, account)
 
 	return c.Next()
 }
@@ -120,8 +131,8 @@ func (h *HTTPHandler) listAccounts(c *fiber.Ctx) error {
 // @Failure 404 {string} string "Account not found"
 // @Router /accounts/{accountID} [get]
 func (h *HTTPHandler) getAccount(c *fiber.Ctx) error {
-	account := CurrentAccount(c)
-	if account == nil {
+	account, ok := reqctx.CurrentAccount(c).(*Account)
+	if !ok || account == nil {
 		return c.SendStatus(fiber.StatusNotFound)
 	}
 	return c.JSON(account)

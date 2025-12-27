@@ -1,14 +1,17 @@
 package catalog
 
 import (
+	"github.com/get-drexa/drexa/internal/reqctx"
+	"github.com/get-drexa/drexa/internal/sharing"
 	"github.com/get-drexa/drexa/internal/virtualfs"
 	"github.com/gofiber/fiber/v2"
 	"github.com/uptrace/bun"
 )
 
 type HTTPHandler struct {
-	vfs *virtualfs.VirtualFS
-	db  *bun.DB
+	sharingService *sharing.Service
+	vfs            *virtualfs.VirtualFS
+	db             *bun.DB
 }
 
 // patchFileRequest represents a file update request
@@ -25,11 +28,11 @@ type patchDirectoryRequest struct {
 	Name string `json:"name" example:"My Documents"`
 }
 
-func NewHTTPHandler(vfs *virtualfs.VirtualFS, db *bun.DB) *HTTPHandler {
-	return &HTTPHandler{vfs: vfs, db: db}
+func NewHTTPHandler(sharingService *sharing.Service, vfs *virtualfs.VirtualFS, db *bun.DB) *HTTPHandler {
+	return &HTTPHandler{sharingService: sharingService, vfs: vfs, db: db}
 }
 
-func (h *HTTPHandler) RegisterRoutes(api fiber.Router) {
+func (h *HTTPHandler) RegisterRoutes(api *virtualfs.ScopedRouter) {
 	api.Delete("/files", h.deleteFiles)
 
 	fg := api.Group("/files/:fileID")
@@ -38,6 +41,7 @@ func (h *HTTPHandler) RegisterRoutes(api fiber.Router) {
 	fg.Get("/content", h.downloadFile)
 	fg.Patch("/", h.patchFile)
 	fg.Delete("/", h.deleteFile)
+	fg.Get("/shares", h.listFileShares)
 
 	api.Post("/directories", h.createDirectory)
 	api.Delete("/directories", h.deleteDirectories)
@@ -49,6 +53,7 @@ func (h *HTTPHandler) RegisterRoutes(api fiber.Router) {
 	dg.Get("/content", h.listDirectory)
 	dg.Patch("/", h.patchDirectory)
 	dg.Delete("/", h.deleteDirectory)
+	dg.Get("/shares", h.listDirectoryShares)
 }
 
 func fileInfoFromNode(node *virtualfs.Node) FileInfo {
@@ -81,4 +86,16 @@ func toDirectoryItem(node *virtualfs.Node) any {
 	case virtualfs.NodeKindFile:
 		return fileInfoFromNode(node)
 	}
+}
+
+func scopeFromCtx(c *fiber.Ctx) (*virtualfs.Scope, bool) {
+	scopeAny := reqctx.VFSAccessScope(c)
+	if scopeAny == nil {
+		return nil, false
+	}
+	scope, ok := scopeAny.(*virtualfs.Scope)
+	if !ok || scope == nil {
+		return nil, false
+	}
+	return scope, true
 }

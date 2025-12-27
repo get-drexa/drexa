@@ -256,6 +256,15 @@
                     }
                 ],
                 "responses": {
+                    "200": {
+                        "description": "Trashed directories (when trash=true)",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/internal_catalog.DirectoryInfo"
+                            }
+                        }
+                    },
                     "204": {
                         "description": "Directories deleted",
                         "schema": {
@@ -378,6 +387,12 @@
                     }
                 ],
                 "responses": {
+                    "200": {
+                        "description": "Trashed directory info (when trash=true)",
+                        "schema": {
+                            "$ref": "#/definitions/internal_catalog.DirectoryInfo"
+                        }
+                    },
                     "204": {
                         "description": "Directory deleted",
                         "schema": {
@@ -479,7 +494,7 @@
                         "BearerAuth": []
                     }
                 ],
-                "description": "Get all files and subdirectories within a directory",
+                "description": "Get all files and subdirectories within a directory with optional pagination and sorting",
                 "produces": [
                     "application/json"
                 ],
@@ -498,18 +513,59 @@
                     },
                     {
                         "type": "string",
-                        "description": "Directory ID",
+                        "description": "Directory ID (use 'root' for the root directory)",
                         "name": "directoryID",
                         "in": "path",
                         "required": true
+                    },
+                    {
+                        "enum": [
+                            "name",
+                            "createdAt",
+                            "updatedAt"
+                        ],
+                        "type": "string",
+                        "description": "Sort field: name, createdAt, or updatedAt",
+                        "name": "orderBy",
+                        "in": "query"
+                    },
+                    {
+                        "enum": [
+                            "asc",
+                            "desc"
+                        ],
+                        "type": "string",
+                        "description": "Sort direction: asc or desc",
+                        "name": "dir",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Maximum number of items to return (default: 100, min: 1)",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Cursor for pagination (base64-encoded cursor from previous response)",
+                        "name": "cursor",
+                        "in": "query"
                     }
                 ],
                 "responses": {
                     "200": {
-                        "description": "Array of FileInfo and DirectoryInfo objects",
+                        "description": "Paginated list of FileInfo and DirectoryInfo objects",
                         "schema": {
-                            "type": "array",
-                            "items": {}
+                            "$ref": "#/definitions/internal_catalog.listDirectoryResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid limit or cursor",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
                         }
                     },
                     "401": {
@@ -603,6 +659,63 @@
                 }
             }
         },
+        "/accounts/{accountID}/directories/{directoryID}/shares": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Get all share links that include this directory",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "directories"
+                ],
+                "summary": "List directory shares",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "Account ID",
+                        "name": "accountID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Directory ID",
+                        "name": "directoryID",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Array of shares",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/github_com_get-drexa_drexa_internal_sharing.Share"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Not authenticated",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "404": {
+                        "description": "Directory not found",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
         "/accounts/{accountID}/files": {
             "delete": {
                 "security": [
@@ -640,6 +753,15 @@
                     }
                 ],
                 "responses": {
+                    "200": {
+                        "description": "Trashed files (when trash=true)",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/internal_catalog.FileInfo"
+                            }
+                        }
+                    },
                     "204": {
                         "description": "Files deleted",
                         "schema": {
@@ -909,6 +1031,240 @@
                     },
                     "404": {
                         "description": "File not found",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/accounts/{accountID}/files/{fileID}/shares": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Get all share links that include this file",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "files"
+                ],
+                "summary": "List file shares",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "Account ID",
+                        "name": "accountID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "File ID",
+                        "name": "fileID",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Array of shares",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/github_com_get-drexa_drexa_internal_sharing.Share"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Not authenticated",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "404": {
+                        "description": "File not found",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            }
+        },
+        "/accounts/{accountID}/shares": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Create a new share link for one or more files or directories",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "shares"
+                ],
+                "summary": "Create share",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "Account ID",
+                        "name": "accountID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Share details",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_sharing.createShareRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Created share",
+                        "schema": {
+                            "$ref": "#/definitions/internal_sharing.Share"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request or no items provided",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Not authenticated",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "404": {
+                        "description": "One or more items not found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/accounts/{accountID}/shares/{shareID}": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Retrieve share link details by ID",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "shares"
+                ],
+                "summary": "Get share",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "Account ID",
+                        "name": "accountID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Share ID",
+                        "name": "shareID",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Share details",
+                        "schema": {
+                            "$ref": "#/definitions/internal_sharing.Share"
+                        }
+                    },
+                    "401": {
+                        "description": "Not authenticated",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "404": {
+                        "description": "Share not found",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Delete a share link, revoking access for all users",
+                "tags": [
+                    "shares"
+                ],
+                "summary": "Delete share",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "Account ID",
+                        "name": "accountID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Share ID",
+                        "name": "shareID",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "Share deleted",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "401": {
+                        "description": "Not authenticated",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "404": {
+                        "description": "Share not found",
                         "schema": {
                             "type": "string"
                         }
@@ -1271,6 +1627,32 @@
         }
     },
     "definitions": {
+        "github_com_get-drexa_drexa_internal_sharing.Share": {
+            "description": "Share link information including expiration and timestamps",
+            "type": "object",
+            "properties": {
+                "createdAt": {
+                    "description": "When the share was created (ISO 8601)",
+                    "type": "string",
+                    "example": "2024-12-13T15:04:05Z"
+                },
+                "expiresAt": {
+                    "description": "When the share expires, null if it never expires (ISO 8601)",
+                    "type": "string",
+                    "example": "2025-01-15T00:00:00Z"
+                },
+                "id": {
+                    "description": "Unique share identifier (public ID)",
+                    "type": "string",
+                    "example": "kRp2XYTq9A55"
+                },
+                "updatedAt": {
+                    "description": "When the share was last updated (ISO 8601)",
+                    "type": "string",
+                    "example": "2024-12-13T16:30:00Z"
+                }
+            }
+        },
         "github_com_get-drexa_drexa_internal_user.User": {
             "description": "User account information",
             "type": "object",
@@ -1506,6 +1888,11 @@
                     "type": "string",
                     "example": "My Documents"
                 },
+                "parentId": {
+                    "description": "ParentID is the public ID of the directory this directory is in",
+                    "type": "string",
+                    "example": "kRp2XYTq9A55"
+                },
                 "path": {
                     "description": "Full path from root (included when ?include=path)",
                     "type": "array",
@@ -1554,6 +1941,11 @@
                     "type": "string",
                     "example": "document.pdf"
                 },
+                "parentId": {
+                    "description": "ParentID is the public ID of the directory this file is in",
+                    "type": "string",
+                    "example": "kRp2XYTq9A55"
+                },
                 "size": {
                     "description": "File size in bytes",
                     "type": "integer",
@@ -1579,6 +1971,21 @@
                     "description": "ID of the parent directory",
                     "type": "string",
                     "example": "kRp2XYTq9A55"
+                }
+            }
+        },
+        "internal_catalog.listDirectoryResponse": {
+            "description": "Response to a request to list the contents of a directory",
+            "type": "object",
+            "properties": {
+                "items": {
+                    "description": "Items is the list of items in the directory, limited to the limit specified in the request",
+                    "type": "array",
+                    "items": {}
+                },
+                "nextCursor": {
+                    "description": "NextCursor is the cursor to use to get the next page of results",
+                    "type": "string"
                 }
             }
         },
@@ -1665,6 +2072,54 @@
             "properties": {
                 "items": {
                     "description": "Array of file/directory IDs to move",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    },
+                    "example": [
+                        "mElnUNCm8F22",
+                        "kRp2XYTq9A55"
+                    ]
+                }
+            }
+        },
+        "internal_sharing.Share": {
+            "description": "Share link information including expiration and timestamps",
+            "type": "object",
+            "properties": {
+                "createdAt": {
+                    "description": "When the share was created (ISO 8601)",
+                    "type": "string",
+                    "example": "2024-12-13T15:04:05Z"
+                },
+                "expiresAt": {
+                    "description": "When the share expires, null if it never expires (ISO 8601)",
+                    "type": "string",
+                    "example": "2025-01-15T00:00:00Z"
+                },
+                "id": {
+                    "description": "Unique share identifier (public ID)",
+                    "type": "string",
+                    "example": "kRp2XYTq9A55"
+                },
+                "updatedAt": {
+                    "description": "When the share was last updated (ISO 8601)",
+                    "type": "string",
+                    "example": "2024-12-13T16:30:00Z"
+                }
+            }
+        },
+        "internal_sharing.createShareRequest": {
+            "description": "Request to create a new share link for files or directories",
+            "type": "object",
+            "properties": {
+                "expiresAt": {
+                    "description": "Optional expiration time for the share (ISO 8601)",
+                    "type": "string",
+                    "example": "2025-01-15T00:00:00Z"
+                },
+                "items": {
+                    "description": "Array of file/directory IDs to share",
                     "type": "array",
                     "items": {
                         "type": "string"

@@ -7,6 +7,8 @@ import (
 )
 
 const authenticatedUserKey = "authenticatedUser"
+const vfsAccessScope = "vfsAccessScope"
+const currentAccountKey = "currentAccount"
 
 var ErrUnauthenticatedRequest = errors.New("unauthenticated request")
 
@@ -18,6 +20,26 @@ func AuthenticatedUser(c *fiber.Ctx) any {
 }
 
 // SetAuthenticatedUser sets the authenticated user in the fiber context.
-func SetAuthenticatedUser(c *fiber.Ctx, user interface{}) {
+func SetAuthenticatedUser(c *fiber.Ctx, user any) {
 	c.Locals(authenticatedUserKey, user)
+}
+
+// SetCurrentAccount sets the current account in the fiber context.
+func SetCurrentAccount(c *fiber.Ctx, account any) {
+	c.Locals(currentAccountKey, account)
+}
+
+// SetVFSAccessScope sets the VFS access scope in the fiber context.
+func SetVFSAccessScope(c *fiber.Ctx, scope any) {
+	c.Locals(vfsAccessScope, scope)
+}
+
+// CurrentAccount returns the current account from the given fiber context.
+func CurrentAccount(c *fiber.Ctx) any {
+	return c.Locals(currentAccountKey)
+}
+
+// VFSAccessScope returns the VFS access scope from the given fiber context.
+func VFSAccessScope(c *fiber.Ctx) any {
+	return c.Locals(vfsAccessScope)
 }

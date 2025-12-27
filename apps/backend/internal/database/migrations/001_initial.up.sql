@@ -79,16 +79,50 @@ CREATE INDEX idx_vfs_nodes_pending ON vfs_nodes(created_at) WHERE status = 'pend
 
 CREATE TABLE IF NOT EXISTS node_shares (
     id UUID PRIMARY KEY,
-    node_id UUID NOT NULL REFERENCES vfs_nodes(id) ON DELETE CASCADE,
-    share_token TEXT NOT NULL UNIQUE,
+    -- the account that owns the share
+    account_id UUID NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+    public_id TEXT NOT NULL UNIQUE,  -- opaque ID for external API (no timestamp leak)
+    -- parent directory of the items in this share
+    shared_directory_id UUID NOT NULL REFERENCES vfs_nodes(id) ON DELETE CASCADE,
+    revoked_at TIMESTAMPTZ,
     expires_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_node_shares_share_token ON node_shares(share_token);
-CREATE INDEX idx_node_shares_node_id ON node_shares(node_id);
+CREATE INDEX idx_node_shares_public_id ON node_shares(public_id);
+CREATE INDEX idx_node_shares_shared_directory_id ON node_shares(shared_directory_id);
 CREATE INDEX idx_node_shares_expires_at ON node_shares(expires_at) WHERE expires_at IS NOT NULL;
+
+CREATE TABLE IF NOT EXISTS share_permissions (
+    id UUID PRIMARY KEY,
+    share_id UUID NOT NULL REFERENCES node_shares(id) ON DELETE CASCADE,
+    account_id UUID REFERENCES accounts(id) ON DELETE CASCADE,  -- NULL = anyone with the link
+    can_read BOOLEAN NOT NULL DEFAULT TRUE,
+    can_write BOOLEAN NOT NULL DEFAULT FALSE,
+    can_delete BOOLEAN NOT NULL DEFAULT FALSE,
+    can_upload BOOLEAN NOT NULL DEFAULT FALSE,
+    expires_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE (share_id, account_id)
+);
+
+CREATE INDEX idx_share_permissions_share_id ON share_permissions(share_id);
+CREATE INDEX idx_share_permissions_account_id ON share_permissions(account_id) WHERE account_id IS NOT NULL;
+CREATE INDEX idx_share_permissions_expires_at ON share_permissions(expires_at) WHERE expires_at IS NOT NULL;
+
+CREATE TABLE IF NOT EXISTS share_items (
+    id UUID PRIMARY KEY,
+    share_id UUID NOT NULL REFERENCES node_shares(id) ON DELETE CASCADE,
+    node_id UUID NOT NULL REFERENCES vfs_nodes(id) ON DELETE CASCADE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE (share_id, node_id)
+);
+
+CREATE INDEX idx_share_items_share_id ON share_items(share_id);
+CREATE INDEX idx_share_items_node_id ON share_items(node_id);
 
 -- ============================================================================
 -- Triggers for updated_at timestamps
@@ -109,6 +143,12 @@ CREATE TRIGGER update_vfs_nodes_updated_at BEFORE UPDATE ON vfs_nodes
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 CREATE TRIGGER update_node_shares_updated_at BEFORE UPDATE ON node_shares
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_share_permissions_updated_at BEFORE UPDATE ON share_permissions
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_share_items_updated_at BEFORE UPDATE ON share_items
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 CREATE TRIGGER update_accounts_updated_at BEFORE UPDATE ON accounts

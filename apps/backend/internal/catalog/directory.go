@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/get-drexa/drexa/internal/account"
 	"github.com/get-drexa/drexa/internal/httperr"
+	"github.com/get-drexa/drexa/internal/sharing"
 	"github.com/get-drexa/drexa/internal/virtualfs"
 	"github.com/gofiber/fiber/v2"
 )
@@ -99,8 +99,8 @@ type decodedListChildrenCursor struct {
 }
 
 func (h *HTTPHandler) currentDirectoryMiddleware(c *fiber.Ctx) error {
-	account := account.CurrentAccount(c)
-	if account == nil {
+	scope, ok := scopeFromCtx(c)
+	if !ok {
 		return c.SendStatus(fiber.StatusUnauthorized)
 	}
 
@@ -108,13 +108,16 @@ func (h *HTTPHandler) currentDirectoryMiddleware(c *fiber.Ctx) error {
 
 	var node *virtualfs.Node
 	if directoryID == "root" {
-		n, err := h.vfs.FindRootDirectory(c.Context(), h.db, account.ID)
+		n, err := h.vfs.FindNode(c.Context(), h.db, scope.RootNodeID.String(), scope)
 		if err != nil {
+			if errors.Is(err, virtualfs.ErrNodeNotFound) {
+				return c.SendStatus(fiber.StatusNotFound)
+			}
 			return httperr.Internal(err)
 		}
 		node = n
 	} else {
-		n, err := h.vfs.FindNodeByPublicID(c.Context(), h.db, account.ID, directoryID)
+		n, err := h.vfs.FindNodeByPublicID(c.Context(), h.db, directoryID, scope)
 		if err != nil {
 			if errors.Is(err, virtualfs.ErrNodeNotFound) {
 				return c.SendStatus(fiber.StatusNotFound)
@@ -153,8 +156,8 @@ func includeParam(c *fiber.Ctx) []string {
 // @Failure 409 {object} map[string]string "Directory already exists"
 // @Router /accounts/{accountID}/directories [post]
 func (h *HTTPHandler) createDirectory(c *fiber.Ctx) error {
-	account := account.CurrentAccount(c)
-	if account == nil {
+	scope, ok := scopeFromCtx(c)
+	if !ok {
 		return c.SendStatus(fiber.StatusUnauthorized)
 	}
 
@@ -169,7 +172,7 @@ func (h *HTTPHandler) createDirectory(c *fiber.Ctx) error {
 	}
 	defer tx.Rollback()
 
-	parent, err := h.vfs.FindNodeByPublicID(c.Context(), tx, account.ID, req.ParentID)
+	parent, err := h.vfs.FindNodeByPublicID(c.Context(), tx, req.ParentID, scope)
 	if err != nil {
 		if errors.Is(err, virtualfs.ErrNodeNotFound) {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Parent not found"})
@@ -181,10 +184,13 @@ func (h *HTTPHandler) createDirectory(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Parent is not a directory"})
 	}
 
-	node, err := h.vfs.CreateDirectory(c.Context(), tx, account.ID, parent.ID, req.Name)
+	node, err := h.vfs.CreateDirectory(c.Context(), tx, parent.ID, req.Name, scope)
 	if err != nil {
 		if errors.Is(err, virtualfs.ErrNodeConflict) {
 			return c.Status(fiber.StatusConflict).JSON(fiber.Map{"error": "Directory already exists"})
+		}
+		if errors.Is(err, virtualfs.ErrAccessDenied) {
+			return c.SendStatus(fiber.StatusNotFound)
 		}
 		return httperr.Internal(err)
 	}
@@ -200,8 +206,11 @@ func (h *HTTPHandler) createDirectory(c *fiber.Ctx) error {
 
 	include := includeParam(c)
 	if slices.Contains(include, "path") {
-		p, err := h.vfs.RealPath(c.Context(), tx, node)
+		p, err := h.vfs.RealPath(c.Context(), tx, node, scope)
 		if err != nil {
+			if errors.Is(err, virtualfs.ErrAccessDenied) {
+				return c.SendStatus(fiber.StatusNotFound)
+			}
 			return httperr.Internal(err)
 		}
 		i.Path = p
@@ -230,6 +239,10 @@ func (h *HTTPHandler) createDirectory(c *fiber.Ctx) error {
 // @Router /accounts/{accountID}/directories/{directoryID} [get]
 func (h *HTTPHandler) fetchDirectory(c *fiber.Ctx) error {
 	node := mustCurrentDirectoryNode(c)
+	scope, ok := scopeFromCtx(c)
+	if !ok {
+		return c.SendStatus(fiber.StatusUnauthorized)
+	}
 
 	i := DirectoryInfo{
 		Kind:      DirItemKindDirectory,
@@ -242,8 +255,11 @@ func (h *HTTPHandler) fetchDirectory(c *fiber.Ctx) error {
 
 	include := includeParam(c)
 	if slices.Contains(include, "path") {
-		p, err := h.vfs.RealPath(c.Context(), h.db, node)
+		p, err := h.vfs.RealPath(c.Context(), h.db, node, scope)
 		if err != nil {
+			if errors.Is(err, virtualfs.ErrAccessDenied) {
+				return c.SendStatus(fiber.StatusNotFound)
+			}
 			return httperr.Internal(err)
 		}
 		i.Path = p
@@ -254,7 +270,7 @@ func (h *HTTPHandler) fetchDirectory(c *fiber.Ctx) error {
 
 // listDirectory returns directory contents
 // @Summary List directory contents
-// @Description Get all files and subdirectories within a directory with optional pagination, sorting, and filtering
+// @Description Get all files and subdirectories within a directory with optional pagination and sorting
 // @Tags directories
 // @Produce json
 // @Security BearerAuth
@@ -271,6 +287,10 @@ func (h *HTTPHandler) fetchDirectory(c *fiber.Ctx) error {
 // @Router /accounts/{accountID}/directories/{directoryID}/content [get]
 func (h *HTTPHandler) listDirectory(c *fiber.Ctx) error {
 	node := mustCurrentDirectoryNode(c)
+	scope, ok := scopeFromCtx(c)
+	if !ok {
+		return c.SendStatus(fiber.StatusUnauthorized)
+	}
 
 	opts := virtualfs.ListChildrenOptions{}
 
@@ -312,7 +332,7 @@ func (h *HTTPHandler) listDirectory(c *fiber.Ctx) error {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid cursor"})
 		}
 
-		n, err := h.vfs.FindNodeByPublicID(c.Context(), h.db, node.AccountID, dc.nodeID)
+		n, err := h.vfs.FindNodeByPublicID(c.Context(), h.db, dc.nodeID, scope)
 		if err != nil {
 			if errors.Is(err, virtualfs.ErrNodeNotFound) {
 				return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid cursor"})
@@ -327,9 +347,12 @@ func (h *HTTPHandler) listDirectory(c *fiber.Ctx) error {
 		}
 	}
 
-	children, cursor, err := h.vfs.ListChildren(c.Context(), h.db, node, opts)
+	children, cursor, err := h.vfs.ListChildren(c.Context(), h.db, node, opts, scope)
 	if err != nil {
 		if errors.Is(err, virtualfs.ErrNodeNotFound) {
+			return c.SendStatus(fiber.StatusNotFound)
+		}
+		if errors.Is(err, virtualfs.ErrAccessDenied) {
 			return c.SendStatus(fiber.StatusNotFound)
 		}
 		return httperr.Internal(err)
@@ -392,6 +415,10 @@ func (h *HTTPHandler) listDirectory(c *fiber.Ctx) error {
 // @Router /accounts/{accountID}/directories/{directoryID} [patch]
 func (h *HTTPHandler) patchDirectory(c *fiber.Ctx) error {
 	node := mustCurrentDirectoryNode(c)
+	scope, ok := scopeFromCtx(c)
+	if !ok {
+		return c.SendStatus(fiber.StatusUnauthorized)
+	}
 
 	patch := new(patchDirectoryRequest)
 	if err := c.BodyParser(patch); err != nil {
@@ -405,9 +432,12 @@ func (h *HTTPHandler) patchDirectory(c *fiber.Ctx) error {
 	defer tx.Rollback()
 
 	if patch.Name != "" {
-		err := h.vfs.RenameNode(c.Context(), tx, node, patch.Name)
+		err := h.vfs.RenameNode(c.Context(), tx, node, patch.Name, scope)
 		if err != nil {
 			if errors.Is(err, virtualfs.ErrNodeNotFound) {
+				return c.SendStatus(fiber.StatusNotFound)
+			}
+			if errors.Is(err, virtualfs.ErrAccessDenied) {
 				return c.SendStatus(fiber.StatusNotFound)
 			}
 			return httperr.Internal(err)
@@ -437,12 +467,17 @@ func (h *HTTPHandler) patchDirectory(c *fiber.Ctx) error {
 // @Param accountID path string true "Account ID" format(uuid)
 // @Param directoryID path string true "Directory ID"
 // @Param trash query bool false "Move to trash instead of permanent delete" default(false)
+// @Success 200 {object} DirectoryInfo "Trashed directory info (when trash=true)"
 // @Success 204 {string} string "Directory deleted"
 // @Failure 401 {string} string "Not authenticated"
 // @Failure 404 {string} string "Directory not found"
 // @Router /accounts/{accountID}/directories/{directoryID} [delete]
 func (h *HTTPHandler) deleteDirectory(c *fiber.Ctx) error {
 	node := mustCurrentDirectoryNode(c)
+	scope, ok := scopeFromCtx(c)
+	if !ok {
+		return c.SendStatus(fiber.StatusUnauthorized)
+	}
 
 	tx, err := h.db.BeginTx(c.Context(), nil)
 	if err != nil {
@@ -452,8 +487,11 @@ func (h *HTTPHandler) deleteDirectory(c *fiber.Ctx) error {
 
 	shouldTrash := c.Query("trash") == "true"
 	if shouldTrash {
-		_, err := h.vfs.SoftDeleteNode(c.Context(), tx, node)
+		_, err := h.vfs.SoftDeleteNode(c.Context(), tx, node, scope)
 		if err != nil {
+			if errors.Is(err, virtualfs.ErrAccessDenied) {
+				return c.SendStatus(fiber.StatusNotFound)
+			}
 			return httperr.Internal(err)
 		}
 
@@ -464,8 +502,11 @@ func (h *HTTPHandler) deleteDirectory(c *fiber.Ctx) error {
 
 		return c.JSON(directoryInfoFromNode(node))
 	} else {
-		err = h.vfs.PermanentlyDeleteNode(c.Context(), tx, node)
+		err = h.vfs.PermanentlyDeleteNode(c.Context(), tx, node, scope)
 		if err != nil {
+			if errors.Is(err, virtualfs.ErrAccessDenied) {
+				return c.SendStatus(fiber.StatusNotFound)
+			}
 			return httperr.Internal(err)
 		}
 
@@ -486,13 +527,14 @@ func (h *HTTPHandler) deleteDirectory(c *fiber.Ctx) error {
 // @Param accountID path string true "Account ID" format(uuid)
 // @Param id query string true "Comma-separated list of directory IDs to delete" example:"kRp2XYTq9A55,xYz123AbC456"
 // @Param trash query bool false "Move to trash instead of permanent delete" default(false)
+// @Success 200 {array} DirectoryInfo "Trashed directories (when trash=true)"
 // @Success 204 {string} string "Directories deleted"
 // @Failure 400 {object} map[string]string "All items must be directories"
 // @Failure 401 {string} string "Not authenticated"
 // @Router /accounts/{accountID}/directories [delete]
 func (h *HTTPHandler) deleteDirectories(c *fiber.Ctx) error {
-	account := account.CurrentAccount(c)
-	if account == nil {
+	scope, ok := scopeFromCtx(c)
+	if !ok {
 		return c.SendStatus(fiber.StatusUnauthorized)
 	}
 
@@ -514,7 +556,7 @@ func (h *HTTPHandler) deleteDirectories(c *fiber.Ctx) error {
 	}
 	defer tx.Rollback()
 
-	nodes, err := h.vfs.FindNodesByPublicID(c.Context(), tx, account.ID, ids)
+	nodes, err := h.vfs.FindNodesByPublicID(c.Context(), tx, ids, scope)
 	if err != nil {
 		return httperr.Internal(err)
 	}
@@ -530,8 +572,11 @@ func (h *HTTPHandler) deleteDirectories(c *fiber.Ctx) error {
 	}
 
 	if shouldTrash {
-		deleted, err := h.vfs.SoftDeleteNodes(c.Context(), tx, nodes)
+		deleted, err := h.vfs.SoftDeleteNodes(c.Context(), tx, nodes, scope)
 		if err != nil {
+			if errors.Is(err, virtualfs.ErrAccessDenied) {
+				return c.SendStatus(fiber.StatusNotFound)
+			}
 			return httperr.Internal(err)
 		}
 
@@ -545,11 +590,14 @@ func (h *HTTPHandler) deleteDirectories(c *fiber.Ctx) error {
 			res = append(res, directoryInfoFromNode(node))
 		}
 
-		return c.JSON(deleted)
+		return c.JSON(res)
 	} else {
 		for _, node := range nodes {
-			err = h.vfs.PermanentlyDeleteNode(c.Context(), tx, node)
+			err = h.vfs.PermanentlyDeleteNode(c.Context(), tx, node, scope)
 			if err != nil {
+				if errors.Is(err, virtualfs.ErrAccessDenied) {
+					return c.SendStatus(fiber.StatusNotFound)
+				}
 				return httperr.Internal(err)
 			}
 		}
@@ -580,8 +628,8 @@ func (h *HTTPHandler) deleteDirectories(c *fiber.Ctx) error {
 // @Failure 404 {object} map[string]string "One or more items not found"
 // @Router /accounts/{accountID}/directories/{directoryID}/content [post]
 func (h *HTTPHandler) moveItemsToDirectory(c *fiber.Ctx) error {
-	acc := account.CurrentAccount(c)
-	if acc == nil {
+	scope, ok := scopeFromCtx(c)
+	if !ok {
 		return c.SendStatus(fiber.StatusUnauthorized)
 	}
 
@@ -602,7 +650,7 @@ func (h *HTTPHandler) moveItemsToDirectory(c *fiber.Ctx) error {
 	}
 	defer tx.Rollback()
 
-	nodes, err := h.vfs.FindNodesByPublicID(c.Context(), tx, acc.ID, req.Items)
+	nodes, err := h.vfs.FindNodesByPublicID(c.Context(), tx, req.Items, scope)
 	if err != nil {
 		return httperr.Internal(err)
 	}
@@ -611,13 +659,16 @@ func (h *HTTPHandler) moveItemsToDirectory(c *fiber.Ctx) error {
 	}
 
 	// Move all nodes to the target directory
-	result, err := h.vfs.MoveNodesInSameDirectory(c.Context(), tx, nodes, targetDir.ID)
+	result, err := h.vfs.MoveNodesInSameDirectory(c.Context(), tx, nodes, targetDir.ID, scope)
 	if err != nil {
 		if errors.Is(err, virtualfs.ErrUnsupportedOperation) {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "All items must be in the same directory"})
 		}
 		if errors.Is(err, virtualfs.ErrNodeConflict) {
 			return c.Status(fiber.StatusConflict).JSON(fiber.Map{"error": "Name conflict in target directory"})
+		}
+		if errors.Is(err, virtualfs.ErrAccessDenied) {
+			return c.SendStatus(fiber.StatusNotFound)
 		}
 		return httperr.Internal(err)
 	}
@@ -711,4 +762,29 @@ func decodeListChildrenCursor(s string) (*decodedListChildrenCursor, error) {
 	c.nodeID = parts[2]
 
 	return c, nil
+}
+
+// listDirectoryShares returns all shares that include this directory
+// @Summary List directory shares
+// @Description Get all share links that include this directory
+// @Tags directories
+// @Produce json
+// @Param accountID path string true "Account ID" format(uuid)
+// @Param directoryID path string true "Directory ID"
+// @Success 200 {array} sharing.Share "Array of shares"
+// @Failure 401 {string} string "Not authenticated"
+// @Failure 404 {string} string "Directory not found"
+// @Security BearerAuth
+// @Router /accounts/{accountID}/directories/{directoryID}/shares [get]
+func (h *HTTPHandler) listDirectoryShares(c *fiber.Ctx) error {
+	node := mustCurrentDirectoryNode(c)
+
+	shares, err := h.sharingService.ListShares(c.Context(), h.db, node.AccountID, sharing.ListSharesOptions{
+		Items: []*virtualfs.Node{node},
+	})
+	if err != nil {
+		return httperr.Internal(err)
+	}
+
+	return c.JSON(shares)
 }
