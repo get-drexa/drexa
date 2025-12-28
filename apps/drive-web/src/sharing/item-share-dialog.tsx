@@ -1,5 +1,11 @@
 import { useMutation, useQuery } from "@tanstack/react-query"
-import { useAtomValue, useStore } from "jotai"
+import {
+	atom,
+	type PrimitiveAtom,
+	useAtomValue,
+	useSetAtom,
+	useStore,
+} from "jotai"
 import {
 	CheckIcon,
 	CopyIcon,
@@ -7,7 +13,8 @@ import {
 	LinkIcon,
 	LockKeyholeIcon,
 } from "lucide-react"
-import { createContext, useContext, useRef } from "react"
+import type React from "react"
+import { createContext, useContext, useMemo, useRef, useState } from "react"
 import {
 	CrossfadeIcon,
 	type CrossfadeIconHandle,
@@ -28,19 +35,38 @@ import {
 	DropdownMenuItem,
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { Input } from "@/components/ui/input"
 import { copyToClipboardMutation } from "@/lib/clipboard"
 import {
 	createShareMutationAtom,
 	deleteShareMutationAtom,
 	directorySharesQueryAtom,
 	fileSharesQueryAtom,
+	updateShareMutationAtom,
 } from "@/sharing/api"
 import type { DirectoryItem } from "@/vfs/vfs"
+import { DateInput, type DateInputHandle } from "../components/date-input"
+import { Checkbox } from "../components/ui/checkbox"
+import { Kbd } from "../components/ui/kbd"
+import { Label } from "../components/ui/label"
+import {
+	Popover,
+	PopoverContent,
+	PopoverTrigger,
+} from "../components/ui/popover"
+import {
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
+} from "../components/ui/select"
 import {
 	Tooltip,
 	TooltipContent,
 	TooltipTrigger,
 } from "../components/ui/tooltip"
+import { cn } from "../lib/utils"
 import type { Share } from "./share"
 
 type ItemShareDialogProps = {
@@ -73,7 +99,7 @@ export function ItemShareDialog({ item, open, onClose }: ItemShareDialogProps) {
 
 	return (
 		<Dialog open={open} onOpenChange={onClose}>
-			<DialogContent>
+			<DialogContent className="select-none">
 				<DialogHeader>
 					<DialogTitle>Share {item?.name}</DialogTitle>
 					<DialogDescription>{description}</DialogDescription>
@@ -177,6 +203,14 @@ function ShareLinkListItem({ share }: { share: Share }) {
 		}
 	}
 
+	const formattedExpirationDate = share.expiresAt
+		? share.expiresAt.toLocaleDateString("en-US", {
+				month: "long",
+				day: "numeric",
+				year: "numeric",
+			})
+		: ""
+
 	return (
 		<li key={share.id} className="group flex items-center gap-3">
 			{/** biome-ignore lint/a11y/noStaticElementInteractions: this is strictly for convenience. the normal copy link button is still accessible. */}
@@ -199,8 +233,8 @@ function ShareLinkListItem({ share }: { share: Share }) {
 			>
 				<p>Share link</p>
 				<p className="text-muted-foreground">
-					{share.expiresAt
-						? `Expires at ${share.expiresAt}`
+					{formattedExpirationDate
+						? `Expires at ${formattedExpirationDate}`
 						: "Never expires"}
 				</p>
 			</div>
@@ -225,26 +259,283 @@ function ShareLinkListItem({ share }: { share: Share }) {
 					</TooltipTrigger>
 					<TooltipContent>Copy share link</TooltipContent>
 				</Tooltip>
-				<DropdownMenu>
-					<DropdownMenuTrigger asChild>
-						<Button
-							variant="outline"
-							size="sm"
-							className="share-options-trigger aria-expanded:bg-accent!"
-						>
-							<EllipsisIcon />
-							<span className="sr-only">Share link options</span>
-						</Button>
-					</DropdownMenuTrigger>
-					<ShareLinkOptionsMenu share={share} />
-				</DropdownMenu>
+				<ShareLinkOptionsMenuButton share={share} />
 			</ButtonGroup>
 		</li>
 	)
 }
 
-function ShareLinkOptionsMenu({ share }: { share: Share }) {
+const ACTIVE_POPOVER_KIND = {
+	rename: "rename",
+	setExpiration: "setExpiration",
+} as const
+type ActivePopoverKind =
+	(typeof ACTIVE_POPOVER_KIND)[keyof typeof ACTIVE_POPOVER_KIND]
+
+function ShareLinkOptionsMenuButton({ share }: { share: Share }) {
+	const activePopoverAtom = useMemo(
+		() => atom<ActivePopoverKind | null>(null),
+		[],
+	)
+
+	const activePopoverKind = useAtomValue(activePopoverAtom)
+
+	const button = (
+		<Button
+			variant="outline"
+			size="sm"
+			className={cn("share-options-trigger aria-expanded:bg-accent!", {
+				"bg-accent!": activePopoverKind !== null,
+			})}
+		>
+			<EllipsisIcon />
+			<span className="sr-only">Share link options</span>
+		</Button>
+	)
+
+	switch (activePopoverKind) {
+		case "rename":
+			return (
+				<RenameShareLinkPopover
+					share={share}
+					activePopoverAtom={activePopoverAtom}
+				>
+					{button}
+				</RenameShareLinkPopover>
+			)
+
+		case "setExpiration":
+			return (
+				<ConfigureShareLinkExpirationPopover
+					share={share}
+					activePopoverAtom={activePopoverAtom}
+				>
+					{button}
+				</ConfigureShareLinkExpirationPopover>
+			)
+
+		default:
+			return (
+				<ShareLinkOptionsMenu
+					share={share}
+					activePopoverAtom={activePopoverAtom}
+				>
+					{button}
+				</ShareLinkOptionsMenu>
+			)
+	}
+}
+
+function RenameShareLinkPopover({
+	share,
+	children,
+	activePopoverAtom,
+}: React.PropsWithChildren<{
+	share: Share
+	activePopoverAtom: PrimitiveAtom<ActivePopoverKind | null>
+}>) {
+	const setActivePopover = useSetAtom(activePopoverAtom)
+	const inputId = `rename-share-link-${share.id}`
+
+	return (
+		<Popover
+			modal
+			defaultOpen
+			onOpenChange={(nextOpen) => {
+				if (!nextOpen) {
+					setActivePopover(null)
+				}
+			}}
+		>
+			<PopoverTrigger asChild>{children}</PopoverTrigger>
+			<PopoverContent align="end">
+				<header className="mb-3">
+					<h1 className="leading-none font-medium mb-2">
+						Set a label for this link
+					</h1>
+					<p className="text-muted-foreground text-sm">
+						Only you can see the label.
+					</p>
+				</header>
+				<Input
+					id={inputId}
+					name={inputId}
+					placeholder="e.g. Product roadmap share"
+				/>
+				<div className="flex justify-end mt-4 gap-2">
+					<Button
+						variant="outline"
+						size="sm"
+						onClick={() => {
+							setActivePopover(null)
+						}}
+					>
+						Cancel
+					</Button>
+					<Button variant="default" size="sm">
+						Save{" "}
+						<Kbd className="border border-primary-foreground/20 bg-transparent text-primary-foreground">
+							⏎
+						</Kbd>
+					</Button>
+				</div>
+			</PopoverContent>
+		</Popover>
+	)
+}
+
+function ConfigureShareLinkExpirationPopover({
+	share,
+	children,
+	activePopoverAtom,
+}: React.PropsWithChildren<{
+	share: Share
+	activePopoverAtom: PrimitiveAtom<ActivePopoverKind | null>
+}>) {
+	const EXPIRATION_TYPE = {
+		date: "date",
+		never: "never",
+	} as const
+	type ExpirationType = (typeof EXPIRATION_TYPE)[keyof typeof EXPIRATION_TYPE]
+
+	const [expirationType, setExpirationType] = useState<ExpirationType>(
+		share.expiresAt === null ? EXPIRATION_TYPE.never : EXPIRATION_TYPE.date,
+	)
 	const { item } = useContext(ItemShareDialogContext)
+	const store = useStore()
+	const setActivePopover = useSetAtom(activePopoverAtom)
+	const dateInputRef = useRef<DateInputHandle>(null)
+
+	const { mutate: updateShare, isPending: isUpdatingShare } = useMutation({
+		...useAtomValue(updateShareMutationAtom),
+		onSuccess: (_updatedShare, _vars, _, { client }) => {
+			let queryKey: readonly unknown[] | null
+			switch (item.kind) {
+				case "file":
+					queryKey = store.get(fileSharesQueryAtom(item.id)).queryKey
+					break
+				case "directory":
+					queryKey = store.get(
+						directorySharesQueryAtom(item.id),
+					).queryKey
+					break
+				default:
+					queryKey = null
+					break
+			}
+			if (queryKey) {
+				client.invalidateQueries({
+					queryKey,
+				})
+			}
+			setActivePopover(null)
+		},
+	})
+
+	const updateExpirationDate = () => {
+		switch (expirationType) {
+			case EXPIRATION_TYPE.date:
+				if (dateInputRef.current?.date) {
+					updateShare({
+						shareId: share.id,
+						expiresAt: dateInputRef.current.date,
+					})
+				}
+				break
+			case EXPIRATION_TYPE.never:
+				updateShare({
+					shareId: share.id,
+					expiresAt: null,
+				})
+				break
+		}
+	}
+
+	return (
+		<Popover
+			modal
+			defaultOpen
+			onOpenChange={(nextOpen) => {
+				if (!nextOpen) {
+					setActivePopover(null)
+				}
+			}}
+		>
+			<PopoverTrigger asChild>{children}</PopoverTrigger>
+			<PopoverContent align="end">
+				<header className="mb-2">
+					<h1 className="leading-none font-medium mb-2">
+						Configure expiration
+					</h1>
+					<p className="text-muted-foreground text-sm">
+						The share link will be accessible until the selected
+						date.
+					</p>
+				</header>
+				<Select
+					value={expirationType}
+					onValueChange={(value) => {
+						setExpirationType(value as ExpirationType)
+					}}
+				>
+					<SelectTrigger className="w-full">
+						<SelectValue placeholder="Select a fruit" />
+					</SelectTrigger>
+					<SelectContent>
+						<SelectItem value="date">
+							Link expires on a date
+						</SelectItem>
+						<SelectItem value="never">
+							Link never expires
+						</SelectItem>
+					</SelectContent>
+				</Select>
+				{expirationType === EXPIRATION_TYPE.date ? (
+					<DateInput
+						className="mt-2"
+						ref={dateInputRef}
+						defaultValue={share.expiresAt ?? undefined}
+					/>
+				) : null}
+				<div className="flex justify-end mt-4 gap-2">
+					<Button
+						variant="outline"
+						size="sm"
+						disabled={isUpdatingShare}
+						onClick={() => {
+							setActivePopover(null)
+						}}
+					>
+						Cancel
+					</Button>
+					<Button
+						variant="default"
+						size="sm"
+						loading={isUpdatingShare}
+						disabled={isUpdatingShare}
+						onClick={updateExpirationDate}
+					>
+						Save{" "}
+						<Kbd className="border border-primary-foreground/20 bg-transparent text-primary-foreground">
+							⏎
+						</Kbd>
+					</Button>
+				</div>
+			</PopoverContent>
+		</Popover>
+	)
+}
+
+function ShareLinkOptionsMenu({
+	share,
+	children,
+	activePopoverAtom,
+}: React.PropsWithChildren<{
+	share: Share
+	activePopoverAtom: PrimitiveAtom<ActivePopoverKind | null>
+}>) {
+	const { item } = useContext(ItemShareDialogContext)
+	const setActivePopover = useSetAtom(activePopoverAtom)
 	const store = useStore()
 
 	const { mutate: deleteShare } = useMutation({
@@ -293,20 +584,35 @@ function ShareLinkOptionsMenu({ share }: { share: Share }) {
 	})
 
 	return (
-		<DropdownMenuContent align="end">
-			<DropdownMenuGroup>
-				<DropdownMenuItem>Rename link</DropdownMenuItem>
-				<DropdownMenuItem>Set expiration</DropdownMenuItem>
-				<DropdownMenuItem
-					variant="destructive"
-					onClick={() => {
-						deleteShare({ shareId: share.id })
-					}}
-				>
-					Delete link
-				</DropdownMenuItem>
-			</DropdownMenuGroup>
-		</DropdownMenuContent>
+		<DropdownMenu>
+			<DropdownMenuTrigger asChild>{children}</DropdownMenuTrigger>
+			<DropdownMenuContent align="end">
+				<DropdownMenuGroup>
+					<DropdownMenuItem
+						onClick={() => {
+							setActivePopover(ACTIVE_POPOVER_KIND.rename)
+						}}
+					>
+						Rename link
+					</DropdownMenuItem>
+					<DropdownMenuItem
+						onClick={() => {
+							setActivePopover(ACTIVE_POPOVER_KIND.setExpiration)
+						}}
+					>
+						Configure expiration
+					</DropdownMenuItem>
+					<DropdownMenuItem
+						variant="destructive"
+						onClick={() => {
+							deleteShare({ shareId: share.id })
+						}}
+					>
+						Delete link
+					</DropdownMenuItem>
+				</DropdownMenuGroup>
+			</DropdownMenuContent>
+		</DropdownMenu>
 	)
 }
 

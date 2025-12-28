@@ -14,7 +14,7 @@ export const fileSharesQueryAtom = atomFamily((fileId: string) =>
 				? () =>
 						fetchApi(
 							"GET",
-							`/accounts/${account.id}/files/${fileId}/shares`,
+							`/accounts/${account.id}/files/${fileId}/shares?includesExpired=true`,
 							{ returns: Share.array() },
 						).then(([_, result]) => result)
 				: skipToken,
@@ -31,7 +31,7 @@ export const directorySharesQueryAtom = atomFamily((directoryId: string) =>
 				? () =>
 						fetchApi(
 							"GET",
-							`/accounts/${account.id}/directories/${directoryId}/shares`,
+							`/accounts/${account.id}/directories/${directoryId}/shares?includesExpired=true`,
 							{ returns: Share.array() },
 						).then(([_, result]) => result)
 				: skipToken,
@@ -69,6 +69,27 @@ export const deleteShareMutationAtom = atom((get) =>
 				"DELETE",
 				`/accounts/${account.id}/shares/${shareId}`,
 				{ returns: Nothing },
+			)
+		},
+	}),
+)
+
+export const updateShareMutationAtom = atom((get) =>
+	mutationOptions({
+		mutationFn: async ({
+			shareId,
+			expiresAt,
+		}: {
+			shareId: string
+			expiresAt?: Date | null
+		}) => {
+			const account = get(currentAccountAtom)
+			if (!account) throw new Error("No account selected")
+
+			await fetchApi(
+				"PATCH",
+				`/accounts/${account.id}/shares/${shareId}`,
+				{ body: JSON.stringify({ expiresAt }), returns: Share },
 			)
 		},
 	}),
