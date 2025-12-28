@@ -779,8 +779,11 @@ func decodeListChildrenCursor(s string) (*decodedListChildrenCursor, error) {
 func (h *HTTPHandler) listDirectoryShares(c *fiber.Ctx) error {
 	node := mustCurrentDirectoryNode(c)
 
+	includesExpired := c.Query("includesExpired") == "true"
+
 	shares, err := h.sharingService.ListShares(c.Context(), h.db, node.AccountID, sharing.ListSharesOptions{
-		Items: []*virtualfs.Node{node},
+		Items:           []*virtualfs.Node{node},
+		IncludesExpired: includesExpired,
 	})
 	if err != nil {
 		return httperr.Internal(err)

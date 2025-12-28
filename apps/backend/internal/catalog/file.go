@@ -362,8 +362,11 @@ func (h *HTTPHandler) deleteFiles(c *fiber.Ctx) error {
 func (h *HTTPHandler) listFileShares(c *fiber.Ctx) error {
 	node := mustCurrentFileNode(c)
 
+	includesExpired := c.Query("includesExpired") == "true"
+
 	shares, err := h.sharingService.ListShares(c.Context(), h.db, node.AccountID, sharing.ListSharesOptions{
-		Items: []*virtualfs.Node{node},
+		Items:           []*virtualfs.Node{node},
+		IncludesExpired: includesExpired,
 	})
 	if err != nil {
 		return httperr.Internal(err)
