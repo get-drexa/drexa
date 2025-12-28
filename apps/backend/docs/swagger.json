@@ -1270,6 +1270,79 @@
                         }
                     }
                 }
+            },
+            "patch": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Update share link details. Omit expiresAt to keep the current value. Use null to remove the expiry.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "shares"
+                ],
+                "summary": "Update share",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "format": "uuid",
+                        "description": "Account ID",
+                        "name": "accountID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "Share ID",
+                        "name": "shareID",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Share details",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_sharing.patchShareRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Updated share",
+                        "schema": {
+                            "$ref": "#/definitions/internal_sharing.Share"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Not authenticated",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    "404": {
+                        "description": "Share not found",
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                }
             }
         },
         "/accounts/{accountID}/uploads": {
@@ -2128,6 +2201,17 @@
                         "mElnUNCm8F22",
                         "kRp2XYTq9A55"
                     ]
+                }
+            }
+        },
+        "internal_sharing.patchShareRequest": {
+            "description": "Request to update a share link. Omit expiresAt to keep the current value. Use null to remove the expiry.",
+            "type": "object",
+            "properties": {
+                "expiresAt": {
+                    "description": "Optional expiration time for the share (ISO 8601), null clears it.",
+                    "type": "string",
+                    "example": "2025-01-15T00:00:00Z"
                 }
             }
         },

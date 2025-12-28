@@ -301,7 +301,7 @@
           "200": {
             "description": "Trashed directories (when trash=true)",
             "content": {
-              "application/json": {
+              "*/*": {
                 "schema": {
                   "type": "array",
                   "items": {
@@ -469,7 +469,7 @@
           "200": {
             "description": "Trashed directory info (when trash=true)",
             "content": {
-              "application/json": {
+              "*/*": {
                 "schema": {
                   "$ref": "#/components/schemas/internal_catalog.DirectoryInfo"
                 }
@@ -927,7 +927,7 @@
           "200": {
             "description": "Trashed files (when trash=true)",
             "content": {
-              "application/json": {
+              "*/*": {
                 "schema": {
                   "type": "array",
                   "items": {
@@ -1569,6 +1569,95 @@
             "description": "Share not found",
             "content": {
               "*/*": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "description": "Update share link details. Omit expiresAt to keep the current value. Use null to remove the expiry.",
+        "tags": [
+          "shares"
+        ],
+        "summary": "Update share",
+        "parameters": [
+          {
+            "description": "Account ID",
+            "name": "accountID",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "description": "Share ID",
+            "name": "shareID",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/internal_sharing.patchShareRequest"
+              }
+            }
+          },
+          "description": "Share details",
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Updated share",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/internal_sharing.Share"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Share not found",
+            "content": {
+              "application/json": {
                 "schema": {
                   "type": "string"
                 }
@@ -2530,6 +2619,17 @@
               "mElnUNCm8F22",
               "kRp2XYTq9A55"
             ]
+          }
+        }
+      },
+      "internal_sharing.patchShareRequest": {
+        "description": "Request to update a share link. Omit expiresAt to keep the current value. Use null to remove the expiry.",
+        "type": "object",
+        "properties": {
+          "expiresAt": {
+            "description": "Optional expiration time for the share (ISO 8601), null clears it.",
+            "type": "string",
+            "example": "2025-01-15T00:00:00Z"
           }
         }
       },

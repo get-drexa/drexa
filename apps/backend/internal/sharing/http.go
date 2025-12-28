@@ -225,6 +225,21 @@ func (h *HTTPHandler) createShare(c *fiber.Ctx) error {
 	return c.JSON(share)
 }
 
+// updateShare updates a share link
+// @Summary Update share
+// @Description Update share link details. Omit expiresAt to keep the current value. Use null to remove the expiry.
+// @Tags shares
+// @Accept json
+// @Produce json
+// @Param accountID path string true "Account ID" format(uuid)
+// @Param shareID path string true "Share ID"
+// @Param request body patchShareRequest true "Share details"
+// @Success 200 {object} Share "Updated share"
+// @Failure 400 {object} map[string]string "Invalid request"
+// @Failure 401 {string} string "Not authenticated"
+// @Failure 404 {string} string "Share not found"
+// @Security BearerAuth
+// @Router /accounts/{accountID}/shares/{shareID} [patch]
 func (h *HTTPHandler) updateShare(c *fiber.Ctx) error {
 	shareID := c.Params("shareID")
 
