@@ -34,6 +34,11 @@ type ListSharesOptions struct {
 	IncludesExpired bool
 }
 
+type UpdateShareOptions struct {
+	// ExpiresAt sets the expiration time for the share. If nil, the expiration time is not changed. If it is a zero time, the expiration time is cleared.
+	ExpiresAt *time.Time
+}
+
 var (
 	ErrShareNotFound = errors.New("share not found")
 	ErrShareExpired  = errors.New("share expired")
@@ -316,4 +321,38 @@ func (s *Service) generatePublicID() (string, error) {
 	}
 	n := binary.BigEndian.Uint64(b[:])
 	return s.sqid.Encode([]uint64{n})
+}
+
+func (s *Service) UpdateShare(ctx context.Context, db bun.IDB, share *Share, opts UpdateShareOptions) error {
+	now := time.Now()
+
+	cols := make([]string, 0, 2)
+
+	if opts.ExpiresAt != nil {
+		newExpiresAt := opts.ExpiresAt
+		if opts.ExpiresAt.IsZero() {
+			newExpiresAt = nil
+		}
+		if !timePtrEqual(share.ExpiresAt, newExpiresAt) {
+			share.ExpiresAt = newExpiresAt
+			share.UpdatedAt = now
+			cols = append(cols, "expires_at", "updated_at")
+		}
+	}
+
+	if len(cols) > 0 {
+		_, err := db.NewUpdate().Model(share).Column(cols...).WherePK().Exec(ctx)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func timePtrEqual(a, b *time.Time) bool {
+	if a == nil || b == nil {
+		return a == b
+	}
+	return a.Equal(*b)
 }

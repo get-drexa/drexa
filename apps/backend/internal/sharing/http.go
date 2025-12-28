@@ -6,6 +6,7 @@ import (
 
 	"github.com/get-drexa/drexa/internal/account"
 	"github.com/get-drexa/drexa/internal/httperr"
+	"github.com/get-drexa/drexa/internal/nullable"
 	"github.com/get-drexa/drexa/internal/reqctx"
 	"github.com/get-drexa/drexa/internal/user"
 	"github.com/get-drexa/drexa/internal/virtualfs"
@@ -31,6 +32,13 @@ type createShareRequest struct {
 	ExpiresAt *time.Time `json:"expiresAt" example:"2025-01-15T00:00:00Z"`
 }
 
+// patchShareRequest represents a request to update a share link
+// @Description Request to update a share link. Omit expiresAt to keep the current value. Use null to remove the expiry.
+type patchShareRequest struct {
+	// Optional expiration time for the share (ISO 8601), null clears it.
+	ExpiresAt nullable.Time `json:"expiresAt" example:"2025-01-15T00:00:00Z"`
+}
+
 func NewHTTPHandler(sharingService *Service, accountService *account.Service, vfs *virtualfs.VirtualFS, db *bun.DB, authMiddleware fiber.Handler) *HTTPHandler {
 	return &HTTPHandler{
 		sharingService: sharingService,
@@ -48,8 +56,9 @@ func (h *HTTPHandler) RegisterShareConsumeRoutes(r fiber.Router) *virtualfs.Scop
 
 func (h *HTTPHandler) RegisterShareManagementRoutes(api *account.ScopedRouter) {
 	g := api.Group("/shares")
-	g.Get("/:shareID", h.getShare)
 	g.Post("/", h.createShare)
+	g.Get("/:shareID", h.getShare)
+	g.Patch("/:shareID", h.updateShare)
 	g.Delete("/:shareID", h.deleteShare)
 }
 
@@ -204,6 +213,52 @@ func (h *HTTPHandler) createShare(c *fiber.Ctx) error {
 	}
 
 	share, err := h.sharingService.CreateShare(c.Context(), tx, acc.ID, opts)
+	if err != nil {
+		return httperr.Internal(err)
+	}
+
+	err = tx.Commit()
+	if err != nil {
+		return httperr.Internal(err)
+	}
+
+	return c.JSON(share)
+}
+
+func (h *HTTPHandler) updateShare(c *fiber.Ctx) error {
+	shareID := c.Params("shareID")
+
+	share, err := h.sharingService.FindShareByPublicID(c.Context(), h.db, shareID)
+	if err != nil {
+		if errors.Is(err, ErrShareNotFound) {
+			return c.SendStatus(fiber.StatusNotFound)
+		}
+		return httperr.Internal(err)
+	}
+
+	var req patchShareRequest
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "invalid request",
+		})
+	}
+
+	tx, err := h.db.BeginTx(c.Context(), nil)
+	if err != nil {
+		return httperr.Internal(err)
+	}
+	defer tx.Rollback()
+
+	opts := UpdateShareOptions{}
+	if req.ExpiresAt.Set {
+		if req.ExpiresAt.Time == nil {
+			opts.ExpiresAt = &time.Time{}
+		} else {
+			opts.ExpiresAt = req.ExpiresAt.Time
+		}
+	}
+
+	err = h.sharingService.UpdateShare(c.Context(), tx, share, opts)
 	if err != nil {
 		return httperr.Internal(err)
 	}
