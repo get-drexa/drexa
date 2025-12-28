@@ -95,7 +95,7 @@
 			}
 		}
 	},
-	"forwardPorts": [3000, 5173, 8080],
+	"forwardPorts": [3000, 5173, 8080, 1455],
 	"portsAttributes": {
 		"3000": {
 			"label": "Development Server",

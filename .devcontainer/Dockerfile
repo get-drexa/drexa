@@ -6,7 +6,6 @@ RUN apt-get update && apt-get install -y \
     ca-certificates \
     gnupg \
     lsb-release \
-    ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
 # Install latest neovim using pre-built binary
@@ -40,4 +39,4 @@ USER node
 WORKDIR /workspace
 
 # Verify installations
-RUN bun --version
+RUN bun i -g @openai/codex && bun --version
