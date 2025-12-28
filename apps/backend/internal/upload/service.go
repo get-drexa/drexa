@@ -137,6 +137,7 @@ func (s *Service) CompleteUpload(ctx context.Context, db bun.IDB, uploadID strin
 	}
 
 	if upload.TargetNode.Status == virtualfs.NodeStatusReady && upload.Status == StatusCompleted {
+		s.pendingUploads.Delete(uploadID)
 		return upload, nil
 	}
 
