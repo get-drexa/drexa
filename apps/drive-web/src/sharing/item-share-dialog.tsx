@@ -40,6 +40,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
 import { Kbd } from "@/components/ui/kbd"
+import { LoadingSpinner } from "@/components/ui/loading-spinner"
 import {
 	Popover,
 	PopoverContent,
@@ -336,7 +337,11 @@ function AddShareLinkListItem() {
 				}}
 			>
 				<span className="bg-secondary rounded-md p-1.5 translate-y-px border border-border shadow-xs group-hover:bg-secondary">
-					<PlusIcon size={16} />
+					{isCreatingShare ? (
+						<LoadingSpinner />
+					) : (
+						<PlusIcon size={16} />
+					)}
 				</span>
 				Create share link
 			</button>
