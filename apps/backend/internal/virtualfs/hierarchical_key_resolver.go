@@ -37,7 +37,7 @@ func (r *HierarchicalKeyResolver) ResolveDeletionKeys(ctx context.Context, node 
 	if err != nil {
 		return nil, err
 	}
-	return &DeletionPlan{Prefix: blob.Key(path)}, nil
+	return &DeletionPlan{Prefix: blob.Key(fmt.Sprintf("%s/%s", node.AccountID, path))}, nil
 }
 
 // ResolveBulkMoveOps computes blob move operations for nodes being moved to a new parent.
