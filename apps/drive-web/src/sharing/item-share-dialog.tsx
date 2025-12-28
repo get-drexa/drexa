@@ -10,8 +10,10 @@ import {
 	CheckIcon,
 	CopyIcon,
 	EllipsisIcon,
+	Link2OffIcon,
 	LinkIcon,
 	LockKeyholeIcon,
+	PlusIcon,
 } from "lucide-react"
 import type React from "react"
 import { createContext, useContext, useMemo, useRef, useState } from "react"
@@ -19,6 +21,7 @@ import {
 	CrossfadeIcon,
 	type CrossfadeIconHandle,
 } from "@/components/crossfade-icon"
+import { DateInput, type DateInputHandle } from "@/components/date-input"
 import { Button } from "@/components/ui/button"
 import { ButtonGroup } from "@/components/ui/button-group"
 import {
@@ -36,7 +39,27 @@ import {
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
+import { Kbd } from "@/components/ui/kbd"
+import {
+	Popover,
+	PopoverContent,
+	PopoverTrigger,
+} from "@/components/ui/popover"
+import {
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
+} from "@/components/ui/select"
+import { Separator } from "@/components/ui/separator"
+import {
+	Tooltip,
+	TooltipContent,
+	TooltipTrigger,
+} from "@/components/ui/tooltip"
 import { copyToClipboardMutation } from "@/lib/clipboard"
+import { cn } from "@/lib/utils"
 import {
 	createShareMutationAtom,
 	deleteShareMutationAtom,
@@ -45,28 +68,6 @@ import {
 	updateShareMutationAtom,
 } from "@/sharing/api"
 import type { DirectoryItem } from "@/vfs/vfs"
-import { DateInput, type DateInputHandle } from "../components/date-input"
-import { Checkbox } from "../components/ui/checkbox"
-import { Kbd } from "../components/ui/kbd"
-import { Label } from "../components/ui/label"
-import {
-	Popover,
-	PopoverContent,
-	PopoverTrigger,
-} from "../components/ui/popover"
-import {
-	Select,
-	SelectContent,
-	SelectItem,
-	SelectTrigger,
-	SelectValue,
-} from "../components/ui/select"
-import {
-	Tooltip,
-	TooltipContent,
-	TooltipTrigger,
-} from "../components/ui/tooltip"
-import { cn } from "../lib/utils"
 import type { Share } from "./share"
 
 type ItemShareDialogProps = {
@@ -120,14 +121,24 @@ function PublicAccessSection({ item }: { item: DirectoryItem }) {
 	const fileSharesQuery = useAtomValue(fileSharesQueryAtom(item.id))
 	const directorySharesQuery = useAtomValue(directorySharesQueryAtom(item.id))
 
+	const sortShares = (shares: Share[]) =>
+		[...shares].sort((a, b) => {
+			if (a.expiresAt && b.expiresAt) {
+				return a.expiresAt.getTime() - b.expiresAt.getTime()
+			}
+			return 0
+		})
+
 	const { data: fileShares, isLoading: isLoadingFileShares } = useQuery({
 		...fileSharesQuery,
 		enabled: item.kind === "file",
+		select: sortShares,
 	})
 	const { data: directoryShares, isLoading: isLoadingDirectoryShares } =
 		useQuery({
 			...directorySharesQuery,
 			enabled: item.kind === "directory",
+			select: sortShares,
 		})
 
 	let shares: Share[] = []
@@ -157,10 +168,12 @@ function PublicAccessSection({ item }: { item: DirectoryItem }) {
 		)
 	} else {
 		content = (
-			<ul>
+			<ul className="space-y-2">
 				{shares.map((share) => (
 					<ShareLinkListItem key={share.id} share={share} />
 				))}
+				<Separator className="my-2" />
+				<AddShareLinkListItem />
 			</ul>
 		)
 	}
@@ -203,6 +216,7 @@ function ShareLinkListItem({ share }: { share: Share }) {
 		}
 	}
 
+	const isExpired = share.expiresAt && share.expiresAt.getTime() < Date.now()
 	const formattedExpirationDate = share.expiresAt
 		? share.expiresAt.toLocaleDateString("en-US", {
 				month: "long",
@@ -210,6 +224,15 @@ function ShareLinkListItem({ share }: { share: Share }) {
 				year: "numeric",
 			})
 		: ""
+
+	let statusMessage: string
+	if (isExpired) {
+		statusMessage = `Expired on ${formattedExpirationDate}`
+	} else if (share.expiresAt) {
+		statusMessage = `Expires on ${formattedExpirationDate}`
+	} else {
+		statusMessage = "Never expires"
+	}
 
 	return (
 		<li key={share.id} className="group flex items-center gap-3">
@@ -221,7 +244,11 @@ function ShareLinkListItem({ share }: { share: Share }) {
 					copyLinkButtonRef.current?.click()
 				}}
 			>
-				<LinkIcon size={16} />
+				{isExpired ? (
+					<Link2OffIcon size={16} />
+				) : (
+					<LinkIcon size={16} />
+				)}
 			</div>
 			{/** biome-ignore lint/a11y/noStaticElementInteractions: this is strictly for convenience. the normal copy link button is still accessible. */}
 			{/** biome-ignore lint/a11y/useKeyWithClickEvents: this is strictly for convenience. the normal copy link button is still accessible. */}
@@ -232,35 +259,87 @@ function ShareLinkListItem({ share }: { share: Share }) {
 				}}
 			>
 				<p>Share link</p>
-				<p className="text-muted-foreground">
-					{formattedExpirationDate
-						? `Expires at ${formattedExpirationDate}`
-						: "Never expires"}
+				<p
+					className={cn(
+						isExpired
+							? "text-amber-700/80 dark:text-amber-400/80"
+							: "text-muted-foreground",
+					)}
+				>
+					{statusMessage}
 				</p>
 			</div>
 			<ButtonGroup>
-				<Tooltip defaultOpen={false} delayDuration={1000}>
-					<TooltipTrigger asChild>
-						<Button
-							tabIndex={-1}
-							ref={copyLinkButtonRef}
-							variant="outline"
-							size="sm"
-							className="group-[&:hover:not(:has(.share-options-trigger:hover))]:bg-accent group-[&:hover:not(:has(.share-options-trigger:hover))]:text-accent-foreground dark:group-[&:hover:not(:has(.share-options-trigger:hover))]:bg-input/50"
-							onClick={copyItemShareLinkToClipboard}
-						>
-							<CrossfadeIcon
-								ref={copyIconRef}
-								from={<CopyIcon />}
-								to={<CheckIcon />}
-							/>
-							<span className="sr-only">Copy share link</span>
-						</Button>
-					</TooltipTrigger>
-					<TooltipContent>Copy share link</TooltipContent>
-				</Tooltip>
+				{isExpired ? null : (
+					<Tooltip defaultOpen={false} delayDuration={1000}>
+						<TooltipTrigger asChild>
+							<Button
+								tabIndex={-1}
+								ref={copyLinkButtonRef}
+								variant="outline"
+								size="sm"
+								className="group-[&:hover:not(:has(.share-options-trigger:hover))]:bg-accent group-[&:hover:not(:has(.share-options-trigger:hover))]:text-accent-foreground dark:group-[&:hover:not(:has(.share-options-trigger:hover))]:bg-input/50"
+								onClick={copyItemShareLinkToClipboard}
+							>
+								<CrossfadeIcon
+									ref={copyIconRef}
+									from={<CopyIcon />}
+									to={<CheckIcon />}
+								/>
+								<span className="sr-only">Copy share link</span>
+							</Button>
+						</TooltipTrigger>
+						<TooltipContent>Copy share link</TooltipContent>
+					</Tooltip>
+				)}
 				<ShareLinkOptionsMenuButton share={share} />
 			</ButtonGroup>
+		</li>
+	)
+}
+
+function AddShareLinkListItem() {
+	const { item } = useContext(ItemShareDialogContext)
+	const store = useStore()
+	const { mutate: createShare, isPending: isCreatingShare } = useMutation({
+		...useAtomValue(createShareMutationAtom),
+		onSuccess: (_createdShare, _vars, _, { client }) => {
+			let queryKey: readonly unknown[] | null
+			switch (item.kind) {
+				case "file":
+					queryKey = store.get(fileSharesQueryAtom(item.id)).queryKey
+					break
+				case "directory":
+					queryKey = store.get(
+						directorySharesQueryAtom(item.id),
+					).queryKey
+					break
+				default:
+					queryKey = null
+					break
+			}
+			if (queryKey) {
+				client.invalidateQueries({
+					queryKey,
+				})
+			}
+		},
+	})
+
+	return (
+		<li>
+			<button
+				type="button"
+				className="flex w-full items-center gap-3 text-sm font-regular group"
+				onClick={() => {
+					createShare({ items: [item.id] })
+				}}
+			>
+				<span className="bg-secondary rounded-md p-1.5 translate-y-px border border-border shadow-xs group-hover:bg-secondary">
+					<PlusIcon size={16} />
+				</span>
+				Create share link
+			</button>
 		</li>
 	)
 }
