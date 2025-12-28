@@ -46,6 +46,7 @@ var (
 	ErrShareNoItems  = errors.New("share has no items")
 	ErrNoPermissions = errors.New("no permissions found")
 	ErrNotSameParent = errors.New("items to be shared must be in the same parent directory")
+	ErrCannotShareRoot = errors.New("cannot share root directory")
 )
 
 func NewService(vfs *virtualfs.VirtualFS) (*Service, error) {
@@ -56,8 +57,13 @@ func NewService(vfs *virtualfs.VirtualFS) (*Service, error) {
 	return &Service{vfs: vfs, sqid: sqid}, nil
 }
 
-// CreateShare creates a share record for a parent directory and its allowed items.
+// CreateShare creates a share record for its allowed items.
+// A share is a partial share of a directory: the share root is always the common parent directory of all items.
 func (s *Service) CreateShare(ctx context.Context, db bun.IDB, accountID uuid.UUID, opts CreateShareOptions) (*Share, error) {
+	if len(opts.Items) == 0 {
+		return nil, ErrShareNoItems
+	}
+
 	id, err := generateInternalID()
 	if err != nil {
 		return nil, err
@@ -68,11 +74,13 @@ func (s *Service) CreateShare(ctx context.Context, db bun.IDB, accountID uuid.UU
 		return nil, err
 	}
 
-	var parentID *uuid.UUID
-	for _, item := range opts.Items {
-		if parentID == nil {
-			parentID = &item.ID
-		} else if item.ParentID != *parentID {
+	sharedDirectoryID := opts.Items[0].ParentID
+	if sharedDirectoryID == uuid.Nil {
+		// Root directories have no parent; they are never shareable.
+		return nil, ErrCannotShareRoot
+	}
+	for _, item := range opts.Items[1:] {
+		if item.ParentID != sharedDirectoryID {
 			return nil, ErrNotSameParent
 		}
 	}
@@ -82,7 +90,7 @@ func (s *Service) CreateShare(ctx context.Context, db bun.IDB, accountID uuid.UU
 		ID:                id,
 		AccountID:         accountID,
 		PublicID:          pid,
-		SharedDirectoryID: opts.Items[0].ID,
+		SharedDirectoryID: sharedDirectoryID,
 		CreatedAt:         now,
 		UpdatedAt:         now,
 	}

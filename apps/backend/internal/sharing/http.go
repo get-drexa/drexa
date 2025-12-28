@@ -90,25 +90,17 @@ func (h *HTTPHandler) shareMiddleware(c *fiber.Ctx) error {
 			})
 		}
 
-		u := reqctx.AuthenticatedUser(c).(*user.User)
-		if u != nil {
-			consumerAccount, err = h.accountService.AccountByID(c.Context(), h.db, u.ID, consumerAccountID)
-			if err != nil {
-				if errors.Is(err, account.ErrAccountNotFound) {
-					return c.SendStatus(fiber.StatusNotFound)
-				}
-				return httperr.Internal(err)
-			}
-
-			consumerAccount, err = h.accountService.AccountByID(c.Context(), h.db, u.ID, consumerAccountID)
-			if err != nil {
-				if errors.Is(err, account.ErrAccountNotFound) {
-					return c.SendStatus(fiber.StatusNotFound)
-				}
-				return httperr.Internal(err)
-			}
+		u, _ := reqctx.AuthenticatedUser(c).(*user.User)
+		if u == nil {
+			return c.SendStatus(fiber.StatusUnauthorized)
 		}
-
+		consumerAccount, err = h.accountService.AccountByID(c.Context(), h.db, u.ID, consumerAccountID)
+		if err != nil {
+			if errors.Is(err, account.ErrAccountNotFound) {
+				return c.SendStatus(fiber.StatusNotFound)
+			}
+			return httperr.Internal(err)
+		}
 	}
 
 	scope, err := h.sharingService.ResolveScopeForShare(c.Context(), h.db, consumerAccount, share)
@@ -155,14 +147,14 @@ func (h *HTTPHandler) getShare(c *fiber.Ctx) error {
 
 // createShare creates a new share link for files or directories
 // @Summary Create share
-// @Description Create a new share link for one or more files or directories
+// @Description Create a new share link for one or more files or directories. All items must be in the same parent directory. Root directory cannot be shared.
 // @Tags shares
 // @Accept json
 // @Produce json
 // @Param accountID path string true "Account ID" format(uuid)
 // @Param request body createShareRequest true "Share details"
 // @Success 200 {object} Share "Created share"
-// @Failure 400 {object} map[string]string "Invalid request or no items provided"
+// @Failure 400 {object} map[string]string "Invalid request, items not in same directory, or root directory cannot be shared"
 // @Failure 401 {string} string "Not authenticated"
 // @Failure 404 {object} map[string]string "One or more items not found"
 // @Security BearerAuth
@@ -214,6 +206,12 @@ func (h *HTTPHandler) createShare(c *fiber.Ctx) error {
 
 	share, err := h.sharingService.CreateShare(c.Context(), tx, acc.ID, opts)
 	if err != nil {
+		if errors.Is(err, ErrNotSameParent) {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "items must be in the same directory"})
+		}
+		if errors.Is(err, ErrCannotShareRoot) {
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "cannot share root directory"})
+		}
 		return httperr.Internal(err)
 	}
 

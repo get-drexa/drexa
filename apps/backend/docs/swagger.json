@@ -1102,7 +1102,7 @@
                         "BearerAuth": []
                     }
                 ],
-                "description": "Create a new share link for one or more files or directories",
+                "description": "Create a new share link for one or more files or directories. All items must be in the same parent directory. Root directory cannot be shared.",
                 "consumes": [
                     "application/json"
                 ],
@@ -1140,7 +1140,7 @@
                         }
                     },
                     "400": {
-                        "description": "Invalid request or no items provided",
+                        "description": "Invalid request, items not in same directory, or root directory cannot be shared",
                         "schema": {
                             "type": "object",
                             "additionalProperties": {
