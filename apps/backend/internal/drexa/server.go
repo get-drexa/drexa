@@ -113,6 +113,7 @@ func NewServer(c Config) (*Server, error) {
 	}
 
 	authMiddleware := auth.NewAuthMiddleware(authService, db, cookieConfig)
+	optionalAuthMiddleware := auth.NewOptionalAuthMiddleware(authService, db, cookieConfig)
 
 	api := app.Group("/api")
 	auth.NewHTTPHandler(authService, db, cookieConfig).RegisterRoutes(api)
@@ -121,7 +122,7 @@ func NewServer(c Config) (*Server, error) {
 	accountRouter := account.NewHTTPHandler(accountService, authService, vfs, db, authMiddleware, cookieConfig).RegisterRoutes(api)
 	upload.NewHTTPHandler(uploadService, db).RegisterRoutes(accountRouter.VFSRouter())
 
-	shareHTTP := sharing.NewHTTPHandler(sharingService, accountService, vfs, db, authMiddleware)
+	shareHTTP := sharing.NewHTTPHandler(sharingService, accountService, vfs, db, optionalAuthMiddleware)
 	shareRoutes := shareHTTP.RegisterShareConsumeRoutes(api)
 	shareHTTP.RegisterShareManagementRoutes(accountRouter)
 

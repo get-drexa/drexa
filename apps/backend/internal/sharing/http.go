@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/get-drexa/drexa/internal/account"
-	"github.com/get-drexa/drexa/internal/auth"
 	"github.com/get-drexa/drexa/internal/httperr"
 	"github.com/get-drexa/drexa/internal/nullable"
 	"github.com/get-drexa/drexa/internal/reqctx"
@@ -21,7 +20,7 @@ type HTTPHandler struct {
 	accountService *account.Service
 	vfs            *virtualfs.VirtualFS
 	db             *bun.DB
-	authMiddleware fiber.Handler
+	optionalAuthMiddleware fiber.Handler
 }
 
 // createShareRequest represents a request to create a share link
@@ -40,13 +39,13 @@ type patchShareRequest struct {
 	ExpiresAt nullable.Time `json:"expiresAt" example:"2025-01-15T00:00:00Z"`
 }
 
-func NewHTTPHandler(sharingService *Service, accountService *account.Service, vfs *virtualfs.VirtualFS, db *bun.DB, authMiddleware fiber.Handler) *HTTPHandler {
+func NewHTTPHandler(sharingService *Service, accountService *account.Service, vfs *virtualfs.VirtualFS, db *bun.DB, optionalAuthMiddleware fiber.Handler) *HTTPHandler {
 	return &HTTPHandler{
 		sharingService: sharingService,
 		accountService: accountService,
 		vfs:            vfs,
 		db:             db,
-		authMiddleware: authMiddleware,
+		optionalAuthMiddleware: optionalAuthMiddleware,
 	}
 }
 
@@ -54,7 +53,7 @@ func (h *HTTPHandler) RegisterShareConsumeRoutes(r fiber.Router) *virtualfs.Scop
 	// Public shares should be accessible without authentication. However, if the client provides auth
 	// credentials (cookies or Authorization header), attempt auth so share scopes can be resolved for
 	// account-scoped shares.
-	g := r.Group("/shares/:shareID", auth.NewOptionalAuthMiddleware(h.authMiddleware), h.shareMiddleware)
+	g := r.Group("/shares/:shareID", h.optionalAuthMiddleware, h.shareMiddleware)
 	return &virtualfs.ScopedRouter{Router: g}
 }
 

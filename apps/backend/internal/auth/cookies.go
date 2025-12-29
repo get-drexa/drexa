@@ -62,3 +62,38 @@ func SetAuthCookies(c *fiber.Ctx, accessToken, refreshToken string, cfg CookieCo
 	c.Cookie(accessTokenCookie)
 	c.Cookie(refreshTokenCookie)
 }
+
+// ClearAuthCookies clears the HTTP-only auth cookies by setting them to an expired value.
+func ClearAuthCookies(c *fiber.Ctx, cfg CookieConfig) {
+	secure := c.Protocol() == "https"
+	expired := time.Unix(0, 0)
+
+	accessTokenCookie := &fiber.Cookie{
+		Name:     cookieKeyAccessToken,
+		Value:    "",
+		Path:     "/",
+		Expires:  expired,
+		SameSite: fiber.CookieSameSiteLaxMode,
+		HTTPOnly: true,
+		Secure:   secure,
+	}
+	if cfg.Domain != "" {
+		accessTokenCookie.Domain = cfg.Domain
+	}
+
+	refreshTokenCookie := &fiber.Cookie{
+		Name:     cookieKeyRefreshToken,
+		Value:    "",
+		Path:     "/",
+		Expires:  expired,
+		SameSite: fiber.CookieSameSiteLaxMode,
+		HTTPOnly: true,
+		Secure:   secure,
+	}
+	if cfg.Domain != "" {
+		refreshTokenCookie.Domain = cfg.Domain
+	}
+
+	c.Cookie(accessTokenCookie)
+	c.Cookie(refreshTokenCookie)
+}
