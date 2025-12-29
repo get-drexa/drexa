@@ -731,34 +731,36 @@ func (vfs *VirtualFS) MoveNodesInSameDirectory(ctx context.Context, db bun.IDB, 
 	}
 
 	// Validate all nodes are accessible
-	nodeIDs := make([]uuid.UUID, len(allowedNodes))
 	nodeNames := make([]string, len(allowedNodes))
 	for i, node := range allowedNodes {
 		if !node.IsAccessible() {
 			return nil, ErrNodeNotFound
 		}
-		nodeIDs[i] = node.ID
 		nodeNames[i] = node.Name
 	}
 
-	var conflicts []*Node
-	err = db.NewSelect().Model(&conflicts).
+	var destinationConflicts []*Node
+	err = db.NewSelect().Model(&destinationConflicts).
 		Where("account_id = ?", allowedNodes[0].AccountID).
 		Where("parent_id = ?", newParentID).
+		Where("deleted_at IS NULL").
 		Where("name IN (?)", bun.In(nodeNames)).
 		Scan(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	conflictID := make(map[uuid.UUID]struct{})
-	for _, c := range conflicts {
-		conflictID[c.ID] = struct{}{}
+	takenNames := make(map[string]struct{}, len(destinationConflicts))
+	for _, c := range destinationConflicts {
+		takenNames[c.Name] = struct{}{}
 	}
 
-	movableNodes := make([]*Node, 0, len(allowedNodes)-len(conflicts))
+	conflicts := make([]*Node, 0, len(takenNames))
+	movableNodes := make([]*Node, 0, len(allowedNodes)-len(takenNames))
 	for _, node := range allowedNodes {
-		if _, ok := conflictID[node.ID]; !ok {
+		if _, ok := takenNames[node.Name]; ok {
+			conflicts = append(conflicts, node)
+		} else {
 			movableNodes = append(movableNodes, node)
 		}
 	}
@@ -774,9 +776,14 @@ func (vfs *VirtualFS) MoveNodesInSameDirectory(ctx context.Context, db bun.IDB, 
 		return nil, err
 	}
 
+	movableIDs := make([]uuid.UUID, len(movableNodes))
+	for i, node := range movableNodes {
+		movableIDs[i] = node.ID
+	}
+
 	_, err = db.NewUpdate().
 		Model((*Node)(nil)).
-		Where("id IN (?)", bun.In(nodeIDs)).
+		Where("id IN (?)", bun.In(movableIDs)).
 		Where("status = ?", NodeStatusReady).
 		Where("deleted_at IS NULL").
 		Set("parent_id = ?", newParentID).
@@ -803,7 +810,7 @@ func (vfs *VirtualFS) MoveNodesInSameDirectory(ctx context.Context, db bun.IDB, 
 		}
 	}
 
-	for _, node := range allowedNodes {
+	for _, node := range movableNodes {
 		node.ParentID = newParentID
 	}
 
