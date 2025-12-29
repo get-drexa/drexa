@@ -102,3 +102,25 @@ func NewAuthMiddleware(s *Service, db *bun.DB, cookieConfig CookieConfig) fiber.
 		return c.Next()
 	}
 }
+
+// NewOptionalAuthMiddleware conditionally runs the given auth middleware only when
+// the request contains auth credentials (Authorization header or auth cookies).
+//
+// This is useful for endpoints that are publicly accessible but can also behave
+// differently for authenticated callers (e.g. share consumption routes that may
+// resolve additional permissions for a specific account when credentials are
+// present).
+//
+// Usage:
+//   authMiddleware := auth.NewAuthMiddleware(...)
+//   router.Use(auth.NewOptionalAuthMiddleware(authMiddleware))
+func NewOptionalAuthMiddleware(authMiddleware fiber.Handler) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		hasAuthHeader := c.Get("Authorization") != ""
+		hasAuthCookies := c.Cookies(cookieKeyAccessToken) != "" || c.Cookies(cookieKeyRefreshToken) != ""
+		if !hasAuthHeader && !hasAuthCookies {
+			return c.Next()
+		}
+		return authMiddleware(c)
+	}
+}

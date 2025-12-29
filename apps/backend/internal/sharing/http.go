@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/get-drexa/drexa/internal/account"
+	"github.com/get-drexa/drexa/internal/auth"
 	"github.com/get-drexa/drexa/internal/httperr"
 	"github.com/get-drexa/drexa/internal/nullable"
 	"github.com/get-drexa/drexa/internal/reqctx"
@@ -50,7 +51,10 @@ func NewHTTPHandler(sharingService *Service, accountService *account.Service, vf
 }
 
 func (h *HTTPHandler) RegisterShareConsumeRoutes(r fiber.Router) *virtualfs.ScopedRouter {
-	g := r.Group("/shares/:shareID", h.shareMiddleware)
+	// Public shares should be accessible without authentication. However, if the client provides auth
+	// credentials (cookies or Authorization header), attempt auth so share scopes can be resolved for
+	// account-scoped shares.
+	g := r.Group("/shares/:shareID", auth.NewOptionalAuthMiddleware(h.authMiddleware), h.shareMiddleware)
 	return &virtualfs.ScopedRouter{Router: g}
 }
 
