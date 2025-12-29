@@ -110,7 +110,6 @@ func NewServer(c Config) (*Server, error) {
 
 	cookieConfig := auth.CookieConfig{
 		Domain: c.Cookie.Domain,
-		Secure: c.Cookie.Secure,
 	}
 
 	authMiddleware := auth.NewAuthMiddleware(authService, db, cookieConfig)

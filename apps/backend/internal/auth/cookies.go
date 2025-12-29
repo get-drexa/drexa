@@ -11,10 +11,6 @@ type CookieConfig struct {
 	// Domain for cross-subdomain cookies (e.g., "app.com" for web.app.com + api.app.com).
 	// Leave empty for same-host cookies (localhost, single domain).
 	Domain string
-	// Secure controls whether cookies are only sent over HTTPS.
-	// If nil, automatically set based on request protocol (true for HTTPS, false for HTTP).
-	// If explicitly set, this value is used regardless of protocol.
-	Secure *bool
 }
 
 // authCookies returns auth cookies from the given fiber context.
@@ -33,8 +29,7 @@ func authCookies(c *fiber.Ctx) map[string]string {
 }
 
 // SetAuthCookies sets HTTP-only auth cookies with security settings derived from the request.
-// Secure flag is based on actual protocol (works automatically with proxies/tunnels),
-// unless explicitly set in cfg.Secure.
+// Secure flag is based on the request protocol (works automatically with proxies/tunnels).
 func SetAuthCookies(c *fiber.Ctx, accessToken, refreshToken string, cfg CookieConfig) {
 	secure := c.Protocol() == "https"
 

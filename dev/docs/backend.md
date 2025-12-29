@@ -44,4 +44,4 @@
 # Configuration
 
 - Config is YAML-driven; see `apps/backend/config.example.yaml` for required fields and env overrides.
-- Keep CORS and cookie settings aligned with the frontend deployment topology.
+- Keep CORS and cookie settings aligned with the frontend deployment topology; cookie `Secure` is derived from request protocol.

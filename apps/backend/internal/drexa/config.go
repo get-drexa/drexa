@@ -56,10 +56,9 @@ type StorageConfig struct {
 
 // CookieConfig controls auth cookie behavior.
 // Domain is optional - only needed for cross-subdomain setups (e.g., "app.com" for web.app.com + api.app.com).
-// Secure flag is derived from the request protocol automatically, unless explicitly set.
+// Secure flag is derived from the request protocol automatically.
 type CookieConfig struct {
 	Domain string `yaml:"domain"`
-	Secure *bool  `yaml:"secure"`
 }
 
 // CORSConfig controls Cross-Origin Resource Sharing behavior.

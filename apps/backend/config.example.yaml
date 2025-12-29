@@ -33,9 +33,6 @@ cookie:
   # Set this when frontend and API are on different subdomains (e.g., "app.com" for web.app.com + api.app.com).
   # Leave empty for same-host cookies (localhost, single domain).
   # domain: app.com
-  # Secure flag for cookies. If not set, automatically determined from request protocol (true for HTTPS, false for HTTP).
-  # Set explicitly to override automatic detection (useful for local development with HTTPS).
-  # secure: false
 
 cors:
   # Allowed origins for cross-origin requests.
