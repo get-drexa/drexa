@@ -103,6 +103,19 @@ func TestRegistrationFlow(t *testing.T) {
 		t.Fatalf("expected account.id and drive.id to be set")
 	}
 
+	t.Run("drives list", func(t *testing.T) {
+		var drives []struct {
+			ID string `json:"id"`
+		}
+		doJSON(t, s.app, http.MethodGet, "/api/drives", reg.AccessToken, nil, http.StatusOK, &drives)
+		if len(drives) != 1 {
+			t.Fatalf("expected 1 drive, got %d", len(drives))
+		}
+		if drives[0].ID != reg.Drive.ID {
+			t.Fatalf("unexpected drive id: got %q want %q", drives[0].ID, reg.Drive.ID)
+		}
+	})
+
 	t.Run("users/me", func(t *testing.T) {
 		var me struct {
 			ID          string `json:"id"`

@@ -87,10 +87,10 @@ func (s *Service) ListAccessibleDrives(ctx context.Context, db bun.IDB, orgID uu
 func (s *Service) ListDrivesForUser(ctx context.Context, db bun.IDB, userID uuid.UUID) ([]*Drive, error) {
 	var drives []*Drive
 	err := db.NewSelect().Model(&drives).
-		Join("JOIN accounts a ON a.org_id = drives.org_id").
+		Join("JOIN accounts a ON a.org_id = drive.org_id").
 		Where("a.user_id = ?", userID).
 		Where("a.status = ?", account.StatusActive).
-		Where("drives.owner_account_id IS NULL OR drives.owner_account_id = a.id").
+		Where("drive.owner_account_id IS NULL OR drive.owner_account_id = a.id").
 		Scan(ctx)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
