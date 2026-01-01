@@ -5,15 +5,21 @@ export type ApiRoute =
 	| "/auth/tokens"
 	| "/accounts"
 	| `/accounts/${string}`
-	| `/accounts/${string}/uploads`
-	| `/accounts/${string}/uploads/${string}/content`
-	| `/accounts/${string}/uploads/${string}`
-	| `/accounts/${string}/files${string}`
-	| `/accounts/${string}/files/${string}`
-	| `/accounts/${string}/files/${string}/content`
-	| `/accounts/${string}/directories`
-	| `/accounts/${string}/directories/${string}`
-	| `/accounts/${string}/directories/${string}/content`
+	| "/drives"
+	| `/drives/${string}`
+	| `/drives/${string}/uploads`
+	| `/drives/${string}/uploads/${string}/content`
+	| `/drives/${string}/uploads/${string}`
+	| `/drives/${string}/files${string}`
+	| `/drives/${string}/files/${string}`
+	| `/drives/${string}/files/${string}/content`
+	| `/drives/${string}/files/${string}/shares${string}`
+	| `/drives/${string}/directories`
+	| `/drives/${string}/directories/${string}`
+	| `/drives/${string}/directories/${string}/content`
+	| `/drives/${string}/directories/${string}/shares${string}`
+	| `/drives/${string}/shares`
+	| `/drives/${string}/shares/${string}`
 	| `/shares/${string}`
 	| `/shares/${string}/directories${string}`
 	| `/shares/${string}/files${string}`

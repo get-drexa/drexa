@@ -64,12 +64,12 @@ func (h *HTTPHandler) currentFileMiddleware(c *fiber.Ctx) error {
 // @Tags files
 // @Produce json
 // @Security BearerAuth
-// @Param accountID path string true "Account ID" format(uuid)
+// @Param driveID path string true "Drive ID" format(uuid)
 // @Param fileID path string true "File ID"
 // @Success 200 {object} FileInfo "File metadata"
 // @Failure 401 {string} string "Not authenticated"
 // @Failure 404 {string} string "File not found"
-// @Router /accounts/{accountID}/files/{fileID} [get]
+// @Router /drives/{driveID}/files/{fileID} [get]
 func (h *HTTPHandler) fetchFile(c *fiber.Ctx) error {
 	node := mustCurrentFileNode(c)
 	i := FileInfo{
@@ -91,13 +91,13 @@ func (h *HTTPHandler) fetchFile(c *fiber.Ctx) error {
 // @Tags files
 // @Produce application/octet-stream
 // @Security BearerAuth
-// @Param accountID path string true "Account ID" format(uuid)
+// @Param driveID path string true "Drive ID" format(uuid)
 // @Param fileID path string true "File ID"
 // @Success 200 {file} binary "File content stream"
 // @Success 307 {string} string "Redirect to download URL"
 // @Failure 401 {string} string "Not authenticated"
 // @Failure 404 {string} string "File not found"
-// @Router /accounts/{accountID}/files/{fileID}/content [get]
+// @Router /drives/{driveID}/files/{fileID}/content [get]
 func (h *HTTPHandler) downloadFile(c *fiber.Ctx) error {
 	node := mustCurrentFileNode(c)
 	scope, ok := scopeFromCtx(c)
@@ -140,14 +140,14 @@ func (h *HTTPHandler) downloadFile(c *fiber.Ctx) error {
 // @Accept json
 // @Produce json
 // @Security BearerAuth
-// @Param accountID path string true "Account ID" format(uuid)
+// @Param driveID path string true "Drive ID" format(uuid)
 // @Param fileID path string true "File ID"
 // @Param request body patchFileRequest true "File update"
 // @Success 200 {object} FileInfo "Updated file metadata"
 // @Failure 400 {object} map[string]string "Invalid request"
 // @Failure 401 {string} string "Not authenticated"
 // @Failure 404 {string} string "File not found"
-// @Router /accounts/{accountID}/files/{fileID} [patch]
+// @Router /drives/{driveID}/files/{fileID} [patch]
 func (h *HTTPHandler) patchFile(c *fiber.Ctx) error {
 	node := mustCurrentFileNode(c)
 	scope, ok := scopeFromCtx(c)
@@ -201,14 +201,14 @@ func (h *HTTPHandler) patchFile(c *fiber.Ctx) error {
 // @Tags files
 // @Produce json
 // @Security BearerAuth
-// @Param accountID path string true "Account ID" format(uuid)
+// @Param driveID path string true "Drive ID" format(uuid)
 // @Param fileID path string true "File ID"
 // @Param trash query bool false "Move to trash instead of permanent delete" default(false)
 // @Success 200 {object} FileInfo "Trashed file info (when trash=true)"
 // @Success 204 {string} string "Permanently deleted (when trash=false)"
 // @Failure 401 {string} string "Not authenticated"
 // @Failure 404 {string} string "File not found"
-// @Router /accounts/{accountID}/files/{fileID} [delete]
+// @Router /drives/{driveID}/files/{fileID} [delete]
 func (h *HTTPHandler) deleteFile(c *fiber.Ctx) error {
 	node := mustCurrentFileNode(c)
 	scope, ok := scopeFromCtx(c)
@@ -264,14 +264,14 @@ func (h *HTTPHandler) deleteFile(c *fiber.Ctx) error {
 // @Description Delete multiple files permanently or move them to trash. All items must be files.
 // @Tags files
 // @Security BearerAuth
-// @Param accountID path string true "Account ID" format(uuid)
+// @Param driveID path string true "Drive ID" format(uuid)
 // @Param id query string true "Comma-separated list of file IDs to delete" example:"mElnUNCm8F22,kRp2XYTq9A55"
 // @Param trash query bool false "Move to trash instead of permanent delete" default(false)
 // @Success 200 {array} FileInfo "Trashed files (when trash=true)"
 // @Success 204 {string} string "Files deleted"
 // @Failure 400 {object} map[string]string "All items must be files"
 // @Failure 401 {string} string "Not authenticated"
-// @Router /accounts/{accountID}/files [delete]
+// @Router /drives/{driveID}/files [delete]
 func (h *HTTPHandler) deleteFiles(c *fiber.Ctx) error {
 	scope, ok := scopeFromCtx(c)
 	if !ok {
@@ -352,19 +352,19 @@ func (h *HTTPHandler) deleteFiles(c *fiber.Ctx) error {
 // @Description Get all share links that include this file
 // @Tags files
 // @Produce json
-// @Param accountID path string true "Account ID" format(uuid)
+// @Param driveID path string true "Drive ID" format(uuid)
 // @Param fileID path string true "File ID"
 // @Success 200 {array} sharing.Share "Array of shares"
 // @Failure 401 {string} string "Not authenticated"
 // @Failure 404 {string} string "File not found"
 // @Security BearerAuth
-// @Router /accounts/{accountID}/files/{fileID}/shares [get]
+// @Router /drives/{driveID}/files/{fileID}/shares [get]
 func (h *HTTPHandler) listFileShares(c *fiber.Ctx) error {
 	node := mustCurrentFileNode(c)
 
 	includesExpired := c.Query("includesExpired") == "true"
 
-	shares, err := h.sharingService.ListShares(c.Context(), h.db, node.AccountID, sharing.ListSharesOptions{
+	shares, err := h.sharingService.ListShares(c.Context(), h.db, node.DriveID, sharing.ListSharesOptions{
 		Items:           []*virtualfs.Node{node},
 		IncludesExpired: includesExpired,
 	})

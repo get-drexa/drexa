@@ -59,7 +59,7 @@ func NewService(vfs *virtualfs.VirtualFS) (*Service, error) {
 
 // CreateShare creates a share record for its allowed items.
 // A share is a partial share of a directory: the share root is always the common parent directory of all items.
-func (s *Service) CreateShare(ctx context.Context, db bun.IDB, accountID uuid.UUID, opts CreateShareOptions) (*Share, error) {
+func (s *Service) CreateShare(ctx context.Context, db bun.IDB, driveID uuid.UUID, createdByAccountID uuid.UUID, opts CreateShareOptions) (*Share, error) {
 	if len(opts.Items) == 0 {
 		return nil, ErrShareNoItems
 	}
@@ -87,12 +87,13 @@ func (s *Service) CreateShare(ctx context.Context, db bun.IDB, accountID uuid.UU
 
 	now := time.Now()
 	sh := &Share{
-		ID:                id,
-		AccountID:         accountID,
-		PublicID:          pid,
-		SharedDirectoryID: sharedDirectoryID,
-		CreatedAt:         now,
-		UpdatedAt:         now,
+		ID:                 id,
+		DriveID:            driveID,
+		CreatedByAccountID: createdByAccountID,
+		PublicID:           pid,
+		SharedDirectoryID:  sharedDirectoryID,
+		CreatedAt:          now,
+		UpdatedAt:          now,
 	}
 
 	if !opts.ExpiresAt.IsZero() {
@@ -165,11 +166,11 @@ func (s *Service) FindShareByPublicID(ctx context.Context, db bun.IDB, publicID 
 	return sh, nil
 }
 
-func (s *Service) ListShares(ctx context.Context, db bun.IDB, accountID uuid.UUID, opts ListSharesOptions) ([]Share, error) {
+func (s *Service) ListShares(ctx context.Context, db bun.IDB, driveID uuid.UUID, opts ListSharesOptions) ([]Share, error) {
 	var shares []Share
 
 	q := db.NewSelect().Model(&shares).
-		Where("account_id = ?", accountID)
+		Where("drive_id = ?", driveID)
 
 	if !opts.IncludesExpired {
 		q = q.Where("expires_at IS NULL OR expires_at > NOW()")
@@ -260,7 +261,7 @@ func (s *Service) ResolveScopeForShare(ctx context.Context, db bun.IDB, consumer
 	}
 
 	scope := &virtualfs.Scope{
-		AccountID:  share.AccountID,
+		DriveID:   share.DriveID,
 		RootNodeID: share.SharedDirectoryID,
 	}
 

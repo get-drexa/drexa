@@ -29,7 +29,7 @@ func (r *HierarchicalKeyResolver) Resolve(ctx context.Context, db bun.IDB, node 
 		return "", err
 	}
 
-	return blob.Key(fmt.Sprintf("%s/%s", node.AccountID, path)), nil
+	return blob.Key(fmt.Sprintf("%s/%s", node.DriveID, path)), nil
 }
 
 func (r *HierarchicalKeyResolver) ResolveDeletionKeys(ctx context.Context, node *Node, allKeys []blob.Key) (*DeletionPlan, error) {
@@ -37,7 +37,7 @@ func (r *HierarchicalKeyResolver) ResolveDeletionKeys(ctx context.Context, node 
 	if err != nil {
 		return nil, err
 	}
-	return &DeletionPlan{Prefix: blob.Key(fmt.Sprintf("%s/%s", node.AccountID, path))}, nil
+	return &DeletionPlan{Prefix: blob.Key(fmt.Sprintf("%s/%s", node.DriveID, path))}, nil
 }
 
 // ResolveBulkMoveOps computes blob move operations for nodes being moved to a new parent.
@@ -48,7 +48,7 @@ func (r *HierarchicalKeyResolver) ResolveBulkMoveOps(ctx context.Context, db bun
 		return nil, nil
 	}
 
-	accountID := nodes[0].AccountID
+	driveID := nodes[0].DriveID
 	oldParentID := nodes[0].ParentID
 
 	for _, node := range nodes[1:] {
@@ -70,8 +70,8 @@ func (r *HierarchicalKeyResolver) ResolveBulkMoveOps(ctx context.Context, db bun
 	// For each node, construct old and new keys using the precomputed parent paths
 	ops := make([]BlobMoveOp, len(nodes))
 	for i, node := range nodes {
-		oldKey := blob.Key(fmt.Sprintf("%s/%s/%s", accountID, oldParentPath, node.Name))
-		newKey := blob.Key(fmt.Sprintf("%s/%s/%s", accountID, newParentPath, node.Name))
+		oldKey := blob.Key(fmt.Sprintf("%s/%s/%s", driveID, oldParentPath, node.Name))
+		newKey := blob.Key(fmt.Sprintf("%s/%s/%s", driveID, newParentPath, node.Name))
 		ops[i] = BlobMoveOp{Node: node, OldKey: oldKey, NewKey: newKey}
 	}
 

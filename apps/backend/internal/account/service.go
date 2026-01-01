@@ -6,88 +6,38 @@ import (
 	"errors"
 
 	"github.com/get-drexa/drexa/internal/database"
-	"github.com/get-drexa/drexa/internal/password"
-	"github.com/get-drexa/drexa/internal/user"
-	"github.com/get-drexa/drexa/internal/virtualfs"
 	"github.com/google/uuid"
 	"github.com/uptrace/bun"
 )
 
-type Service struct {
-	userService user.Service
-	vfs         *virtualfs.VirtualFS
+type Service struct{}
+
+func NewService() *Service {
+	return &Service{}
 }
 
-type RegisterOptions struct {
-	Email       string
-	Password    string
-	DisplayName string
-}
-
-type CreateAccountOptions struct {
-	OrganizationID uuid.UUID
-	QuotaBytes     int64
-}
-
-func NewService(userService *user.Service, vfs *virtualfs.VirtualFS) *Service {
-	return &Service{
-		userService: *userService,
-		vfs:         vfs,
-	}
-}
-
-func (s *Service) Register(ctx context.Context, db bun.IDB, opts RegisterOptions) (*Account, *user.User, error) {
-	hashed, err := password.HashString(opts.Password)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	u, err := s.userService.RegisterUser(ctx, db, user.UserRegistrationOptions{
-		Email:       opts.Email,
-		Password:    hashed,
-		DisplayName: opts.DisplayName,
-	})
-	if err != nil {
-		return nil, nil, err
-	}
-
-	acc, err := s.CreateAccount(ctx, db, u.ID, CreateAccountOptions{
-		// TODO: make quota configurable
-		QuotaBytes: 1024 * 1024 * 1024, // 1GB
-	})
-	if err != nil {
-		return nil, nil, err
-	}
-
-	_, err = s.vfs.CreateRootDirectory(ctx, db, acc.ID)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	return acc, u, nil
-}
-
-func (s *Service) CreateAccount(ctx context.Context, db bun.IDB, userID uuid.UUID, opts CreateAccountOptions) (*Account, error) {
+func (s *Service) CreateAccount(ctx context.Context, db bun.IDB, orgID uuid.UUID, userID uuid.UUID, role Role, status Status) (*Account, error) {
 	id, err := newAccountID()
 	if err != nil {
 		return nil, err
 	}
 
-	account := &Account{
-		ID:                id,
-		UserID:            userID,
-		StorageQuotaBytes: opts.QuotaBytes,
+	acc := &Account{
+		ID:     id,
+		OrgID:  orgID,
+		UserID: userID,
+		Role:   role,
+		Status: status,
 	}
 
-	_, err = db.NewInsert().Model(account).Returning("*").Exec(ctx)
+	_, err = db.NewInsert().Model(acc).Returning("*").Exec(ctx)
 	if err != nil {
 		if database.IsUniqueViolation(err) {
 			return nil, ErrAccountAlreadyExists
 		}
 		return nil, err
 	}
-
-	return account, nil
+	return acc, nil
 }
 
 func (s *Service) ListAccounts(ctx context.Context, db bun.IDB, userID uuid.UUID) ([]*Account, error) {
@@ -102,26 +52,29 @@ func (s *Service) ListAccounts(ctx context.Context, db bun.IDB, userID uuid.UUID
 	return accounts, nil
 }
 
-func (s *Service) AccountByUserID(ctx context.Context, db bun.IDB, userID uuid.UUID) (*Account, error) {
-	var account Account
-	err := db.NewSelect().Model(&account).Where("user_id = ?", userID).Scan(ctx)
+func (s *Service) AccountByID(ctx context.Context, db bun.IDB, userID uuid.UUID, id uuid.UUID) (*Account, error) {
+	var acc Account
+	err := db.NewSelect().Model(&acc).Where("user_id = ?", userID).Where("id = ?", id).Scan(ctx)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrAccountNotFound
 		}
 		return nil, err
 	}
-	return &account, nil
+	return &acc, nil
 }
 
-func (s *Service) AccountByID(ctx context.Context, db bun.IDB, userID uuid.UUID, id uuid.UUID) (*Account, error) {
-	var account Account
-	err := db.NewSelect().Model(&account).Where("user_id = ?", userID).Where("id = ?", id).Scan(ctx)
+func (s *Service) FindUserAccountInOrg(ctx context.Context, db bun.IDB, orgID uuid.UUID, userID uuid.UUID) (*Account, error) {
+	var acc Account
+	err := db.NewSelect().Model(&acc).
+		Where("org_id = ?", orgID).
+		Where("user_id = ?", userID).
+		Scan(ctx)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrAccountNotFound
 		}
 		return nil, err
 	}
-	return &account, nil
+	return &acc, nil
 }

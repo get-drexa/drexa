@@ -1,6 +1,6 @@
 import { type } from "arktype"
-import type { Account } from "@/account/account"
 import { ApiError, fetchApi } from "@/lib/api"
+import type { Drive } from "@/drive/drive"
 import type { DirectoryInfoWithPath } from "@/vfs/vfs"
 
 export const UploadStatus = type.enumerated("pending", "completed", "failed")
@@ -14,13 +14,13 @@ export const Upload = type({
 export type Upload = typeof Upload.infer
 
 export async function uploadFile({
-	account,
+	drive,
 	file,
 	targetDirectory,
 	onStart,
 	onProgress,
 }: {
-	account: Account
+	drive: Drive
 	file: File
 	targetDirectory: DirectoryInfoWithPath
 	onStart: (xhr: XMLHttpRequest) => void
@@ -28,7 +28,7 @@ export async function uploadFile({
 }) {
 	const [, upload] = await fetchApi(
 		"POST",
-		`/accounts/${account.id}/uploads`,
+		`/drives/${drive.id}/uploads`,
 		{
 			body: JSON.stringify({
 				name: file.name,
@@ -45,7 +45,7 @@ export async function uploadFile({
 		onProgress,
 	})
 
-	await fetchApi("PATCH", `/accounts/${account.id}/uploads/${upload.id}`, {
+	await fetchApi("PATCH", `/drives/${drive.id}/uploads/${upload.id}`, {
 		body: JSON.stringify({
 			status: "completed",
 		}),

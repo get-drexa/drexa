@@ -33,34 +33,29 @@ function buildQueryString(params: Record<string, string | undefined>): string {
 type ShareDirectoryInfoQueryParams = {
 	shareId: string
 	directoryId: string
-	accountId?: string
 }
 
 export const shareDirectoryInfoQueryKey = (
 	shareId: string,
 	directoryId: string,
-	accountId?: string,
 ): readonly unknown[] => [
 	"shares",
 	shareId,
 	"directories",
 	directoryId,
 	"info",
-	accountId ?? "public",
 ]
 
 export function shareDirectoryInfoQuery({
 	shareId,
 	directoryId,
-	accountId,
 }: ShareDirectoryInfoQueryParams) {
 	const queryString = buildQueryString({
 		include: "path",
-		accountId,
 	})
 
 	return queryOptions({
-		queryKey: shareDirectoryInfoQueryKey(shareId, directoryId, accountId),
+		queryKey: shareDirectoryInfoQueryKey(shareId, directoryId),
 		queryFn: () =>
 			fetchApi(
 				"GET",
@@ -76,7 +71,6 @@ type ShareDirectoryContentQueryParams = {
 	orderBy: DirectoryContentOrderBy
 	direction: DirectoryContentOrderDirection
 	limit: number
-	accountId?: string
 }
 
 export const shareDirectoryContentQueryKey = (
@@ -85,7 +79,6 @@ export const shareDirectoryContentQueryKey = (
 	params?: {
 		orderBy?: DirectoryContentOrderBy
 		direction?: DirectoryContentOrderDirection
-		accountId?: string
 	},
 ): readonly unknown[] => [
 	"shares",
@@ -98,7 +91,6 @@ export const shareDirectoryContentQueryKey = (
 				{
 					orderBy: params.orderBy,
 					direction: params.direction,
-					accountId: params.accountId,
 				},
 			]
 		: []),
@@ -117,13 +109,11 @@ export function shareDirectoryContentQuery({
 	orderBy,
 	direction,
 	limit,
-	accountId,
 }: ShareDirectoryContentQueryParams) {
 	return infiniteQueryOptions({
 		queryKey: shareDirectoryContentQueryKey(shareId, directoryId, {
 			orderBy,
 			direction,
-			accountId,
 		}),
 		initialPageParam: {
 			orderBy,
@@ -137,7 +127,6 @@ export function shareDirectoryContentQuery({
 				dir: pageParam.direction,
 				limit: String(pageParam.limit),
 				cursor: pageParam.cursor || undefined,
-				accountId,
 			})
 			return fetchApi(
 				"GET",
@@ -158,17 +147,12 @@ export function shareDirectoryContentQuery({
 type ShareFileContentUrlParams = {
 	shareId: string
 	fileId: string
-	accountId?: string
 }
 
 export function shareFileContentUrl({
 	shareId,
 	fileId,
-	accountId,
 }: ShareFileContentUrlParams): string {
 	const url = buildShareApiUrl(`/shares/${shareId}/files/${fileId}/content`)
-	if (accountId) {
-		url.searchParams.set("accountId", accountId)
-	}
 	return url.toString()
 }

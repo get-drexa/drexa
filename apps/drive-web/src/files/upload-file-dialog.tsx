@@ -31,7 +31,7 @@ import {
 import { formatError } from "@/lib/error"
 import { directoryContentQueryKey } from "@/vfs/api"
 import type { DirectoryInfoWithPath } from "@/vfs/vfs"
-import { currentAccountAtom } from "../account/account"
+import { currentDriveAtom } from "@/drive/drive"
 import {
 	clearAllFileUploadStatusesAtom,
 	clearFileUploadStatusesAtom,
@@ -68,12 +68,12 @@ function useUploadFilesAtom({
 		() =>
 			mutationOptions({
 				mutationFn: async (files: PickedFile[]) => {
-					const account = store.get(currentAccountAtom)
-					if (!account) throw new Error("No account selected")
+					const drive = store.get(currentDriveAtom)
+					if (!drive) throw new Error("No drive selected")
 
 					const promises = files.map((pickedFile) =>
 						uploadFile({
-							account,
+							drive,
 							file: pickedFile.file,
 							targetDirectory,
 							onStart: () => {
@@ -136,11 +136,11 @@ function useUploadFilesAtom({
 					}
 
 					// Invalidate all queries for the target directory (with any params)
-					const account = store.get(currentAccountAtom)
-					if (account) {
+					const drive = store.get(currentDriveAtom)
+					if (drive) {
 						client.invalidateQueries({
 							queryKey: directoryContentQueryKey(
-								account.id,
+								drive.id,
 								targetDirectory.id,
 							),
 						})

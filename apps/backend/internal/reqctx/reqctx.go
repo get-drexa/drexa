@@ -9,6 +9,7 @@ import (
 const authenticatedUserKey = "authenticatedUser"
 const vfsAccessScope = "vfsAccessScope"
 const currentAccountKey = "currentAccount"
+const currentDriveKey = "currentDrive"
 
 var ErrUnauthenticatedRequest = errors.New("unauthenticated request")
 
@@ -29,6 +30,11 @@ func SetCurrentAccount(c *fiber.Ctx, account any) {
 	c.Locals(currentAccountKey, account)
 }
 
+// SetCurrentDrive sets the current drive in the fiber context.
+func SetCurrentDrive(c *fiber.Ctx, drive any) {
+	c.Locals(currentDriveKey, drive)
+}
+
 // SetVFSAccessScope sets the VFS access scope in the fiber context.
 func SetVFSAccessScope(c *fiber.Ctx, scope any) {
 	c.Locals(vfsAccessScope, scope)
@@ -37,6 +43,11 @@ func SetVFSAccessScope(c *fiber.Ctx, scope any) {
 // CurrentAccount returns the current account from the given fiber context.
 func CurrentAccount(c *fiber.Ctx) any {
 	return c.Locals(currentAccountKey)
+}
+
+// CurrentDrive returns the current drive from the given fiber context.
+func CurrentDrive(c *fiber.Ctx) any {
+	return c.Locals(currentDriveKey)
 }
 
 // VFSAccessScope returns the VFS access scope from the given fiber context.

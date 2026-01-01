@@ -7,30 +7,37 @@ import (
 	"github.com/uptrace/bun"
 )
 
-// Account represents a storage account with quota information
-// @Description Storage account with usage and quota details
+type Role string
+
+const (
+	RoleAdmin  Role = "admin"
+	RoleMember Role = "member"
+)
+
+type Status string
+
+const (
+	StatusInvited   Status = "invited"
+	StatusActive    Status = "active"
+	StatusSuspended Status = "suspended"
+)
+
+// Account represents a user's identity within an organization (principal / membership).
 type Account struct {
 	bun.BaseModel `bun:"accounts" swaggerignore:"true"`
 
-	// Unique account identifier
-	ID uuid.UUID `bun:",pk,type:uuid" json:"id" example:"550e8400-e29b-41d4-a716-446655440000"`
+	ID     uuid.UUID `bun:",pk,type:uuid" json:"id"`
+	OrgID  uuid.UUID `bun:"org_id,notnull,type:uuid" json:"orgId"`
+	UserID uuid.UUID `bun:"user_id,notnull,type:uuid" json:"userId"`
 
-	// ID of the user who owns this account
-	UserID uuid.UUID `bun:"user_id,notnull,type:uuid" json:"userId" example:"550e8400-e29b-41d4-a716-446655440001"`
+	Role   Role   `bun:"role,notnull" json:"role" example:"member"`
+	Status Status `bun:"status,notnull" json:"status" example:"active"`
 
-	// Current storage usage in bytes
-	StorageUsageBytes int64 `bun:"storage_usage_bytes,notnull" json:"storageUsageBytes" example:"1073741824"`
-
-	// Maximum storage quota in bytes
-	StorageQuotaBytes int64 `bun:"storage_quota_bytes,notnull" json:"storageQuotaBytes" example:"10737418240"`
-
-	// When the account was created (ISO 8601)
-	CreatedAt time.Time `bun:"created_at,notnull,nullzero" json:"createdAt" example:"2024-12-13T15:04:05Z"`
-
-	// When the account was last updated (ISO 8601)
-	UpdatedAt time.Time `bun:"updated_at,notnull,nullzero" json:"updatedAt" example:"2024-12-13T16:30:00Z"`
+	CreatedAt time.Time `bun:"created_at,notnull,nullzero" json:"createdAt"`
+	UpdatedAt time.Time `bun:"updated_at,notnull,nullzero" json:"updatedAt"`
 }
 
 func newAccountID() (uuid.UUID, error) {
 	return uuid.NewV7()
 }
+

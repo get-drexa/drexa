@@ -14,7 +14,7 @@ import {
 } from "lucide-react"
 import { lazy, Suspense, useCallback, useContext } from "react"
 import { toast } from "sonner"
-import { currentAccountAtom } from "@/account/account"
+import { currentDriveAtom } from "@/drive/drive"
 import { DirectoryIcon } from "@/components/icons/directory-icon"
 import { TextFileIcon } from "@/components/icons/text-file-icon"
 import { Button } from "@/components/ui/button"
@@ -378,7 +378,7 @@ function DirectoryContentContextMenu({
 	const [target, setTarget] = useAtom(contextMenuTargetItemsAtom)
 	const setBackgroundTaskProgress = useSetAtom(backgroundTaskProgressAtom)
 	const setCutItems = useSetAtom(cutItemsAtom)
-	const account = useAtomValue(currentAccountAtom)
+	const drive = useAtomValue(currentDriveAtom)
 	const { directory } = useContext(DirectoryPageContext)
 	const search = Route.useSearch()
 	const setActiveDialogData = useSetAtom(activeDialogDataAtom)
@@ -390,11 +390,11 @@ function DirectoryContentContextMenu({
 			setBackgroundTaskProgress({
 				label: "Moving items to trash…",
 			})
-			if (!account) {
+			if (!drive) {
 				return null
 			}
 			return optimisticallyRemoveDirectoryItems(client, {
-				queryKey: directoryContentQueryKey(account.id, directory.id, {
+				queryKey: directoryContentQueryKey(drive.id, directory.id, {
 					orderBy: search.orderBy,
 					direction: search.direction,
 				}),

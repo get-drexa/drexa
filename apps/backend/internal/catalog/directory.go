@@ -147,14 +147,14 @@ func includeParam(c *fiber.Ctx) []string {
 // @Accept json
 // @Produce json
 // @Security BearerAuth
-// @Param accountID path string true "Account ID" format(uuid)
+// @Param driveID path string true "Drive ID" format(uuid)
 // @Param request body createDirectoryRequest true "Directory details"
 // @Param include query string false "Include additional fields" Enums(path)
 // @Success 200 {object} DirectoryInfo "Created directory"
 // @Failure 400 {object} map[string]string "Parent not found or not a directory"
 // @Failure 401 {string} string "Not authenticated"
 // @Failure 409 {object} map[string]string "Directory already exists"
-// @Router /accounts/{accountID}/directories [post]
+// @Router /drives/{driveID}/directories [post]
 func (h *HTTPHandler) createDirectory(c *fiber.Ctx) error {
 	scope, ok := scopeFromCtx(c)
 	if !ok {
@@ -230,13 +230,13 @@ func (h *HTTPHandler) createDirectory(c *fiber.Ctx) error {
 // @Tags directories
 // @Produce json
 // @Security BearerAuth
-// @Param accountID path string true "Account ID" format(uuid)
+// @Param driveID path string true "Drive ID" format(uuid)
 // @Param directoryID path string true "Directory ID"
 // @Param include query string false "Include additional fields" Enums(path)
 // @Success 200 {object} DirectoryInfo "Directory metadata"
 // @Failure 401 {string} string "Not authenticated"
 // @Failure 404 {string} string "Directory not found"
-// @Router /accounts/{accountID}/directories/{directoryID} [get]
+// @Router /drives/{driveID}/directories/{directoryID} [get]
 func (h *HTTPHandler) fetchDirectory(c *fiber.Ctx) error {
 	node := mustCurrentDirectoryNode(c)
 	scope, ok := scopeFromCtx(c)
@@ -274,7 +274,7 @@ func (h *HTTPHandler) fetchDirectory(c *fiber.Ctx) error {
 // @Tags directories
 // @Produce json
 // @Security BearerAuth
-// @Param accountID path string true "Account ID" format(uuid)
+// @Param driveID path string true "Drive ID" format(uuid)
 // @Param directoryID path string true "Directory ID (use 'root' for the root directory)"
 // @Param orderBy query string false "Sort field: name, createdAt, or updatedAt" Enums(name,createdAt,updatedAt)
 // @Param dir query string false "Sort direction: asc or desc" Enums(asc,desc)
@@ -284,7 +284,7 @@ func (h *HTTPHandler) fetchDirectory(c *fiber.Ctx) error {
 // @Failure 400 {object} map[string]string "Invalid limit or cursor"
 // @Failure 401 {string} string "Not authenticated"
 // @Failure 404 {string} string "Directory not found"
-// @Router /accounts/{accountID}/directories/{directoryID}/content [get]
+// @Router /drives/{driveID}/directories/{directoryID}/content [get]
 func (h *HTTPHandler) listDirectory(c *fiber.Ctx) error {
 	node := mustCurrentDirectoryNode(c)
 	scope, ok := scopeFromCtx(c)
@@ -405,14 +405,14 @@ func (h *HTTPHandler) listDirectory(c *fiber.Ctx) error {
 // @Accept json
 // @Produce json
 // @Security BearerAuth
-// @Param accountID path string true "Account ID" format(uuid)
+// @Param driveID path string true "Drive ID" format(uuid)
 // @Param directoryID path string true "Directory ID"
 // @Param request body patchDirectoryRequest true "Directory update"
 // @Success 200 {object} DirectoryInfo "Updated directory metadata"
 // @Failure 400 {object} map[string]string "Invalid request"
 // @Failure 401 {string} string "Not authenticated"
 // @Failure 404 {string} string "Directory not found"
-// @Router /accounts/{accountID}/directories/{directoryID} [patch]
+// @Router /drives/{driveID}/directories/{directoryID} [patch]
 func (h *HTTPHandler) patchDirectory(c *fiber.Ctx) error {
 	node := mustCurrentDirectoryNode(c)
 	scope, ok := scopeFromCtx(c)
@@ -464,14 +464,14 @@ func (h *HTTPHandler) patchDirectory(c *fiber.Ctx) error {
 // @Description Delete a directory permanently or move it to trash. Deleting a directory also affects all its contents.
 // @Tags directories
 // @Security BearerAuth
-// @Param accountID path string true "Account ID" format(uuid)
+// @Param driveID path string true "Drive ID" format(uuid)
 // @Param directoryID path string true "Directory ID"
 // @Param trash query bool false "Move to trash instead of permanent delete" default(false)
 // @Success 200 {object} DirectoryInfo "Trashed directory info (when trash=true)"
 // @Success 204 {string} string "Directory deleted"
 // @Failure 401 {string} string "Not authenticated"
 // @Failure 404 {string} string "Directory not found"
-// @Router /accounts/{accountID}/directories/{directoryID} [delete]
+// @Router /drives/{driveID}/directories/{directoryID} [delete]
 func (h *HTTPHandler) deleteDirectory(c *fiber.Ctx) error {
 	node := mustCurrentDirectoryNode(c)
 	scope, ok := scopeFromCtx(c)
@@ -524,14 +524,14 @@ func (h *HTTPHandler) deleteDirectory(c *fiber.Ctx) error {
 // @Description Delete multiple directories permanently or move them to trash. Deleting directories also affects all their contents. All items must be directories.
 // @Tags directories
 // @Security BearerAuth
-// @Param accountID path string true "Account ID" format(uuid)
+// @Param driveID path string true "Drive ID" format(uuid)
 // @Param id query string true "Comma-separated list of directory IDs to delete" example:"kRp2XYTq9A55,xYz123AbC456"
 // @Param trash query bool false "Move to trash instead of permanent delete" default(false)
 // @Success 200 {array} DirectoryInfo "Trashed directories (when trash=true)"
 // @Success 204 {string} string "Directories deleted"
 // @Failure 400 {object} map[string]string "All items must be directories"
 // @Failure 401 {string} string "Not authenticated"
-// @Router /accounts/{accountID}/directories [delete]
+// @Router /drives/{driveID}/directories [delete]
 func (h *HTTPHandler) deleteDirectories(c *fiber.Ctx) error {
 	scope, ok := scopeFromCtx(c)
 	if !ok {
@@ -619,14 +619,14 @@ func (h *HTTPHandler) deleteDirectories(c *fiber.Ctx) error {
 // @Accept json
 // @Produce json
 // @Security BearerAuth
-// @Param accountID path string true "Account ID" format(uuid)
+// @Param driveID path string true "Drive ID" format(uuid)
 // @Param directoryID path string true "Target directory ID"
 // @Param request body postDirectoryContentRequest true "Items to move"
 // @Success 200 {object} moveItemsToDirectoryResponse "Move operation results with moved, conflict, and error states"
 // @Failure 400 {object} map[string]string "Invalid request or items not in same directory"
 // @Failure 401 {string} string "Not authenticated"
 // @Failure 404 {object} map[string]string "One or more items not found"
-// @Router /accounts/{accountID}/directories/{directoryID}/content [post]
+// @Router /drives/{driveID}/directories/{directoryID}/content [post]
 func (h *HTTPHandler) moveItemsToDirectory(c *fiber.Ctx) error {
 	scope, ok := scopeFromCtx(c)
 	if !ok {
@@ -769,19 +769,19 @@ func decodeListChildrenCursor(s string) (*decodedListChildrenCursor, error) {
 // @Description Get all share links that include this directory
 // @Tags directories
 // @Produce json
-// @Param accountID path string true "Account ID" format(uuid)
+// @Param driveID path string true "Drive ID" format(uuid)
 // @Param directoryID path string true "Directory ID"
 // @Success 200 {array} sharing.Share "Array of shares"
 // @Failure 401 {string} string "Not authenticated"
 // @Failure 404 {string} string "Directory not found"
 // @Security BearerAuth
-// @Router /accounts/{accountID}/directories/{directoryID}/shares [get]
+// @Router /drives/{driveID}/directories/{directoryID}/shares [get]
 func (h *HTTPHandler) listDirectoryShares(c *fiber.Ctx) error {
 	node := mustCurrentDirectoryNode(c)
 
 	includesExpired := c.Query("includesExpired") == "true"
 
-	shares, err := h.sharingService.ListShares(c.Context(), h.db, node.AccountID, sharing.ListSharesOptions{
+	shares, err := h.sharingService.ListShares(c.Context(), h.db, node.DriveID, sharing.ListSharesOptions{
 		Items:           []*virtualfs.Node{node},
 		IncludesExpired: includesExpired,
 	})

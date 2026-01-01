@@ -81,7 +81,7 @@ FROM node_paths
 WHERE id = ?;`
 
 func isScopeSet(scope *Scope) bool {
-	return scope != nil && scope.AccountID != uuid.Nil && scope.RootNodeID != uuid.Nil
+	return scope != nil && scope.DriveID != uuid.Nil && scope.RootNodeID != uuid.Nil
 }
 
 // canAccessNode checks if the scope permits the operation and allows access to the node.

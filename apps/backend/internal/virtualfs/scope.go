@@ -5,8 +5,8 @@ import "github.com/google/uuid"
 // Scope defines the bounded view of the virtual filesystem that a caller is allowed to operate on.
 // It is populated by higher layers (account/share middleware) and enforced by VFS methods.
 type Scope struct {
-	// AccountID is the owner of the storage. It stays constant even when a share actor accesses it.
-	AccountID uuid.UUID
+	// DriveID is the owner of the storage (the tenant). It stays constant even when a share actor accesses it.
+	DriveID uuid.UUID
 
 	// RootNodeID is the top-most node the caller is allowed to traverse; all accesses must stay under it.
 	// It must be set for all VFS access operations.

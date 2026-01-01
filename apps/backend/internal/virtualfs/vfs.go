@@ -94,7 +94,7 @@ func (vfs *VirtualFS) FindNode(ctx context.Context, db bun.IDB, fileID string, s
 
 	var node Node
 	err := db.NewSelect().Model(&node).
-		Where("account_id = ?", scope.AccountID).
+		Where("drive_id = ?", scope.DriveID).
 		Where("id = ?", fileID).
 		Where("status = ?", NodeStatusReady).
 		Where("deleted_at IS NULL").
@@ -135,7 +135,7 @@ func (vfs *VirtualFS) FindNodesByPublicID(ctx context.Context, db bun.IDB, publi
 
 	var nodes []*Node
 	err := db.NewSelect().Model(&nodes).
-		Where("account_id = ?", scope.AccountID).
+		Where("drive_id = ?", scope.DriveID).
 		Where("public_id IN (?)", bun.In(publicIDs)).
 		Where("status = ?", NodeStatusReady).
 		Scan(ctx)
@@ -146,11 +146,11 @@ func (vfs *VirtualFS) FindNodesByPublicID(ctx context.Context, db bun.IDB, publi
 	return vfs.filterNodesByScope(ctx, db, scope, nodes)
 }
 
-func (vfs *VirtualFS) FindRootDirectory(ctx context.Context, db bun.IDB, accountID uuid.UUID) (*Node, error) {
+func (vfs *VirtualFS) FindRootDirectory(ctx context.Context, db bun.IDB, driveID uuid.UUID) (*Node, error) {
 	root := new(Node)
 
 	err := db.NewSelect().Model(root).
-		Where("account_id = ?", accountID).
+		Where("drive_id = ?", driveID).
 		Where("parent_id IS NULL").
 		Where("status = ?", NodeStatusReady).
 		Where("deleted_at IS NULL").
@@ -166,8 +166,8 @@ func (vfs *VirtualFS) FindRootDirectory(ctx context.Context, db bun.IDB, account
 	return root, nil
 }
 
-// CreateRootDirectory creates the account root directory node.
-func (vfs *VirtualFS) CreateRootDirectory(ctx context.Context, db bun.IDB, accountID uuid.UUID) (*Node, error) {
+// CreateRootDirectory creates the drive root directory node.
+func (vfs *VirtualFS) CreateRootDirectory(ctx context.Context, db bun.IDB, driveID uuid.UUID) (*Node, error) {
 	pid, err := vfs.generatePublicID()
 	if err != nil {
 		return nil, err
@@ -181,7 +181,7 @@ func (vfs *VirtualFS) CreateRootDirectory(ctx context.Context, db bun.IDB, accou
 	node := &Node{
 		ID:        id,
 		PublicID:  pid,
-		AccountID: accountID,
+		DriveID:   driveID,
 		ParentID:  uuid.Nil,
 		Kind:      NodeKindDirectory,
 		Status:    NodeStatusReady,
@@ -212,7 +212,7 @@ func (vfs *VirtualFS) ListChildren(ctx context.Context, db bun.IDB, node *Node, 
 
 	var nodes []*Node
 	q := db.NewSelect().Model(&nodes).
-		Where("account_id = ?", node.AccountID).
+		Where("drive_id = ?", node.DriveID).
 		Where("parent_id = ?", node.ID).
 		Where("status = ?", NodeStatusReady).
 		Where("deleted_at IS NULL")
@@ -326,13 +326,13 @@ func (vfs *VirtualFS) CreateFile(ctx context.Context, db bun.IDB, opts CreateFil
 	}
 
 	node := Node{
-		ID:        id,
-		PublicID:  pid,
-		AccountID: scope.AccountID,
-		ParentID:  opts.ParentID,
-		Kind:      NodeKindFile,
-		Status:    NodeStatusPending,
-		Name:      opts.Name,
+		ID:       id,
+		PublicID: pid,
+		DriveID:  scope.DriveID,
+		ParentID: opts.ParentID,
+		Kind:     NodeKindFile,
+		Status:   NodeStatusPending,
+		Name:     opts.Name,
 	}
 
 	if vfs.keyResolver.ShouldPersistKey() {
@@ -492,13 +492,13 @@ func (vfs *VirtualFS) CreateDirectory(ctx context.Context, db bun.IDB, parentID 
 	}
 
 	node := &Node{
-		ID:        id,
-		PublicID:  pid,
-		AccountID: scope.AccountID,
-		ParentID:  parentID,
-		Kind:      NodeKindDirectory,
-		Status:    NodeStatusReady,
-		Name:      name,
+		ID:       id,
+		PublicID: pid,
+		DriveID:  scope.DriveID,
+		ParentID: parentID,
+		Kind:     NodeKindDirectory,
+		Status:   NodeStatusReady,
+		Name:     name,
 	}
 
 	_, err = db.NewInsert().Model(node).Exec(ctx)
@@ -739,13 +739,13 @@ func (vfs *VirtualFS) MoveNodesInSameDirectory(ctx context.Context, db bun.IDB, 
 		nodeNames[i] = node.Name
 	}
 
-	var destinationConflicts []*Node
-	err = db.NewSelect().Model(&destinationConflicts).
-		Where("account_id = ?", allowedNodes[0].AccountID).
-		Where("parent_id = ?", newParentID).
-		Where("deleted_at IS NULL").
-		Where("name IN (?)", bun.In(nodeNames)).
-		Scan(ctx)
+		var destinationConflicts []*Node
+		err = db.NewSelect().Model(&destinationConflicts).
+		Where("drive_id = ?", allowedNodes[0].DriveID).
+			Where("parent_id = ?", newParentID).
+			Where("deleted_at IS NULL").
+			Where("name IN (?)", bun.In(nodeNames)).
+			Scan(ctx)
 	if err != nil {
 		return nil, err
 	}

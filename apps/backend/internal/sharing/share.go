@@ -12,8 +12,9 @@ import (
 type Share struct {
 	bun.BaseModel `bun:"node_shares"`
 
-	ID        uuid.UUID `bun:",pk,type:uuid" json:"-"`
-	AccountID uuid.UUID `bun:"account_id,notnull,type:uuid" json:"-"`
+	ID                 uuid.UUID `bun:",pk,type:uuid" json:"-"`
+	DriveID            uuid.UUID `bun:"drive_id,notnull,type:uuid" json:"-"`
+	CreatedByAccountID uuid.UUID `bun:"created_by_account_id,notnull,type:uuid" json:"-"`
 	// Unique share identifier (public ID)
 	PublicID          string     `bun:"public_id,notnull" json:"id" example:"kRp2XYTq9A55"`
 	SharedDirectoryID uuid.UUID  `bun:"shared_directory_id,notnull,type:uuid" json:"-"`

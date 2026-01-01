@@ -51,14 +51,14 @@ func (h *HTTPHandler) RegisterRoutes(api *virtualfs.ScopedRouter) {
 // @Accept json
 // @Produce json
 // @Security BearerAuth
-// @Param accountID path string true "Account ID" format(uuid)
+// @Param driveID path string true "Drive ID" format(uuid)
 // @Param request body createUploadRequest true "Upload details"
 // @Success 200 {object} Upload "Upload session created"
 // @Failure 400 {object} map[string]string "Parent is not a directory"
 // @Failure 401 {string} string "Not authenticated"
 // @Failure 404 {string} string "Parent directory not found"
 // @Failure 409 {object} map[string]string "File with this name already exists"
-// @Router /accounts/{accountID}/uploads [post]
+// @Router /drives/{driveID}/uploads [post]
 func (h *HTTPHandler) Create(c *fiber.Ctx) error {
 	scopeAny := reqctx.VFSAccessScope(c)
 	scope, ok := scopeAny.(*virtualfs.Scope)
@@ -107,13 +107,13 @@ func (h *HTTPHandler) Create(c *fiber.Ctx) error {
 // @Tags uploads
 // @Accept application/octet-stream
 // @Security BearerAuth
-// @Param accountID path string true "Account ID" format(uuid)
+// @Param driveID path string true "Drive ID" format(uuid)
 // @Param uploadID path string true "Upload session ID"
 // @Param file body []byte true "File content (binary)"
 // @Success 204 {string} string "Content received successfully"
 // @Failure 401 {string} string "Not authenticated"
 // @Failure 404 {string} string "Upload session not found"
-// @Router /accounts/{accountID}/uploads/{uploadID}/content [put]
+// @Router /drives/{driveID}/uploads/{uploadID}/content [put]
 func (h *HTTPHandler) ReceiveContent(c *fiber.Ctx) error {
 	scopeAny := reqctx.VFSAccessScope(c)
 	scope, ok := scopeAny.(*virtualfs.Scope)
@@ -148,14 +148,14 @@ func (h *HTTPHandler) ReceiveContent(c *fiber.Ctx) error {
 // @Accept json
 // @Produce json
 // @Security BearerAuth
-// @Param accountID path string true "Account ID" format(uuid)
+// @Param driveID path string true "Drive ID" format(uuid)
 // @Param uploadID path string true "Upload session ID"
 // @Param request body updateUploadRequest true "Status update"
 // @Success 200 {object} Upload "Upload completed"
 // @Failure 400 {object} map[string]string "Content not uploaded yet or invalid status"
 // @Failure 401 {string} string "Not authenticated"
 // @Failure 404 {string} string "Upload session not found"
-// @Router /accounts/{accountID}/uploads/{uploadID} [patch]
+// @Router /drives/{driveID}/uploads/{uploadID} [patch]
 func (h *HTTPHandler) Update(c *fiber.Ctx) error {
 	scopeAny := reqctx.VFSAccessScope(c)
 	scope, ok := scopeAny.(*virtualfs.Scope)

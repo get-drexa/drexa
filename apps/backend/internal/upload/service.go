@@ -103,7 +103,7 @@ func (s *Service) ReceiveUpload(ctx context.Context, db bun.IDB, uploadID string
 		return ErrUnauthorized
 	}
 
-	if upload.TargetNode.AccountID != scope.AccountID {
+	if upload.TargetNode.DriveID != scope.DriveID {
 		return ErrNotFound
 	}
 
@@ -132,7 +132,7 @@ func (s *Service) CompleteUpload(ctx context.Context, db bun.IDB, uploadID strin
 		return nil, ErrUnauthorized
 	}
 
-	if upload.TargetNode.AccountID != scope.AccountID {
+	if upload.TargetNode.DriveID != scope.DriveID {
 		return nil, ErrNotFound
 	}
 

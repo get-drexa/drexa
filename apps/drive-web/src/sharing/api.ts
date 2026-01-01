@@ -1,20 +1,20 @@
 import { mutationOptions, queryOptions, skipToken } from "@tanstack/react-query"
 import { atom } from "jotai"
 import { atomFamily } from "jotai/utils"
-import { currentAccountAtom } from "@/account/account"
 import { fetchApi, Nothing } from "@/lib/api"
+import { currentDriveAtom } from "@/drive/drive"
 import { Share } from "./share"
 
 export const fileSharesQueryAtom = atomFamily((fileId: string) =>
 	atom((get) => {
-		const account = get(currentAccountAtom)
+		const drive = get(currentDriveAtom)
 		return queryOptions({
-			queryKey: ["accounts", account?.id, "shares", { fileId }],
-			queryFn: account
+			queryKey: ["drives", drive?.id, "shares", { fileId }],
+			queryFn: drive
 				? () =>
 						fetchApi(
 							"GET",
-							`/accounts/${account.id}/files/${fileId}/shares?includesExpired=true`,
+							`/drives/${drive.id}/files/${fileId}/shares?includesExpired=true`,
 							{ returns: Share.array() },
 						).then(([_, result]) => result)
 				: skipToken,
@@ -24,14 +24,14 @@ export const fileSharesQueryAtom = atomFamily((fileId: string) =>
 
 export const directorySharesQueryAtom = atomFamily((directoryId: string) =>
 	atom((get) => {
-		const account = get(currentAccountAtom)
+		const drive = get(currentDriveAtom)
 		return queryOptions({
-			queryKey: ["accounts", account?.id, "shares", { directoryId }],
-			queryFn: account
+			queryKey: ["drives", drive?.id, "shares", { directoryId }],
+			queryFn: drive
 				? () =>
 						fetchApi(
 							"GET",
-							`/accounts/${account.id}/directories/${directoryId}/shares?includesExpired=true`,
+							`/drives/${drive.id}/directories/${directoryId}/shares?includesExpired=true`,
 							{ returns: Share.array() },
 						).then(([_, result]) => result)
 				: skipToken,
@@ -42,12 +42,12 @@ export const directorySharesQueryAtom = atomFamily((directoryId: string) =>
 export const createShareMutationAtom = atom((get) =>
 	mutationOptions({
 		mutationFn: async ({ items }: { items: string[] }) => {
-			const account = get(currentAccountAtom)
-			if (!account) throw new Error("No account selected")
+			const drive = get(currentDriveAtom)
+			if (!drive) throw new Error("No drive selected")
 
 			const [_, result] = await fetchApi(
 				"POST",
-				`/accounts/${account.id}/shares`,
+				`/drives/${drive.id}/shares`,
 				{
 					body: JSON.stringify({ items }),
 					returns: Share,
@@ -62,12 +62,12 @@ export const createShareMutationAtom = atom((get) =>
 export const deleteShareMutationAtom = atom((get) =>
 	mutationOptions({
 		mutationFn: async ({ shareId }: { shareId: string }) => {
-			const account = get(currentAccountAtom)
-			if (!account) throw new Error("No account selected")
+			const drive = get(currentDriveAtom)
+			if (!drive) throw new Error("No drive selected")
 
 			await fetchApi(
 				"DELETE",
-				`/accounts/${account.id}/shares/${shareId}`,
+				`/drives/${drive.id}/shares/${shareId}`,
 				{ returns: Nothing },
 			)
 		},
@@ -83,12 +83,12 @@ export const updateShareMutationAtom = atom((get) =>
 			shareId: string
 			expiresAt?: Date | null
 		}) => {
-			const account = get(currentAccountAtom)
-			if (!account) throw new Error("No account selected")
+			const drive = get(currentDriveAtom)
+			if (!drive) throw new Error("No drive selected")
 
 			await fetchApi(
 				"PATCH",
-				`/accounts/${account.id}/shares/${shareId}`,
+				`/drives/${drive.id}/shares/${shareId}`,
 				{ body: JSON.stringify({ expiresAt }), returns: Share },
 			)
 		},

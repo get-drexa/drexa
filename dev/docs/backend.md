@@ -7,17 +7,17 @@
 
 # Routing + auth conventions
 
-- Account-scoped resources live under `/accounts/:accountID`; always apply auth + account middleware.
+- Drive-scoped resources live under `/drives/:driveID`; always apply auth + drive middleware.
 - Auth middleware must be the source of truth for the current user (via `reqctx`).
 - Support both bearer-token and cookie flows; pick one per client surface.
 - Use transactions for multi-step writes or cross-table changes.
 
 # Data model relationships (high level)
 
-- Users own accounts.
-- Accounts own VFS nodes (files + directories).
+- Users have accounts (principals) within organizations.
+- Drives own VFS nodes (files + directories).
 - Auth grants own refresh tokens.
-- Node share tokens exist for future sharing flows.
+- Node shares grant scoped access into drives.
 
 # Virtual filesystem + storage
 

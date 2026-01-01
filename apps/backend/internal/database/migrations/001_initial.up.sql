@@ -13,16 +13,48 @@ CREATE TABLE IF NOT EXISTS users (
 
 CREATE INDEX idx_users_email ON users(email);
 
+CREATE TABLE IF NOT EXISTS organizations (
+    id UUID PRIMARY KEY,
+    kind TEXT NOT NULL CHECK (kind IN ('personal', 'team')),
+    name TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_organizations_kind ON organizations(kind);
+
+-- Accounts represent a user's identity within an organization (membership / principal).
 CREATE TABLE IF NOT EXISTS accounts (
     id UUID PRIMARY KEY,
+    org_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    role TEXT NOT NULL DEFAULT 'member' CHECK (role IN ('admin', 'member')),
+    status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('invited', 'active', 'suspended')),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE UNIQUE INDEX idx_accounts_org_user_id ON accounts(org_id, user_id);
+CREATE INDEX idx_accounts_user_id ON accounts(user_id);
+CREATE INDEX idx_accounts_org_id ON accounts(org_id);
+
+-- Drives are the storage tenants; VFS is partitioned by drive_id.
+CREATE TABLE IF NOT EXISTS drives (
+    id UUID PRIMARY KEY,
+    public_id TEXT NOT NULL UNIQUE,
+    org_id UUID NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+    owner_account_id UUID REFERENCES accounts(id) ON DELETE SET NULL, -- NULL = shared/org-owned drive
+    name TEXT NOT NULL,
     storage_usage_bytes BIGINT NOT NULL DEFAULT 0,
     storage_quota_bytes BIGINT NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_accounts_user_id ON accounts(user_id);
+CREATE INDEX idx_drives_org_id ON drives(org_id);
+CREATE INDEX idx_drives_owner_account_id ON drives(owner_account_id) WHERE owner_account_id IS NOT NULL;
+CREATE UNIQUE INDEX idx_drives_org_owner_account_id ON drives(org_id, owner_account_id) WHERE owner_account_id IS NOT NULL;
+CREATE INDEX idx_drives_public_id ON drives(public_id);
 
 CREATE TABLE IF NOT EXISTS grants (
     id UUID PRIMARY KEY,
@@ -49,7 +81,7 @@ CREATE INDEX idx_refresh_tokens_expires_at ON refresh_tokens(expires_at);
 CREATE TABLE IF NOT EXISTS vfs_nodes (
     id UUID PRIMARY KEY,
     public_id TEXT NOT NULL UNIQUE,  -- opaque ID for external API (no timestamp leak)
-    account_id UUID NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+    drive_id UUID NOT NULL REFERENCES drives(id) ON DELETE CASCADE,
     parent_id UUID REFERENCES vfs_nodes(id) ON DELETE CASCADE,  -- NULL = root directory
     kind TEXT NOT NULL CHECK (kind IN ('file', 'directory')),
     status TEXT NOT NULL DEFAULT 'ready' CHECK (status IN ('pending', 'ready')),
@@ -64,23 +96,25 @@ CREATE TABLE IF NOT EXISTS vfs_nodes (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     deleted_at TIMESTAMPTZ,  -- soft delete for trash
     
-    -- No duplicate names in same parent (per account, excluding deleted)
-    CONSTRAINT unique_node_name UNIQUE NULLS NOT DISTINCT (account_id, parent_id, name, deleted_at)
+    -- No duplicate names in same parent (per drive, excluding deleted)
+    CONSTRAINT unique_node_name UNIQUE NULLS NOT DISTINCT (drive_id, parent_id, name, deleted_at)
 );
 
-CREATE INDEX idx_vfs_nodes_account_id ON vfs_nodes(account_id) WHERE deleted_at IS NULL;
+CREATE INDEX idx_vfs_nodes_drive_id ON vfs_nodes(drive_id) WHERE deleted_at IS NULL;
 CREATE INDEX idx_vfs_nodes_parent_id ON vfs_nodes(parent_id) WHERE deleted_at IS NULL;
-CREATE INDEX idx_vfs_nodes_account_parent ON vfs_nodes(account_id, parent_id) WHERE deleted_at IS NULL;
-CREATE INDEX idx_vfs_nodes_kind ON vfs_nodes(account_id, kind) WHERE deleted_at IS NULL;
-CREATE INDEX idx_vfs_nodes_deleted ON vfs_nodes(account_id, deleted_at) WHERE deleted_at IS NOT NULL;
+CREATE INDEX idx_vfs_nodes_drive_parent ON vfs_nodes(drive_id, parent_id) WHERE deleted_at IS NULL;
+CREATE INDEX idx_vfs_nodes_kind ON vfs_nodes(drive_id, kind) WHERE deleted_at IS NULL;
+CREATE INDEX idx_vfs_nodes_deleted ON vfs_nodes(drive_id, deleted_at) WHERE deleted_at IS NOT NULL;
 CREATE INDEX idx_vfs_nodes_public_id ON vfs_nodes(public_id);
-CREATE UNIQUE INDEX idx_vfs_nodes_account_root ON vfs_nodes(account_id) WHERE parent_id IS NULL;  -- one root per account
+CREATE UNIQUE INDEX idx_vfs_nodes_drive_root ON vfs_nodes(drive_id) WHERE parent_id IS NULL;  -- one root per drive
 CREATE INDEX idx_vfs_nodes_pending ON vfs_nodes(created_at) WHERE status = 'pending';  -- for cleanup job
 
 CREATE TABLE IF NOT EXISTS node_shares (
     id UUID PRIMARY KEY,
-    -- the account that owns the share
-    account_id UUID NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+    -- storage tenant that owns the shared content
+    drive_id UUID NOT NULL REFERENCES drives(id) ON DELETE CASCADE,
+    -- principal that created/managed the share record
+    created_by_account_id UUID NOT NULL REFERENCES accounts(id) ON DELETE RESTRICT,
     public_id TEXT NOT NULL UNIQUE,  -- opaque ID for external API (no timestamp leak)
     -- parent directory of the items in this share
     shared_directory_id UUID NOT NULL REFERENCES vfs_nodes(id) ON DELETE CASCADE,
@@ -93,6 +127,8 @@ CREATE TABLE IF NOT EXISTS node_shares (
 CREATE INDEX idx_node_shares_public_id ON node_shares(public_id);
 CREATE INDEX idx_node_shares_shared_directory_id ON node_shares(shared_directory_id);
 CREATE INDEX idx_node_shares_expires_at ON node_shares(expires_at) WHERE expires_at IS NOT NULL;
+CREATE INDEX idx_node_shares_drive_id ON node_shares(drive_id);
+CREATE INDEX idx_node_shares_created_by_account_id ON node_shares(created_by_account_id);
 
 CREATE TABLE IF NOT EXISTS share_permissions (
     id UUID PRIMARY KEY,
@@ -139,6 +175,15 @@ $$ LANGUAGE plpgsql;
 CREATE TRIGGER update_users_updated_at BEFORE UPDATE ON users
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
+CREATE TRIGGER update_organizations_updated_at BEFORE UPDATE ON organizations
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_accounts_updated_at BEFORE UPDATE ON accounts
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_drives_updated_at BEFORE UPDATE ON drives
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
 CREATE TRIGGER update_vfs_nodes_updated_at BEFORE UPDATE ON vfs_nodes
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
@@ -149,9 +194,6 @@ CREATE TRIGGER update_share_permissions_updated_at BEFORE UPDATE ON share_permis
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 CREATE TRIGGER update_share_items_updated_at BEFORE UPDATE ON share_items
-    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-
-CREATE TRIGGER update_accounts_updated_at BEFORE UPDATE ON accounts
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 CREATE TRIGGER update_grants_updated_at BEFORE UPDATE ON grants

@@ -2,30 +2,30 @@ import { createFileRoute, Navigate, Outlet } from "@tanstack/react-router"
 import { useAtomValue } from "jotai"
 import { atomEffect } from "jotai-effect"
 import { atomWithQuery } from "jotai-tanstack-query"
-import { accountsQuery } from "@/account/api"
 import { LoadingSpinner } from "@/components/ui/loading-spinner"
-import { currentAccountAtom } from "../account/account"
+import { drivesQuery } from "@/drive/api"
+import { currentDriveAtom } from "@/drive/drive"
 
 export const Route = createFileRoute("/_authenticated")({
 	component: AuthenticatedLayout,
 })
 
-const accountsAtom = atomWithQuery(() => accountsQuery)
-const selectFirstAccountEffect = atomEffect((get, set) => {
-	const { data: accounts } = get(accountsAtom)
-	const firstAccount = accounts?.[0]
-	if (firstAccount && get.peek(currentAccountAtom) === null) {
-		set(currentAccountAtom, firstAccount)
+const drivesAtom = atomWithQuery(() => drivesQuery)
+const selectFirstDriveEffect = atomEffect((get, set) => {
+	const { data: drives } = get(drivesAtom)
+	const firstDrive = drives?.[0]
+	if (firstDrive && get.peek(currentDriveAtom) === null) {
+		set(currentDriveAtom, firstDrive)
 	}
 })
 
 function AuthenticatedLayout() {
-	const { data: accounts, isLoading: isLoadingAccounts } =
-		useAtomValue(accountsAtom)
+	const { data: drives, isLoading: isLoadingDrives } =
+		useAtomValue(drivesAtom)
 
-	useAtomValue(selectFirstAccountEffect)
+	useAtomValue(selectFirstDriveEffect)
 
-	if (isLoadingAccounts) {
+	if (isLoadingDrives) {
 		return (
 			<div className="flex h-screen w-full items-center justify-center">
 				<LoadingSpinner className="size-10" />
@@ -33,7 +33,7 @@ function AuthenticatedLayout() {
 		)
 	}
 
-	if (!accounts) {
+	if (!drives) {
 		return <Navigate replace to="/login" />
 	}
 

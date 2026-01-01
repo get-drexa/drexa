@@ -1,9 +1,8 @@
 import { useQuery } from "@tanstack/react-query"
 import { createFileRoute } from "@tanstack/react-router"
 import { type } from "arktype"
-import { atom, useAtomValue } from "jotai"
+import { atom } from "jotai"
 import { useCallback, useMemo } from "react"
-import { currentAccountAtom } from "@/account/account"
 import { DirectoryPageContext } from "@/directories/directory-page/context"
 import {
 	DEFAULT_DIRECTORY_CONTENT_ORDER_BY,
@@ -48,11 +47,9 @@ function RouteComponent() {
 	const { shareId, directoryId } = Route.useParams()
 	const search = Route.useSearch()
 	const navigate = Route.useNavigate()
-	const account = useAtomValue(currentAccountAtom)
-	const accountId = account?.id
 
 	const { data: directoryInfo, isLoading: isLoadingDirectoryInfo } = useQuery(
-		shareDirectoryInfoQuery({ shareId, directoryId, accountId }),
+		shareDirectoryInfoQuery({ shareId, directoryId }),
 	)
 
 	const directoryUrlById = useCallback(
@@ -74,9 +71,8 @@ function RouteComponent() {
 				orderBy: search.orderBy,
 				direction: search.direction,
 				limit: 100,
-				accountId,
 			}),
-		[shareId, directoryId, search.orderBy, search.direction, accountId],
+		[shareId, directoryId, search.orderBy, search.direction],
 	)
 
 	const applySorting = useCallback(
@@ -99,11 +95,10 @@ function RouteComponent() {
 			const url = shareFileContentUrl({
 				shareId,
 				fileId: file.id,
-				accountId,
 			})
 			window.open(url, "_blank", "noopener,noreferrer")
 		},
-		[shareId, accountId],
+		[shareId],
 	)
 
 	if (isLoadingDirectoryInfo) {

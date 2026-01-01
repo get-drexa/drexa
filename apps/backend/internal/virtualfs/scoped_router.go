@@ -6,7 +6,7 @@ import "github.com/gofiber/fiber/v2"
 // returns a valid *Scope for all registered routes.
 //
 // This is the base type for routers that provide VFS access scope.
-// More specific router types (like account.ScopedRouter) may embed this
+// More specific router types may embed this
 // to provide additional guarantees.
 type ScopedRouter struct {
 	fiber.Router

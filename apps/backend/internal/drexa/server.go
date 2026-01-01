@@ -10,7 +10,10 @@ import (
 	"github.com/get-drexa/drexa/internal/blob"
 	"github.com/get-drexa/drexa/internal/catalog"
 	"github.com/get-drexa/drexa/internal/database"
+	"github.com/get-drexa/drexa/internal/drive"
 	"github.com/get-drexa/drexa/internal/httperr"
+	"github.com/get-drexa/drexa/internal/organization"
+	"github.com/get-drexa/drexa/internal/registration"
 	"github.com/get-drexa/drexa/internal/sharing"
 	"github.com/get-drexa/drexa/internal/upload"
 	"github.com/get-drexa/drexa/internal/user"
@@ -100,13 +103,16 @@ func NewServer(c Config) (*Server, error) {
 	}
 
 	userService := user.NewService()
+	organizationService := organization.NewService()
+	accountService := account.NewService()
+	driveService := drive.NewService()
 	authService := auth.NewService(userService, auth.TokenConfig{
 		Issuer:    c.JWT.Issuer,
 		Audience:  c.JWT.Audience,
 		SecretKey: c.JWT.SecretKey,
 	})
 	uploadService := upload.NewService(vfs, blobStore)
-	accountService := account.NewService(userService, vfs)
+	registrationService := registration.NewService(userService, organizationService, accountService, driveService, vfs)
 
 	cookieConfig := auth.CookieConfig{
 		Domain: c.Cookie.Domain,
@@ -119,15 +125,18 @@ func NewServer(c Config) (*Server, error) {
 	auth.NewHTTPHandler(authService, db, cookieConfig).RegisterRoutes(api)
 	user.NewHTTPHandler(userService, db, authMiddleware).RegisterRoutes(api)
 
-	accountRouter := account.NewHTTPHandler(accountService, authService, vfs, db, authMiddleware, cookieConfig).RegisterRoutes(api)
-	upload.NewHTTPHandler(uploadService, db).RegisterRoutes(accountRouter.VFSRouter())
+	account.NewHTTPHandler(accountService, db, authMiddleware).RegisterRoutes(api)
+	registration.NewHTTPHandler(registrationService, authService, db, cookieConfig).RegisterRoutes(api)
 
-	shareHTTP := sharing.NewHTTPHandler(sharingService, accountService, vfs, db, optionalAuthMiddleware)
+	driveRouter := drive.NewHTTPHandler(driveService, accountService, vfs, db, authMiddleware).RegisterRoutes(api)
+	upload.NewHTTPHandler(uploadService, db).RegisterRoutes(driveRouter)
+
+	shareHTTP := sharing.NewHTTPHandler(sharingService, accountService, driveService, vfs, db, optionalAuthMiddleware)
 	shareRoutes := shareHTTP.RegisterShareConsumeRoutes(api)
-	shareHTTP.RegisterShareManagementRoutes(accountRouter)
+	shareHTTP.RegisterShareManagementRoutes(driveRouter)
 
 	catalogHTTP := catalog.NewHTTPHandler(sharingService, vfs, db)
-	catalogHTTP.RegisterRoutes(accountRouter.VFSRouter())
+	catalogHTTP.RegisterRoutes(driveRouter)
 	catalogHTTP.RegisterRoutes(shareRoutes)
 
 	s := &Server{
