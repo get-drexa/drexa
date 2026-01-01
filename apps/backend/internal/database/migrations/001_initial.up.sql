@@ -17,11 +17,20 @@ CREATE TABLE IF NOT EXISTS organizations (
     id UUID PRIMARY KEY,
     kind TEXT NOT NULL CHECK (kind IN ('personal', 'team')),
     name TEXT NOT NULL,
+    slug TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT organizations_slug_format CHECK (
+        slug IS NULL OR (
+            char_length(slug) BETWEEN 1 AND 63
+            AND slug <> 'my'
+            AND slug ~ '^[a-z0-9]+(?:-[a-z0-9]+)*$'
+        )
+    )
 );
 
 CREATE INDEX idx_organizations_kind ON organizations(kind);
+CREATE UNIQUE INDEX idx_organizations_slug ON organizations(lower(slug)) WHERE slug IS NOT NULL;
 
 -- Accounts represent a user's identity within an organization (membership / principal).
 CREATE TABLE IF NOT EXISTS accounts (
