@@ -17,6 +17,7 @@ import (
 	"github.com/get-drexa/drexa/internal/database"
 	"github.com/get-drexa/drexa/internal/organization"
 	"github.com/gofiber/fiber/v2"
+	"github.com/google/uuid"
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
 )
 
@@ -184,6 +185,58 @@ func TestRegistrationFlow(t *testing.T) {
 		}
 		if orgs[0].Kind != string(organization.KindPersonal) {
 			t.Fatalf("unexpected organization kind: %q", orgs[0].Kind)
+		}
+	})
+
+	t.Run("organizations/:orgSlug", func(t *testing.T) {
+		var myOrg struct {
+			ID   string `json:"id"`
+			Kind string `json:"kind"`
+			Name string `json:"name"`
+			Slug string `json:"slug"`
+		}
+		doJSON(t, s.app, http.MethodGet, "/api/organizations/my", reg.AccessToken, nil, http.StatusOK, &myOrg)
+		if myOrg.Kind != string(organization.KindPersonal) {
+			t.Fatalf("unexpected personal org kind: %q", myOrg.Kind)
+		}
+
+		orgID, err := uuid.NewV7()
+		if err != nil {
+			t.Fatalf("uuid: %v", err)
+		}
+		accountID, err := uuid.NewV7()
+		if err != nil {
+			t.Fatalf("uuid: %v", err)
+		}
+
+		_, err = s.db.ExecContext(ctx,
+			`INSERT INTO organizations (id, kind, name, slug) VALUES (?, ?, ?, ?)`,
+			orgID, organization.KindTeam, "Acme", "acme",
+		)
+		if err != nil {
+			t.Fatalf("insert org: %v", err)
+		}
+
+		_, err = s.db.ExecContext(ctx,
+			`INSERT INTO accounts (id, org_id, user_id, role, status) VALUES (?, ?, ?, ?, ?)`,
+			accountID, orgID, reg.User.ID, "member", "active",
+		)
+		if err != nil {
+			t.Fatalf("insert account: %v", err)
+		}
+
+		var got struct {
+			ID   string `json:"id"`
+			Kind string `json:"kind"`
+			Name string `json:"name"`
+			Slug string `json:"slug"`
+		}
+		doJSON(t, s.app, http.MethodGet, "/api/organizations/acme", reg.AccessToken, nil, http.StatusOK, &got)
+		if got.Slug != "acme" {
+			t.Fatalf("unexpected org slug: %q", got.Slug)
+		}
+		if got.Kind != string(organization.KindTeam) {
+			t.Fatalf("unexpected org kind: %q", got.Kind)
 		}
 	})
 

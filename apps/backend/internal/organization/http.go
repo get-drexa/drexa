@@ -1,6 +1,10 @@
 package organization
 
 import (
+	"errors"
+	"strings"
+
+	"github.com/get-drexa/drexa/internal/account"
 	"github.com/get-drexa/drexa/internal/httperr"
 	"github.com/get-drexa/drexa/internal/reqctx"
 	"github.com/get-drexa/drexa/internal/user"
@@ -10,16 +14,27 @@ import (
 
 type HTTPHandler struct {
 	service        *Service
+	accountService *account.Service
 	db             *bun.DB
 	authMiddleware fiber.Handler
 }
 
-func NewHTTPHandler(service *Service, db *bun.DB, authMiddleware fiber.Handler) *HTTPHandler {
-	return &HTTPHandler{service: service, db: db, authMiddleware: authMiddleware}
+func NewHTTPHandler(service *Service, accountService *account.Service, db *bun.DB, authMiddleware fiber.Handler) *HTTPHandler {
+	return &HTTPHandler{service: service, accountService: accountService, db: db, authMiddleware: authMiddleware}
 }
 
-func (h *HTTPHandler) RegisterRoutes(users fiber.Router) {
+// RegisterUserRoutes mounts user-scoped organization routes onto an existing
+// `/users` router group (which should already be protected by auth middleware).
+func (h *HTTPHandler) RegisterUserRoutes(users fiber.Router) {
 	users.Get("/me/organizations", h.listAuthenticatedUserOrganizations)
+}
+
+// RegisterRoutes mounts organization routes under `/organizations` and applies
+// auth middleware to the group.
+func (h *HTTPHandler) RegisterRoutes(api fiber.Router) {
+	orgs := api.Group("/organizations")
+	orgs.Use(h.authMiddleware)
+	orgs.Get("/:orgSlug", h.getOrganizationBySlug)
 }
 
 // listAuthenticatedUserOrganizations returns the organizations the current user is a member of
@@ -43,4 +58,60 @@ func (h *HTTPHandler) listAuthenticatedUserOrganizations(c *fiber.Ctx) error {
 	}
 
 	return c.JSON(orgs)
+}
+
+// getOrganizationBySlug returns an organization by slug (only if the user is a member)
+// @Summary Get organization by slug
+// @Description Retrieve organization information by slug (membership required)
+// @Tags organizations
+// @Produce json
+// @Param orgSlug path string true "Organization slug"
+// @Security BearerAuth
+// @Success 200 {object} Organization "Organization"
+// @Failure 401 {string} string "Not authenticated"
+// @Failure 404 {string} string "Organization not found"
+// @Router /organizations/{orgSlug} [get]
+func (h *HTTPHandler) getOrganizationBySlug(c *fiber.Ctx) error {
+	u, _ := reqctx.AuthenticatedUser(c).(*user.User)
+	if u == nil {
+		return c.SendStatus(fiber.StatusUnauthorized)
+	}
+
+	rawSlug := strings.ToLower(strings.TrimSpace(c.Params("orgSlug")))
+	if rawSlug == ReservedSlug {
+		org, err := h.service.PersonalOrganizationForUser(c.Context(), h.db, u.ID)
+		if err != nil {
+			if errors.Is(err, ErrOrganizationNotFound) {
+				return c.SendStatus(fiber.StatusNotFound)
+			}
+			return httperr.Internal(err)
+		}
+		return c.JSON(org)
+	}
+
+	slug, err := NormalizeSlug(rawSlug)
+	if err != nil {
+		return c.SendStatus(fiber.StatusNotFound)
+	}
+
+	org, err := h.service.OrganizationBySlug(c.Context(), h.db, slug)
+	if err != nil {
+		if errors.Is(err, ErrOrganizationNotFound) {
+			return c.SendStatus(fiber.StatusNotFound)
+		}
+		return httperr.Internal(err)
+	}
+
+	acc, err := h.accountService.FindUserAccountInOrg(c.Context(), h.db, org.ID, u.ID)
+	if err != nil {
+		if errors.Is(err, account.ErrAccountNotFound) {
+			return c.SendStatus(fiber.StatusNotFound)
+		}
+		return httperr.Internal(err)
+	}
+	if acc.Status != account.StatusActive {
+		return c.SendStatus(fiber.StatusNotFound)
+	}
+
+	return c.JSON(org)
 }

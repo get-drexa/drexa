@@ -126,7 +126,10 @@ func NewServer(c Config) (*Server, error) {
 	registration.NewHTTPHandler(registrationService, authService, db, cookieConfig).RegisterRoutes(api)
 	usersAPI := user.NewHTTPHandler(userService, db, authMiddleware).RegisterRoutes(api)
 	account.NewHTTPHandler(accountService, db, authMiddleware).RegisterRoutes(api)
-	organization.NewHTTPHandler(organizationService, db, authMiddleware).RegisterRoutes(usersAPI)
+
+	orgHTTP := organization.NewHTTPHandler(organizationService, accountService, db, authMiddleware)
+	orgHTTP.RegisterUserRoutes(usersAPI)
+	orgHTTP.RegisterRoutes(api)
 
 	orgAPI := api.Group("/:orgSlug", authMiddleware, organization.NewMiddleware(organizationService, accountService, db))
 
