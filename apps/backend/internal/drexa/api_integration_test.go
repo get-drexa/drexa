@@ -142,6 +142,9 @@ func TestRegistrationFlow(t *testing.T) {
 		if login.Organizations[0].Kind != string(organization.KindPersonal) {
 			t.Fatalf("unexpected organization kind: %q", login.Organizations[0].Kind)
 		}
+		if login.Organizations[0].Slug != organization.ReservedSlug {
+			t.Fatalf("unexpected personal organization slug: %q", login.Organizations[0].Slug)
+		}
 	})
 
 	t.Run("drives list", func(t *testing.T) {
@@ -186,6 +189,9 @@ func TestRegistrationFlow(t *testing.T) {
 		if orgs[0].Kind != string(organization.KindPersonal) {
 			t.Fatalf("unexpected organization kind: %q", orgs[0].Kind)
 		}
+		if orgs[0].Slug != organization.ReservedSlug {
+			t.Fatalf("unexpected personal organization slug: %q", orgs[0].Slug)
+		}
 	})
 
 	t.Run("organizations/:orgSlug", func(t *testing.T) {
@@ -198,6 +204,9 @@ func TestRegistrationFlow(t *testing.T) {
 		doJSON(t, s.app, http.MethodGet, "/api/organizations/my", reg.AccessToken, nil, http.StatusOK, &myOrg)
 		if myOrg.Kind != string(organization.KindPersonal) {
 			t.Fatalf("unexpected personal org kind: %q", myOrg.Kind)
+		}
+		if myOrg.Slug != organization.ReservedSlug {
+			t.Fatalf("unexpected personal org slug: %q", myOrg.Slug)
 		}
 
 		orgID, err := uuid.NewV7()
