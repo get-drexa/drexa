@@ -1,6 +1,6 @@
 //go:build integration
 
-package account
+package account_test
 
 import (
 	"context"
@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/get-drexa/drexa/internal/account"
 	"github.com/get-drexa/drexa/internal/database"
 	"github.com/get-drexa/drexa/internal/organization"
 	"github.com/get-drexa/drexa/internal/password"
@@ -44,7 +45,7 @@ func TestService_AccountQueries(t *testing.T) {
 
 	userSvc := user.NewService()
 	orgSvc := organization.NewService()
-	accSvc := NewService()
+	accSvc := account.NewService()
 
 	testUser, err := userSvc.RegisterUser(ctx, db, user.UserRegistrationOptions{
 		Email:       "account@example.com",
@@ -60,7 +61,7 @@ func TestService_AccountQueries(t *testing.T) {
 		t.Fatalf("CreatePersonalOrganization(personal): %v", err)
 	}
 
-	accPersonal, err := accSvc.CreateAccount(ctx, db, personalOrg.ID, testUser.ID, RoleAdmin, StatusActive)
+	accPersonal, err := accSvc.CreateAccount(ctx, db, personalOrg.ID, testUser.ID, account.RoleAdmin, account.StatusActive)
 	if err != nil {
 		t.Fatalf("CreateAccount(personal): %v", err)
 	}
@@ -86,8 +87,8 @@ func TestService_AccountQueries(t *testing.T) {
 		if gotPersonal.OrgID != personalOrg.ID {
 			t.Fatalf("unexpected personal org id: got %q want %q", gotPersonal.OrgID, personalOrg.ID)
 		}
-		if gotPersonal.Role != RoleAdmin {
-			t.Fatalf("unexpected personal role: got %q want %q", gotPersonal.Role, RoleAdmin)
+		if gotPersonal.Role != account.RoleAdmin {
+			t.Fatalf("unexpected personal role: got %q want %q", gotPersonal.Role, account.RoleAdmin)
 		}
 
 	})

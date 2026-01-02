@@ -8,6 +8,7 @@ import (
 	"github.com/get-drexa/drexa/internal/drive"
 	"github.com/get-drexa/drexa/internal/httperr"
 	"github.com/get-drexa/drexa/internal/nullable"
+	"github.com/get-drexa/drexa/internal/organization"
 	"github.com/get-drexa/drexa/internal/reqctx"
 	"github.com/get-drexa/drexa/internal/user"
 	"github.com/get-drexa/drexa/internal/virtualfs"
@@ -78,14 +79,19 @@ func (h *HTTPHandler) shareMiddleware(c *fiber.Ctx) error {
 		return httperr.Internal(err)
 	}
 
+	drive, err := h.driveService.DriveByID(c.Context(), h.db, share.DriveID)
+	if err != nil {
+		return httperr.Internal(err)
+	}
+
+	org, _ := reqctx.CurrentOrganization(c).(*organization.Organization)
+	if org != nil && drive.OrgID != org.ID {
+		return c.SendStatus(fiber.StatusNotFound)
+	}
+
 	var consumerAccount *account.Account
 	u, _ := reqctx.AuthenticatedUser(c).(*user.User)
 	if u != nil {
-		drive, err := h.driveService.DriveByID(c.Context(), h.db, share.DriveID)
-		if err != nil {
-			return httperr.Internal(err)
-		}
-
 		consumerAccount, err = h.accountService.FindUserAccountInOrg(c.Context(), h.db, drive.OrgID, u.ID)
 		if err != nil {
 			if errors.Is(err, account.ErrAccountNotFound) {

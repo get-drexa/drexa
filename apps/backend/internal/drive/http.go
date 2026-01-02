@@ -5,6 +5,7 @@ import (
 
 	"github.com/get-drexa/drexa/internal/account"
 	"github.com/get-drexa/drexa/internal/httperr"
+	"github.com/get-drexa/drexa/internal/organization"
 	"github.com/get-drexa/drexa/internal/reqctx"
 	"github.com/get-drexa/drexa/internal/user"
 	"github.com/get-drexa/drexa/internal/virtualfs"
@@ -14,20 +15,20 @@ import (
 )
 
 type HTTPHandler struct {
-	driveService     *Service
-	accountService   *account.Service
-	vfs              *virtualfs.VirtualFS
-	db               *bun.DB
-	authMiddleware   fiber.Handler
+	driveService   *Service
+	accountService *account.Service
+	vfs            *virtualfs.VirtualFS
+	db             *bun.DB
+	authMiddleware fiber.Handler
 }
 
 func NewHTTPHandler(driveService *Service, accountService *account.Service, vfs *virtualfs.VirtualFS, db *bun.DB, authMiddleware fiber.Handler) *HTTPHandler {
 	return &HTTPHandler{
-		driveService:     driveService,
-		accountService:   accountService,
-		vfs:              vfs,
-		db:               db,
-		authMiddleware:   authMiddleware,
+		driveService:   driveService,
+		accountService: accountService,
+		vfs:            vfs,
+		db:             db,
+		authMiddleware: authMiddleware,
 	}
 }
 
@@ -45,8 +46,23 @@ func (h *HTTPHandler) RegisterRoutes(api fiber.Router) *virtualfs.ScopedRouter {
 
 func (h *HTTPHandler) listDrives(c *fiber.Ctx) error {
 	u := reqctx.AuthenticatedUser(c).(*user.User)
+	org, ok := reqctx.CurrentOrganization(c).(*organization.Organization)
+	if !ok || org == nil {
+		return c.SendStatus(fiber.StatusNotFound)
+	}
 
-	drives, err := h.driveService.ListDrivesForUser(c.Context(), h.db, u.ID)
+	acc, err := h.accountService.FindUserAccountInOrg(c.Context(), h.db, org.ID, u.ID)
+	if err != nil {
+		if errors.Is(err, account.ErrAccountNotFound) {
+			return c.SendStatus(fiber.StatusNotFound)
+		}
+		return httperr.Internal(err)
+	}
+	if acc.Status != account.StatusActive {
+		return c.SendStatus(fiber.StatusNotFound)
+	}
+
+	drives, err := h.driveService.ListAccessibleDrives(c.Context(), h.db, org.ID, acc.ID)
 	if err != nil {
 		return httperr.Internal(err)
 	}
@@ -62,7 +78,10 @@ func (h *HTTPHandler) getDrive(c *fiber.Ctx) error {
 }
 
 func (h *HTTPHandler) driveMiddleware(c *fiber.Ctx) error {
-	u := reqctx.AuthenticatedUser(c).(*user.User)
+	org, ok := reqctx.CurrentOrganization(c).(*organization.Organization)
+	if !ok || org == nil {
+		return c.SendStatus(fiber.StatusNotFound)
+	}
 
 	driveID, err := uuid.Parse(c.Params("driveID"))
 	if err != nil {
@@ -76,15 +95,12 @@ func (h *HTTPHandler) driveMiddleware(c *fiber.Ctx) error {
 		}
 		return httperr.Internal(err)
 	}
-
-	acc, err := h.accountService.FindUserAccountInOrg(c.Context(), h.db, drive.OrgID, u.ID)
-	if err != nil {
-		if errors.Is(err, account.ErrAccountNotFound) {
-			return c.SendStatus(fiber.StatusNotFound)
-		}
-		return httperr.Internal(err)
+	if drive.OrgID != org.ID {
+		return c.SendStatus(fiber.StatusNotFound)
 	}
-	if acc.Status != account.StatusActive {
+
+	acc, ok := reqctx.CurrentAccount(c).(*account.Account)
+	if !ok || acc == nil {
 		return c.SendStatus(fiber.StatusNotFound)
 	}
 
@@ -107,7 +123,6 @@ func (h *HTTPHandler) driveMiddleware(c *fiber.Ctx) error {
 	}
 
 	reqctx.SetCurrentDrive(c, drive)
-	reqctx.SetCurrentAccount(c, acc)
 	reqctx.SetVFSAccessScope(c, scope)
 
 	return c.Next()

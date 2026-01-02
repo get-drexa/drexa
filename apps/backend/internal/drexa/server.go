@@ -123,12 +123,13 @@ func NewServer(c Config) (*Server, error) {
 
 	api := app.Group("/api")
 	auth.NewHTTPHandler(authService, db, cookieConfig).RegisterRoutes(api)
-	user.NewHTTPHandler(userService, db, authMiddleware).RegisterRoutes(api)
-
-	account.NewHTTPHandler(accountService, db, authMiddleware).RegisterRoutes(api)
 	registration.NewHTTPHandler(registrationService, authService, db, cookieConfig).RegisterRoutes(api)
+	user.NewHTTPHandler(userService, db, authMiddleware).RegisterRoutes(api)
+	account.NewHTTPHandler(accountService, db, authMiddleware).RegisterRoutes(api)
 
-	driveRouter := drive.NewHTTPHandler(driveService, accountService, vfs, db, authMiddleware).RegisterRoutes(api)
+	orgAPI := api.Group("/:orgSlug", authMiddleware, organization.NewMiddleware(organizationService, accountService, db))
+
+	driveRouter := drive.NewHTTPHandler(driveService, accountService, vfs, db, authMiddleware).RegisterRoutes(orgAPI)
 	upload.NewHTTPHandler(uploadService, db).RegisterRoutes(driveRouter)
 
 	shareHTTP := sharing.NewHTTPHandler(sharingService, accountService, driveService, vfs, db, optionalAuthMiddleware)

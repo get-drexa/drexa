@@ -10,6 +10,7 @@ const authenticatedUserKey = "authenticatedUser"
 const vfsAccessScope = "vfsAccessScope"
 const currentAccountKey = "currentAccount"
 const currentDriveKey = "currentDrive"
+const currentOrganizationKey = "currentOrganization"
 
 var ErrUnauthenticatedRequest = errors.New("unauthenticated request")
 
@@ -40,6 +41,11 @@ func SetVFSAccessScope(c *fiber.Ctx, scope any) {
 	c.Locals(vfsAccessScope, scope)
 }
 
+// SetCurrentOrganization sets the current organization in the fiber context.
+func SetCurrentOrganization(c *fiber.Ctx, organization any) {
+	c.Locals(currentOrganizationKey, organization)
+}
+
 // CurrentAccount returns the current account from the given fiber context.
 func CurrentAccount(c *fiber.Ctx) any {
 	return c.Locals(currentAccountKey)
@@ -48,6 +54,11 @@ func CurrentAccount(c *fiber.Ctx) any {
 // CurrentDrive returns the current drive from the given fiber context.
 func CurrentDrive(c *fiber.Ctx) any {
 	return c.Locals(currentDriveKey)
+}
+
+// CurrentOrganization returns the current organization from the given fiber context.
+func CurrentOrganization(c *fiber.Ctx) any {
+	return c.Locals(currentOrganizationKey)
 }
 
 // VFSAccessScope returns the VFS access scope from the given fiber context.

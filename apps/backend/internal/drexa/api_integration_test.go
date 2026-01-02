@@ -107,7 +107,7 @@ func TestRegistrationFlow(t *testing.T) {
 		var drives []struct {
 			ID string `json:"id"`
 		}
-		doJSON(t, s.app, http.MethodGet, "/api/drives", reg.AccessToken, nil, http.StatusOK, &drives)
+		doJSON(t, s.app, http.MethodGet, "/api/my/drives", reg.AccessToken, nil, http.StatusOK, &drives)
 		if len(drives) != 1 {
 			t.Fatalf("expected 1 drive, got %d", len(drives))
 		}
@@ -156,7 +156,7 @@ func TestRegistrationFlow(t *testing.T) {
 			t,
 			s.app,
 			http.MethodGet,
-			fmt.Sprintf("/api/drives/%s/directories/root/content?limit=100", reg.Drive.ID),
+			fmt.Sprintf("/api/my/drives/%s/directories/root/content?limit=100", reg.Drive.ID),
 			reg.AccessToken,
 			nil,
 			http.StatusOK,

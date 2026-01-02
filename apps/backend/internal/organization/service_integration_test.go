@@ -8,7 +8,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/get-drexa/drexa/internal/account"
 	"github.com/get-drexa/drexa/internal/database"
+	"github.com/get-drexa/drexa/internal/password"
+	"github.com/get-drexa/drexa/internal/user"
+	"github.com/google/uuid"
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
 )
 
@@ -60,6 +64,64 @@ func TestService_CreatePersonalOrganization(t *testing.T) {
 		}
 		if got.Name != "Personal Org" {
 			t.Fatalf("unexpected org name: got %q want %q", got.Name, "Personal Org")
+		}
+	})
+
+	t.Run("organization by slug", func(t *testing.T) {
+		slug := "test-org"
+		orgWithSlug := &Organization{
+			ID:   uuid.Must(uuid.NewV7()),
+			Kind: KindTeam,
+			Name: "Team Org",
+			Slug: &slug,
+		}
+		if _, err := db.NewInsert().Model(orgWithSlug).Returning("*").Exec(ctx); err != nil {
+			t.Fatalf("insert org with slug: %v", err)
+		}
+
+		for _, candidate := range []string{"TEST-ORG", "Test-Org", "test-org"} {
+			got, err := svc.OrganizationBySlug(ctx, db, candidate)
+			if err != nil {
+				t.Fatalf("OrganizationBySlug(%q): %v", candidate, err)
+			}
+			if got.ID != orgWithSlug.ID {
+				t.Fatalf("unexpected org id: got %q want %q", got.ID, orgWithSlug.ID)
+			}
+			if got.Slug == nil || *got.Slug != slug {
+				t.Fatalf("unexpected org slug: got %v want %q", got.Slug, slug)
+			}
+		}
+	})
+
+	t.Run("personal organization for user", func(t *testing.T) {
+		accSvc := account.NewService()
+		userSvc := user.NewService()
+
+		hashed, err := password.HashString("test-password")
+		if err != nil {
+			t.Fatalf("HashString: %v", err)
+		}
+
+		u, err := userSvc.RegisterUser(ctx, db, user.UserRegistrationOptions{
+			Email:       fmt.Sprintf("org-user-%s@example.com", uuid.Must(uuid.NewV7())),
+			DisplayName: "Org User",
+			Password:    hashed,
+		})
+		if err != nil {
+			t.Fatalf("RegisterUser: %v", err)
+		}
+
+		acc, err := accSvc.CreateAccount(ctx, db, org.ID, u.ID, account.RoleAdmin, account.StatusActive)
+		if err != nil {
+			t.Fatalf("CreateAccount: %v", err)
+		}
+
+		got, err := svc.PersonalOrganizationForUser(ctx, db, acc.UserID)
+		if err != nil {
+			t.Fatalf("PersonalOrganizationForUser: %v", err)
+		}
+		if got.ID != org.ID {
+			t.Fatalf("unexpected org id: got %q want %q", got.ID, org.ID)
 		}
 	})
 }
