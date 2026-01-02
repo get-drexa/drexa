@@ -171,6 +171,22 @@ func TestRegistrationFlow(t *testing.T) {
 		}
 	})
 
+	t.Run("users/me/organizations", func(t *testing.T) {
+		var orgs []struct {
+			ID   string `json:"id"`
+			Kind string `json:"kind"`
+			Name string `json:"name"`
+			Slug string `json:"slug"`
+		}
+		doJSON(t, s.app, http.MethodGet, "/api/users/me/organizations", reg.AccessToken, nil, http.StatusOK, &orgs)
+		if len(orgs) != 1 {
+			t.Fatalf("expected 1 organization, got %d", len(orgs))
+		}
+		if orgs[0].Kind != string(organization.KindPersonal) {
+			t.Fatalf("unexpected organization kind: %q", orgs[0].Kind)
+		}
+	})
+
 	t.Run("accounts/:id", func(t *testing.T) {
 		var got struct {
 			ID     string `json:"id"`

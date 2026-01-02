@@ -124,8 +124,9 @@ func NewServer(c Config) (*Server, error) {
 	api := app.Group("/api")
 	auth.NewHTTPHandler(authService, organizationService, db, cookieConfig).RegisterRoutes(api)
 	registration.NewHTTPHandler(registrationService, authService, db, cookieConfig).RegisterRoutes(api)
-	user.NewHTTPHandler(userService, db, authMiddleware).RegisterRoutes(api)
+	usersAPI := user.NewHTTPHandler(userService, db, authMiddleware).RegisterRoutes(api)
 	account.NewHTTPHandler(accountService, db, authMiddleware).RegisterRoutes(api)
+	organization.NewHTTPHandler(organizationService, db, authMiddleware).RegisterRoutes(usersAPI)
 
 	orgAPI := api.Group("/:orgSlug", authMiddleware, organization.NewMiddleware(organizationService, accountService, db))
 

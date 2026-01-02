@@ -16,10 +16,11 @@ func NewHTTPHandler(service *Service, db *bun.DB, authMiddleware fiber.Handler) 
 	return &HTTPHandler{service: service, db: db, authMiddleware: authMiddleware}
 }
 
-func (h *HTTPHandler) RegisterRoutes(api fiber.Router) {
-	user := api.Group("/users")
-	user.Use(h.authMiddleware)
-	user.Get("/me", h.getAuthenticatedUser)
+func (h *HTTPHandler) RegisterRoutes(api fiber.Router) fiber.Router {
+	users := api.Group("/users")
+	users.Use(h.authMiddleware)
+	users.Get("/me", h.getAuthenticatedUser)
+	return users
 }
 
 // getAuthenticatedUser returns the currently authenticated user
