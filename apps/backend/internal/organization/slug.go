@@ -11,9 +11,12 @@ const (
 	slugMaxLength = 63
 )
 
+// ReservedSlug is the special organization slug used to address the authenticated
+// user's personal organization in API routes (e.g. /api/my/...).
+const ReservedSlug = "my"
+
 var (
-	slugPattern  = regexp.MustCompile(`^[a-z0-9]+(?:-[a-z0-9]+)*$`)
-	reservedSlug = "my"
+	slugPattern = regexp.MustCompile(`^[a-z0-9]+(?:-[a-z0-9]+)*$`)
 )
 
 var ErrInvalidSlug = errors.New("invalid organization slug")
@@ -24,7 +27,7 @@ func NormalizeSlug(input string) (string, error) {
 	if len(slug) < slugMinLength || len(slug) > slugMaxLength {
 		return "", ErrInvalidSlug
 	}
-	if slug == reservedSlug {
+	if slug == ReservedSlug {
 		return "", ErrInvalidSlug
 	}
 	if !slugPattern.MatchString(slug) {

@@ -122,7 +122,7 @@ func NewServer(c Config) (*Server, error) {
 	optionalAuthMiddleware := auth.NewOptionalAuthMiddleware(authService, db, cookieConfig)
 
 	api := app.Group("/api")
-	auth.NewHTTPHandler(authService, db, cookieConfig).RegisterRoutes(api)
+	auth.NewHTTPHandler(authService, organizationService, db, cookieConfig).RegisterRoutes(api)
 	registration.NewHTTPHandler(registrationService, authService, db, cookieConfig).RegisterRoutes(api)
 	user.NewHTTPHandler(userService, db, authMiddleware).RegisterRoutes(api)
 	account.NewHTTPHandler(accountService, db, authMiddleware).RegisterRoutes(api)

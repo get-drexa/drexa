@@ -15,7 +15,6 @@
 			"golangciLintVersion": "2.6.1"
 		}
 	},
-	"postCreateCommand": "./scripts/setup-git.sh",
 	"customizations": {
 		"vscode": {
 			"extensions": [
@@ -97,6 +96,8 @@
 		}
 	},
 	"forwardPorts": [3000, 5173, 8080, 1455],
+	"appPort": [3000, 5173, 8080, 1455],
+	"postCreateCommand": "./scripts/editor-setup.sh",
 	"portsAttributes": {
 		"3000": {
 			"label": "Development Server",
@@ -111,5 +112,9 @@
 			"onAutoForward": "notify"
 		}
 	},
+	"mounts": [
+		"source=${localEnv:HOME}/.config/nvim,target=/home/node/.config/nvim,type=bind,consistency=cached",
+		"source=${localWorkspaceFolder}/.codex,target=/home/node/.codex,type=bind,consistency=cached"
+	],
 	"remoteUser": "node"
 }

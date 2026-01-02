@@ -76,3 +76,21 @@ func (s *Service) PersonalOrganizationForUser(ctx context.Context, db bun.IDB, u
 	}
 	return &org, nil
 }
+
+func (s *Service) ListOrganizationsForUser(ctx context.Context, db bun.IDB, userID uuid.UUID) ([]Organization, error) {
+	orgs := make([]Organization, 0)
+	err := db.NewSelect().
+		Model(&orgs).
+		Join("JOIN accounts ON accounts.org_id = organization.id").
+		Where("accounts.user_id = ?", userID).
+		Where("accounts.status = ?", account.StatusActive).
+		Order("organization.kind ASC", "organization.name ASC").
+		Scan(ctx)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return orgs, nil
+		}
+		return nil, err
+	}
+	return orgs, nil
+}

@@ -5,6 +5,7 @@ import (
 	"log/slog"
 
 	"github.com/get-drexa/drexa/internal/httperr"
+	"github.com/get-drexa/drexa/internal/organization"
 	"github.com/get-drexa/drexa/internal/user"
 	"github.com/gofiber/fiber/v2"
 	"github.com/uptrace/bun"
@@ -36,6 +37,8 @@ type loginRequest struct {
 type loginResponse struct {
 	// Authenticated user information
 	User user.User `json:"user"`
+	// Organizations the user is a member of
+	Organizations []organization.Organization `json:"organizations"`
 	// JWT access token (only included when tokenDelivery is "body")
 	AccessToken string `json:"accessToken,omitempty" example:"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI1NTBlODQwMC1lMjliLTQxZDQtYTcxNi00NDY2NTU0NDAwMDAifQ.signature"`
 	// Base64 URL encoded refresh token (only included when tokenDelivery is "body")
@@ -59,13 +62,14 @@ type tokenResponse struct {
 }
 
 type HTTPHandler struct {
-	service      *Service
-	db           *bun.DB
-	cookieConfig CookieConfig
+	service             *Service
+	organizationService *organization.Service
+	db                  *bun.DB
+	cookieConfig        CookieConfig
 }
 
-func NewHTTPHandler(s *Service, db *bun.DB, cookieConfig CookieConfig) *HTTPHandler {
-	return &HTTPHandler{service: s, db: db, cookieConfig: cookieConfig}
+func NewHTTPHandler(s *Service, organizationService *organization.Service, db *bun.DB, cookieConfig CookieConfig) *HTTPHandler {
+	return &HTTPHandler{service: s, organizationService: organizationService, db: db, cookieConfig: cookieConfig}
 }
 
 func (h *HTTPHandler) RegisterRoutes(api fiber.Router) {
@@ -91,6 +95,10 @@ func (h *HTTPHandler) Login(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid request"})
 	}
 
+	if req.TokenDelivery != TokenDeliveryCookie && req.TokenDelivery != TokenDeliveryBody {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid token delivery method"})
+	}
+
 	tx, err := h.db.BeginTx(c.Context(), nil)
 	if err != nil {
 		return httperr.Internal(err)
@@ -105,27 +113,33 @@ func (h *HTTPHandler) Login(c *fiber.Ctx) error {
 		return httperr.Internal(err)
 	}
 
+	orgs, err := h.organizationService.ListOrganizationsForUser(c.Context(), tx, result.User.ID)
+	if err != nil {
+		return httperr.Internal(err)
+	}
+
 	if err := tx.Commit(); err != nil {
 		return httperr.Internal(err)
 	}
 
 	switch req.TokenDelivery {
-	default:
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid token delivery method"})
-
 	case TokenDeliveryCookie:
 		SetAuthCookies(c, result.AccessToken, result.RefreshToken, h.cookieConfig)
 		return c.JSON(loginResponse{
-			User: *result.User,
+			User:          *result.User,
+			Organizations: orgs,
 		})
 
 	case TokenDeliveryBody:
 		return c.JSON(loginResponse{
-			User:         *result.User,
-			AccessToken:  result.AccessToken,
-			RefreshToken: result.RefreshToken,
+			User:          *result.User,
+			Organizations: orgs,
+			AccessToken:   result.AccessToken,
+			RefreshToken:  result.RefreshToken,
 		})
 	}
+
+	return httperr.Internal(errors.New("unreachable token delivery"))
 }
 
 // refreshAccessToken exchanges a refresh token for new access and refresh tokens

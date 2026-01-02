@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/get-drexa/drexa/internal/database"
+	"github.com/get-drexa/drexa/internal/organization"
 	"github.com/gofiber/fiber/v2"
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
 )
@@ -102,6 +103,45 @@ func TestRegistrationFlow(t *testing.T) {
 	if reg.Account.ID == "" || reg.Drive.ID == "" {
 		t.Fatalf("expected account.id and drive.id to be set")
 	}
+
+	t.Run("login includes organizations", func(t *testing.T) {
+		type loginResponse struct {
+			User struct {
+				ID          string `json:"id"`
+				DisplayName string `json:"displayName"`
+				Email       string `json:"email"`
+			} `json:"user"`
+			Organizations []struct {
+				ID   string `json:"id"`
+				Kind string `json:"kind"`
+				Name string `json:"name"`
+				Slug string `json:"slug"`
+			} `json:"organizations"`
+			AccessToken  string `json:"accessToken"`
+			RefreshToken string `json:"refreshToken"`
+		}
+
+		loginBody := map[string]any{
+			"email":         "alice@example.com",
+			"password":      "password123",
+			"tokenDelivery": "body",
+		}
+
+		var login loginResponse
+		doJSON(t, s.app, http.MethodPost, "/api/auth/login", "", loginBody, http.StatusOK, &login)
+		if login.AccessToken == "" {
+			t.Fatalf("expected access token in login response")
+		}
+		if login.User.ID != reg.User.ID {
+			t.Fatalf("unexpected user id: got %q want %q", login.User.ID, reg.User.ID)
+		}
+		if len(login.Organizations) != 1 {
+			t.Fatalf("expected 1 organization, got %d", len(login.Organizations))
+		}
+		if login.Organizations[0].Kind != string(organization.KindPersonal) {
+			t.Fatalf("unexpected organization kind: %q", login.Organizations[0].Kind)
+		}
+	})
 
 	t.Run("drives list", func(t *testing.T) {
 		var drives []struct {

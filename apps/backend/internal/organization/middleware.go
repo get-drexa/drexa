@@ -27,7 +27,7 @@ func NewMiddleware(orgService *Service, accountService *account.Service, db *bun
 		var org *Organization
 		var err error
 
-		if slug == reservedSlug {
+		if slug == ReservedSlug {
 			org, err = orgService.PersonalOrganizationForUser(c.Context(), db, u.ID)
 		} else {
 			org, err = orgService.OrganizationBySlug(c.Context(), db, slug)
