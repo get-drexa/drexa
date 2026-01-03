@@ -6,6 +6,7 @@ RUN apt-get update && apt-get install -y \
     ca-certificates \
     gnupg \
     lsb-release \
+    ripgrep \
     && rm -rf /var/lib/apt/lists/*
 
 # Install latest neovim using pre-built binary
