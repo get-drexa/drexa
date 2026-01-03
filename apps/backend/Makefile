@@ -1,4 +1,6 @@
-.PHONY: build build-docs build-all run run-docs docs install-tools fmt clean
+.PHONY: build build-docs build-all run run-docs docs install-tools fmt test clean
+
+ROOT_DIR := $(abspath $(CURDIR)/../..)
 
 # Build the API server
 build:
@@ -38,6 +40,10 @@ install-tools:
 fmt:
 	go fmt ./...
 	swag fmt
+
+test:
+	@mkdir -p $(ROOT_DIR)/.gocache $(ROOT_DIR)/.gomodcache
+	@GOCACHE=$(ROOT_DIR)/.gocache GOMODCACHE=$(ROOT_DIR)/.gomodcache go test ./...
 
 # Clean build artifacts
 clean:

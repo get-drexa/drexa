@@ -1,6 +1,6 @@
 //go:build integration
 
-package user
+package user_test
 
 import (
 	"context"
@@ -11,6 +11,7 @@ import (
 
 	"github.com/get-drexa/drexa/internal/database"
 	"github.com/get-drexa/drexa/internal/password"
+	"github.com/get-drexa/drexa/internal/user"
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
 )
 
@@ -45,9 +46,9 @@ func TestService_UserQueries(t *testing.T) {
 		t.Fatalf("HashString: %v", err)
 	}
 
-	svc := NewService()
+	svc := user.NewService()
 
-	user1, err := svc.RegisterUser(ctx, db, UserRegistrationOptions{
+	user1, err := svc.RegisterUser(ctx, db, user.UserRegistrationOptions{
 		Email:       "alice@example.com",
 		DisplayName: "Alice",
 		Password:    pw1,
@@ -55,7 +56,7 @@ func TestService_UserQueries(t *testing.T) {
 	if err != nil {
 		t.Fatalf("RegisterUser(user1): %v", err)
 	}
-	user2, err := svc.RegisterUser(ctx, db, UserRegistrationOptions{
+	user2, err := svc.RegisterUser(ctx, db, user.UserRegistrationOptions{
 		Email:       "bob@example.com",
 		DisplayName: "Bob",
 		Password:    pw2,
@@ -134,9 +135,9 @@ func TestService_RegisterUserConflict(t *testing.T) {
 		t.Fatalf("HashString: %v", err)
 	}
 
-	svc := NewService()
+	svc := user.NewService()
 
-	_, err = svc.RegisterUser(ctx, db, UserRegistrationOptions{
+	_, err = svc.RegisterUser(ctx, db, user.UserRegistrationOptions{
 		Email:       "conflict@example.com",
 		DisplayName: "Conflict",
 		Password:    pw,
@@ -145,7 +146,7 @@ func TestService_RegisterUserConflict(t *testing.T) {
 		t.Fatalf("RegisterUser(first): %v", err)
 	}
 
-	_, err = svc.RegisterUser(ctx, db, UserRegistrationOptions{
+	_, err = svc.RegisterUser(ctx, db, user.UserRegistrationOptions{
 		Email:       "conflict@example.com",
 		DisplayName: "Conflict 2",
 		Password:    pw,
@@ -153,7 +154,7 @@ func TestService_RegisterUserConflict(t *testing.T) {
 	if err == nil {
 		t.Fatalf("expected conflict error, got nil")
 	}
-	var existsErr *AlreadyExistsError
+	var existsErr *user.AlreadyExistsError
 	if !errors.As(err, &existsErr) {
 		t.Fatalf("expected AlreadyExistsError, got %T: %v", err, err)
 	}

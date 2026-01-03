@@ -1,6 +1,6 @@
 //go:build integration
 
-package drexa
+package drexa_test
 
 import (
 	"bytes"
@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/get-drexa/drexa/internal/database"
+	"github.com/get-drexa/drexa/internal/drexa"
 	"github.com/get-drexa/drexa/internal/organization"
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
@@ -42,28 +43,31 @@ func TestRegistrationFlow(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = os.RemoveAll(blobRoot) })
 
-	s, err := NewServer(Config{
-		Server: ServerConfig{Port: 8080},
-		Database: DatabaseConfig{
+	db := database.NewFromPostgres(postgresURL)
+	t.Cleanup(func() { _ = db.Close() })
+
+	if err := database.RunMigrations(ctx, db); err != nil {
+		t.Fatalf("RunMigrations: %v", err)
+	}
+
+	s, err := drexa.NewServer(drexa.Config{
+		Server: drexa.ServerConfig{Port: 8080},
+		Database: drexa.DatabaseConfig{
 			PostgresURL: postgresURL,
 		},
-		JWT: JWTConfig{
+		JWT: drexa.JWTConfig{
 			Issuer:    "drexa-test",
 			Audience:  "drexa-test",
 			SecretKey: []byte("drexa-test-secret"),
 		},
-		Storage: StorageConfig{
-			Mode:     StorageModeFlat,
-			Backend:  StorageBackendFS,
+		Storage: drexa.StorageConfig{
+			Mode:     drexa.StorageModeFlat,
+			Backend:  drexa.StorageBackendFS,
 			RootPath: blobRoot,
 		},
 	})
 	if err != nil {
 		t.Fatalf("NewServer: %v", err)
-	}
-
-	if err := database.RunMigrations(ctx, s.db); err != nil {
-		t.Fatalf("RunMigrations: %v", err)
 	}
 
 	type registerResponse struct {
@@ -94,7 +98,7 @@ func TestRegistrationFlow(t *testing.T) {
 	}
 
 	var reg registerResponse
-	doJSON(t, s.app, http.MethodPost, "/api/accounts", "", registerBody, http.StatusOK, &reg)
+	doJSON(t, s.App(), http.MethodPost, "/api/accounts", "", registerBody, http.StatusOK, &reg)
 	if reg.AccessToken == "" {
 		t.Fatalf("expected access token in registration response")
 	}
@@ -129,7 +133,7 @@ func TestRegistrationFlow(t *testing.T) {
 		}
 
 		var login loginResponse
-		doJSON(t, s.app, http.MethodPost, "/api/auth/login", "", loginBody, http.StatusOK, &login)
+		doJSON(t, s.App(), http.MethodPost, "/api/auth/login", "", loginBody, http.StatusOK, &login)
 		if login.AccessToken == "" {
 			t.Fatalf("expected access token in login response")
 		}
@@ -151,7 +155,7 @@ func TestRegistrationFlow(t *testing.T) {
 		var drives []struct {
 			ID string `json:"id"`
 		}
-		doJSON(t, s.app, http.MethodGet, "/api/my/drives", reg.AccessToken, nil, http.StatusOK, &drives)
+		doJSON(t, s.App(), http.MethodGet, "/api/my/drives", reg.AccessToken, nil, http.StatusOK, &drives)
 		if len(drives) != 1 {
 			t.Fatalf("expected 1 drive, got %d", len(drives))
 		}
@@ -166,7 +170,7 @@ func TestRegistrationFlow(t *testing.T) {
 			DisplayName string `json:"displayName"`
 			Email       string `json:"email"`
 		}
-		doJSON(t, s.app, http.MethodGet, "/api/users/me", reg.AccessToken, nil, http.StatusOK, &me)
+		doJSON(t, s.App(), http.MethodGet, "/api/users/me", reg.AccessToken, nil, http.StatusOK, &me)
 		if me.ID != reg.User.ID {
 			t.Fatalf("unexpected user id: got %q want %q", me.ID, reg.User.ID)
 		}
@@ -182,7 +186,7 @@ func TestRegistrationFlow(t *testing.T) {
 			Name string `json:"name"`
 			Slug string `json:"slug"`
 		}
-		doJSON(t, s.app, http.MethodGet, "/api/users/me/organizations", reg.AccessToken, nil, http.StatusOK, &orgs)
+		doJSON(t, s.App(), http.MethodGet, "/api/users/me/organizations", reg.AccessToken, nil, http.StatusOK, &orgs)
 		if len(orgs) != 1 {
 			t.Fatalf("expected 1 organization, got %d", len(orgs))
 		}
@@ -201,7 +205,7 @@ func TestRegistrationFlow(t *testing.T) {
 			Name string `json:"name"`
 			Slug string `json:"slug"`
 		}
-		doJSON(t, s.app, http.MethodGet, "/api/organizations/my", reg.AccessToken, nil, http.StatusOK, &myOrg)
+		doJSON(t, s.App(), http.MethodGet, "/api/organizations/my", reg.AccessToken, nil, http.StatusOK, &myOrg)
 		if myOrg.Kind != string(organization.KindPersonal) {
 			t.Fatalf("unexpected personal org kind: %q", myOrg.Kind)
 		}
@@ -218,7 +222,7 @@ func TestRegistrationFlow(t *testing.T) {
 			t.Fatalf("uuid: %v", err)
 		}
 
-		_, err = s.db.ExecContext(ctx,
+		_, err = db.ExecContext(ctx,
 			`INSERT INTO organizations (id, kind, name, slug) VALUES (?, ?, ?, ?)`,
 			orgID, organization.KindTeam, "Acme", "acme",
 		)
@@ -226,7 +230,7 @@ func TestRegistrationFlow(t *testing.T) {
 			t.Fatalf("insert org: %v", err)
 		}
 
-		_, err = s.db.ExecContext(ctx,
+		_, err = db.ExecContext(ctx,
 			`INSERT INTO accounts (id, org_id, user_id, role, status) VALUES (?, ?, ?, ?, ?)`,
 			accountID, orgID, reg.User.ID, "member", "active",
 		)
@@ -240,7 +244,7 @@ func TestRegistrationFlow(t *testing.T) {
 			Name string `json:"name"`
 			Slug string `json:"slug"`
 		}
-		doJSON(t, s.app, http.MethodGet, "/api/organizations/acme", reg.AccessToken, nil, http.StatusOK, &got)
+		doJSON(t, s.App(), http.MethodGet, "/api/organizations/acme", reg.AccessToken, nil, http.StatusOK, &got)
 		if got.Slug != "acme" {
 			t.Fatalf("unexpected org slug: %q", got.Slug)
 		}
@@ -257,7 +261,7 @@ func TestRegistrationFlow(t *testing.T) {
 			Role   string `json:"role"`
 			Status string `json:"status"`
 		}
-		doJSON(t, s.app, http.MethodGet, fmt.Sprintf("/api/accounts/%s", reg.Account.ID), reg.AccessToken, nil, http.StatusOK, &got)
+		doJSON(t, s.App(), http.MethodGet, fmt.Sprintf("/api/accounts/%s", reg.Account.ID), reg.AccessToken, nil, http.StatusOK, &got)
 		if got.ID != reg.Account.ID {
 			t.Fatalf("unexpected account id: got %q want %q", got.ID, reg.Account.ID)
 		}
@@ -272,7 +276,7 @@ func TestRegistrationFlow(t *testing.T) {
 		}
 		doJSON(
 			t,
-			s.app,
+			s.App(),
 			http.MethodGet,
 			fmt.Sprintf("/api/my/drives/%s/directories/root/content?limit=100", reg.Drive.ID),
 			reg.AccessToken,

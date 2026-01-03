@@ -1,6 +1,6 @@
 //go:build integration
 
-package organization
+package organization_test
 
 import (
 	"context"
@@ -10,6 +10,7 @@ import (
 
 	"github.com/get-drexa/drexa/internal/account"
 	"github.com/get-drexa/drexa/internal/database"
+	"github.com/get-drexa/drexa/internal/organization"
 	"github.com/get-drexa/drexa/internal/password"
 	"github.com/get-drexa/drexa/internal/user"
 	"github.com/google/uuid"
@@ -38,14 +39,14 @@ func TestService_CreatePersonalOrganization(t *testing.T) {
 		t.Fatalf("RunMigrations: %v", err)
 	}
 
-	svc := NewService()
+	svc := organization.NewService()
 
 	org, err := svc.CreatePersonalOrganization(ctx, db, "Personal Org")
 	if err != nil {
 		t.Fatalf("CreatePersonalOrganization: %v", err)
 	}
-	if org.Kind != KindPersonal {
-		t.Fatalf("unexpected org kind: got %q want %q", org.Kind, KindPersonal)
+	if org.Kind != organization.KindPersonal {
+		t.Fatalf("unexpected org kind: got %q want %q", org.Kind, organization.KindPersonal)
 	}
 	if org.Name != "Personal Org" {
 		t.Fatalf("unexpected org name: got %q want %q", org.Name, "Personal Org")
@@ -59,8 +60,8 @@ func TestService_CreatePersonalOrganization(t *testing.T) {
 		if got.ID != org.ID {
 			t.Fatalf("unexpected org id: got %q want %q", got.ID, org.ID)
 		}
-		if got.Kind != KindPersonal {
-			t.Fatalf("unexpected org kind: got %q want %q", got.Kind, KindPersonal)
+		if got.Kind != organization.KindPersonal {
+			t.Fatalf("unexpected org kind: got %q want %q", got.Kind, organization.KindPersonal)
 		}
 		if got.Name != "Personal Org" {
 			t.Fatalf("unexpected org name: got %q want %q", got.Name, "Personal Org")
@@ -69,9 +70,9 @@ func TestService_CreatePersonalOrganization(t *testing.T) {
 
 	t.Run("organization by slug", func(t *testing.T) {
 		slug := "test-org"
-		orgWithSlug := &Organization{
+		orgWithSlug := &organization.Organization{
 			ID:   uuid.Must(uuid.NewV7()),
-			Kind: KindTeam,
+			Kind: organization.KindTeam,
 			Name: "Team Org",
 			Slug: &slug,
 		}

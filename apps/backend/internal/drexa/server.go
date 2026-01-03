@@ -163,3 +163,7 @@ func NewServer(c Config) (*Server, error) {
 func (s *Server) Start() error {
 	return s.app.Listen(fmt.Sprintf(":%d", s.config.Server.Port))
 }
+
+func (s *Server) App() *fiber.App {
+	return s.app
+}

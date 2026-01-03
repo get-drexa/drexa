@@ -1,8 +1,10 @@
-package organization
+package organization_test
 
 import (
 	"strings"
 	"testing"
+
+	"github.com/get-drexa/drexa/internal/organization"
 )
 
 func TestNormalizeSlug(t *testing.T) {
@@ -61,7 +63,7 @@ func TestNormalizeSlug(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := NormalizeSlug(tt.input)
+			got, err := organization.NormalizeSlug(tt.input)
 			if tt.wantErr {
 				if err == nil {
 					t.Fatalf("expected error, got none (slug=%q)", got)

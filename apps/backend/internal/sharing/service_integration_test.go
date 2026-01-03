@@ -1,6 +1,6 @@
 //go:build integration
 
-package sharing
+package sharing_test
 
 import (
 	"context"
@@ -16,6 +16,7 @@ import (
 	"github.com/get-drexa/drexa/internal/drive"
 	"github.com/get-drexa/drexa/internal/organization"
 	"github.com/get-drexa/drexa/internal/password"
+	"github.com/get-drexa/drexa/internal/sharing"
 	"github.com/get-drexa/drexa/internal/user"
 	"github.com/get-drexa/drexa/internal/virtualfs"
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
@@ -128,36 +129,36 @@ func TestService_SharingScopes(t *testing.T) {
 		t.Fatalf("WriteFile: %v", err)
 	}
 
-	shareSvc, err := NewService(vfs)
+	shareSvc, err := sharing.NewService(vfs)
 	if err != nil {
 		t.Fatalf("NewService: %v", err)
 	}
 
 	t.Run("create share validation", func(t *testing.T) {
-		if _, err := shareSvc.CreateShare(ctx, db, drv.ID, acc.ID, CreateShareOptions{}); err != ErrShareNoItems {
+		if _, err := shareSvc.CreateShare(ctx, db, drv.ID, acc.ID, sharing.CreateShareOptions{}); err != sharing.ErrShareNoItems {
 			t.Fatalf("expected ErrShareNoItems, got %v", err)
 		}
 
-		if _, err := shareSvc.CreateShare(ctx, db, drv.ID, acc.ID, CreateShareOptions{
+		if _, err := shareSvc.CreateShare(ctx, db, drv.ID, acc.ID, sharing.CreateShareOptions{
 			Items: []*virtualfs.Node{root},
-		}); err != ErrCannotShareRoot {
+		}); err != sharing.ErrCannotShareRoot {
 			t.Fatalf("expected ErrCannotShareRoot, got %v", err)
 		}
 
-		if _, err := shareSvc.CreateShare(ctx, db, drv.ID, acc.ID, CreateShareOptions{
+		if _, err := shareSvc.CreateShare(ctx, db, drv.ID, acc.ID, sharing.CreateShareOptions{
 			Items: []*virtualfs.Node{dirNode, fileNode},
-		}); err != ErrNotSameParent {
+		}); err != sharing.ErrNotSameParent {
 			t.Fatalf("expected ErrNotSameParent, got %v", err)
 		}
 	})
 
-	dirShare, err := shareSvc.CreateShare(ctx, db, drv.ID, acc.ID, CreateShareOptions{
+	dirShare, err := shareSvc.CreateShare(ctx, db, drv.ID, acc.ID, sharing.CreateShareOptions{
 		Items: []*virtualfs.Node{dirNode},
 	})
 	if err != nil {
 		t.Fatalf("CreateShare(dir): %v", err)
 	}
-	fileShare, err := shareSvc.CreateShare(ctx, db, drv.ID, acc.ID, CreateShareOptions{
+	fileShare, err := shareSvc.CreateShare(ctx, db, drv.ID, acc.ID, sharing.CreateShareOptions{
 		Items: []*virtualfs.Node{fileNode},
 	})
 	if err != nil {
@@ -212,7 +213,7 @@ func TestService_SharingScopes(t *testing.T) {
 	})
 
 	t.Run("list shares includes expired", func(t *testing.T) {
-		expiredShare, err := shareSvc.CreateShare(ctx, db, drv.ID, acc.ID, CreateShareOptions{
+		expiredShare, err := shareSvc.CreateShare(ctx, db, drv.ID, acc.ID, sharing.CreateShareOptions{
 			Items:     []*virtualfs.Node{fileNode},
 			ExpiresAt: time.Now().Add(-1 * time.Hour),
 		})
@@ -220,7 +221,7 @@ func TestService_SharingScopes(t *testing.T) {
 			t.Fatalf("CreateShare(expired list): %v", err)
 		}
 
-		activeShares, err := shareSvc.ListShares(ctx, db, drv.ID, ListSharesOptions{IncludesExpired: false})
+		activeShares, err := shareSvc.ListShares(ctx, db, drv.ID, sharing.ListSharesOptions{IncludesExpired: false})
 		if err != nil {
 			t.Fatalf("ListShares(active): %v", err)
 		}
@@ -235,7 +236,7 @@ func TestService_SharingScopes(t *testing.T) {
 			t.Fatalf("expected active shares to be listed")
 		}
 
-		allShares, err := shareSvc.ListShares(ctx, db, drv.ID, ListSharesOptions{IncludesExpired: true})
+		allShares, err := shareSvc.ListShares(ctx, db, drv.ID, sharing.ListSharesOptions{IncludesExpired: true})
 		if err != nil {
 			t.Fatalf("ListShares(all): %v", err)
 		}
@@ -252,26 +253,26 @@ func TestService_SharingScopes(t *testing.T) {
 	})
 
 	t.Run("find share not found", func(t *testing.T) {
-		if _, err := shareSvc.FindShareByPublicID(ctx, db, "missing-share"); err != ErrShareNotFound {
+		if _, err := shareSvc.FindShareByPublicID(ctx, db, "missing-share"); err != sharing.ErrShareNotFound {
 			t.Fatalf("expected ErrShareNotFound, got %v", err)
 		}
 	})
 
 	t.Run("expired share", func(t *testing.T) {
-		expiredShare, err := shareSvc.CreateShare(ctx, db, drv.ID, acc.ID, CreateShareOptions{
+		expiredShare, err := shareSvc.CreateShare(ctx, db, drv.ID, acc.ID, sharing.CreateShareOptions{
 			Items:     []*virtualfs.Node{fileNode},
 			ExpiresAt: time.Now().Add(-1 * time.Hour),
 		})
 		if err != nil {
 			t.Fatalf("CreateShare(expired): %v", err)
 		}
-		if _, err := shareSvc.ResolveScopeForShare(ctx, db, nil, expiredShare); err != ErrShareExpired {
+		if _, err := shareSvc.ResolveScopeForShare(ctx, db, nil, expiredShare); err != sharing.ErrShareExpired {
 			t.Fatalf("expected ErrShareExpired, got %v", err)
 		}
 	})
 
 	t.Run("revoked share", func(t *testing.T) {
-		revokedShare, err := shareSvc.CreateShare(ctx, db, drv.ID, acc.ID, CreateShareOptions{
+		revokedShare, err := shareSvc.CreateShare(ctx, db, drv.ID, acc.ID, sharing.CreateShareOptions{
 			Items: []*virtualfs.Node{fileNode},
 		})
 		if err != nil {
@@ -285,31 +286,31 @@ func TestService_SharingScopes(t *testing.T) {
 			t.Fatalf("update revoked share: %v", err)
 		}
 		revokedShare.RevokedAt = &now
-		if _, err := shareSvc.ResolveScopeForShare(ctx, db, nil, revokedShare); err != ErrShareRevoked {
+		if _, err := shareSvc.ResolveScopeForShare(ctx, db, nil, revokedShare); err != sharing.ErrShareRevoked {
 			t.Fatalf("expected ErrShareRevoked, got %v", err)
 		}
 	})
 
 	t.Run("no permissions", func(t *testing.T) {
-		noPermShare, err := shareSvc.CreateShare(ctx, db, drv.ID, acc.ID, CreateShareOptions{
+		noPermShare, err := shareSvc.CreateShare(ctx, db, drv.ID, acc.ID, sharing.CreateShareOptions{
 			Items: []*virtualfs.Node{fileNode},
 		})
 		if err != nil {
 			t.Fatalf("CreateShare(no permissions): %v", err)
 		}
 		if _, err := db.NewDelete().
-			Model(&SharePermission{}).
+			Model(&sharing.SharePermission{}).
 			Where("share_id = ?", noPermShare.ID).
 			Exec(ctx); err != nil {
 			t.Fatalf("delete permissions: %v", err)
 		}
-		if _, err := shareSvc.ResolveScopeForShare(ctx, db, nil, noPermShare); err != ErrNoPermissions {
+		if _, err := shareSvc.ResolveScopeForShare(ctx, db, nil, noPermShare); err != sharing.ErrNoPermissions {
 			t.Fatalf("expected ErrNoPermissions, got %v", err)
 		}
 	})
 
 	t.Run("permission expired", func(t *testing.T) {
-		expiredPermShare, err := shareSvc.CreateShare(ctx, db, drv.ID, acc.ID, CreateShareOptions{
+		expiredPermShare, err := shareSvc.CreateShare(ctx, db, drv.ID, acc.ID, sharing.CreateShareOptions{
 			Items: []*virtualfs.Node{fileNode},
 		})
 		if err != nil {
@@ -317,31 +318,31 @@ func TestService_SharingScopes(t *testing.T) {
 		}
 		expiredAt := time.Now().Add(-1 * time.Hour)
 		if _, err := db.NewUpdate().
-			Model(&SharePermission{}).
+			Model(&sharing.SharePermission{}).
 			Set("expires_at = ?", expiredAt).
 			Where("share_id = ?", expiredPermShare.ID).
 			Exec(ctx); err != nil {
 			t.Fatalf("update permission expiry: %v", err)
 		}
-		if _, err := shareSvc.ResolveScopeForShare(ctx, db, nil, expiredPermShare); err != ErrShareExpired {
+		if _, err := shareSvc.ResolveScopeForShare(ctx, db, nil, expiredPermShare); err != sharing.ErrShareExpired {
 			t.Fatalf("expected ErrShareExpired, got %v", err)
 		}
 	})
 
 	t.Run("no items", func(t *testing.T) {
-		noItemsShare, err := shareSvc.CreateShare(ctx, db, drv.ID, acc.ID, CreateShareOptions{
+		noItemsShare, err := shareSvc.CreateShare(ctx, db, drv.ID, acc.ID, sharing.CreateShareOptions{
 			Items: []*virtualfs.Node{fileNode},
 		})
 		if err != nil {
 			t.Fatalf("CreateShare(no items): %v", err)
 		}
 		if _, err := db.NewDelete().
-			Model(&ShareItem{}).
+			Model(&sharing.ShareItem{}).
 			Where("share_id = ?", noItemsShare.ID).
 			Exec(ctx); err != nil {
 			t.Fatalf("delete share items: %v", err)
 		}
-		if _, err := shareSvc.ResolveScopeForShare(ctx, db, nil, noItemsShare); err != ErrShareNoItems {
+		if _, err := shareSvc.ResolveScopeForShare(ctx, db, nil, noItemsShare); err != sharing.ErrShareNoItems {
 			t.Fatalf("expected ErrShareNoItems, got %v", err)
 		}
 	})

@@ -1,6 +1,6 @@
 //go:build integration
 
-package drive
+package drive_test
 
 import (
 	"context"
@@ -10,6 +10,7 @@ import (
 
 	"github.com/get-drexa/drexa/internal/account"
 	"github.com/get-drexa/drexa/internal/database"
+	"github.com/get-drexa/drexa/internal/drive"
 	"github.com/get-drexa/drexa/internal/organization"
 	"github.com/get-drexa/drexa/internal/password"
 	"github.com/get-drexa/drexa/internal/user"
@@ -46,7 +47,7 @@ func TestService_DriveAccess(t *testing.T) {
 	userSvc := user.NewService()
 	orgSvc := organization.NewService()
 	accSvc := account.NewService()
-	driveSvc := NewService()
+	driveSvc := drive.NewService()
 
 	testUser, err := userSvc.RegisterUser(ctx, db, user.UserRegistrationOptions{
 		Email:       "drive@example.com",
@@ -75,7 +76,7 @@ func TestService_DriveAccess(t *testing.T) {
 		t.Fatalf("CreateAccount(org2): %v", err)
 	}
 
-	drive1, err := driveSvc.CreateDrive(ctx, db, CreateDriveOptions{
+	drive1, err := driveSvc.CreateDrive(ctx, db, drive.CreateDriveOptions{
 		OrgID:          org1.ID,
 		OwnerAccountID: &acc1.ID,
 		Name:           "Drive One",
@@ -84,7 +85,7 @@ func TestService_DriveAccess(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateDrive(org1): %v", err)
 	}
-	drive2, err := driveSvc.CreateDrive(ctx, db, CreateDriveOptions{
+	drive2, err := driveSvc.CreateDrive(ctx, db, drive.CreateDriveOptions{
 		OrgID:          org2.ID,
 		OwnerAccountID: &acc2.ID,
 		Name:           "Drive Two",

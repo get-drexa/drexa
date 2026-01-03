@@ -1,6 +1,6 @@
 //go:build integration
 
-package registration
+package registration_test
 
 import (
 	"context"
@@ -14,6 +14,7 @@ import (
 	"github.com/get-drexa/drexa/internal/database"
 	"github.com/get-drexa/drexa/internal/drive"
 	"github.com/get-drexa/drexa/internal/organization"
+	"github.com/get-drexa/drexa/internal/registration"
 	"github.com/get-drexa/drexa/internal/user"
 	"github.com/get-drexa/drexa/internal/virtualfs"
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
@@ -62,9 +63,9 @@ func TestService_Register(t *testing.T) {
 	accSvc := account.NewService()
 	driveSvc := drive.NewService()
 
-	regSvc := NewService(userSvc, orgSvc, accSvc, driveSvc, vfs)
+	regSvc := registration.NewService(userSvc, orgSvc, accSvc, driveSvc, vfs)
 
-	result, err := regSvc.Register(ctx, db, RegisterOptions{
+	result, err := regSvc.Register(ctx, db, registration.RegisterOptions{
 		Email:       "reg@example.com",
 		Password:    "password123",
 		DisplayName: "Reg User",
