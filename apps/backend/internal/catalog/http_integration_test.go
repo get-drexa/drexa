@@ -301,8 +301,31 @@ func TestHTTP_CatalogEndpoints(t *testing.T) {
 		}
 	})
 
-	// Note: Directory rename test skipped due to VFS bug where it tries to
-	// resolve blob keys for directories which don't have blobs.
+	t.Run("rename directory", func(t *testing.T) {
+		root, err := env.vfs.FindNode(ctx, env.db, env.rootDirID.String(), env.scope)
+		if err != nil {
+			t.Fatalf("FindNode root: %v", err)
+		}
+		renameDir, err := env.vfs.CreateDirectory(ctx, env.db, root.ID, "to-rename", env.scope)
+		if err != nil {
+			t.Fatalf("CreateDirectory to-rename: %v", err)
+		}
+
+		var resp struct {
+			Kind string `json:"kind"`
+			ID   string `json:"id"`
+			Name string `json:"name"`
+		}
+		body := map[string]string{"name": "renamed-dir"}
+		doJSONAuth(t, env.app, http.MethodPatch, driveURL(fmt.Sprintf("/directories/%s", renameDir.PublicID)), env.accessToken, body, http.StatusOK, &resp)
+
+		if resp.Kind != "directory" {
+			t.Errorf("expected kind=directory, got %q", resp.Kind)
+		}
+		if resp.Name != "renamed-dir" {
+			t.Errorf("expected name=renamed-dir, got %q", resp.Name)
+		}
+	})
 
 	// File tests
 	t.Run("fetch file by ID", func(t *testing.T) {

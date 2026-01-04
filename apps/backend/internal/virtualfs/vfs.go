@@ -598,7 +598,8 @@ func (vfs *VirtualFS) RenameNode(ctx context.Context, db bun.IDB, node *Node, na
 		return ErrAccessDenied
 	}
 
-	oldKey, err := vfs.keyResolver.Resolve(ctx, db, node)
+	// Resolve rename operation before updating DB (needs old path)
+	renameOp, err := vfs.keyResolver.ResolveRenameOp(ctx, db, node, name)
 	if err != nil {
 		return err
 	}
@@ -617,22 +618,18 @@ func (vfs *VirtualFS) RenameNode(ctx context.Context, db bun.IDB, node *Node, na
 		return err
 	}
 
-	newKey, err := vfs.keyResolver.Resolve(ctx, db, node)
-	if err != nil {
-		return err
-	}
-
-	if oldKey != newKey {
-		err = vfs.blobStore.Move(ctx, oldKey, newKey)
+	// Execute blob move if needed
+	if renameOp != nil {
+		err = vfs.blobStore.Move(ctx, renameOp.OldKey, renameOp.NewKey)
 		if err != nil {
 			return err
 		}
 
 		if vfs.keyResolver.ShouldPersistKey() {
-			node.BlobKey = newKey
+			node.BlobKey = renameOp.NewKey
 			_, err = db.NewUpdate().Model(node).
 				WherePK().
-				Set("blob_key = ?", newKey).
+				Set("blob_key = ?", renameOp.NewKey).
 				Exec(ctx)
 			if err != nil {
 				return err

@@ -45,3 +45,9 @@ func (r *FlatKeyResolver) ResolveBulkMoveOps(ctx context.Context, db bun.IDB, no
 	}
 	return nil, nil
 }
+
+// ResolveRenameOp returns nil for flat key storage since blob keys are UUIDs
+// and don't change when nodes are renamed.
+func (r *FlatKeyResolver) ResolveRenameOp(ctx context.Context, db bun.IDB, node *Node, newName string) (*BlobMoveOp, error) {
+	return nil, nil
+}

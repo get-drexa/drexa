@@ -20,6 +20,12 @@ type BlobKeyResolver interface {
 	// Returns ErrBulkMoveRequiresSameParent if nodes don't all share the same parent.
 	// Returns nil, nil if no blob moves are needed (e.g., flat key storage where keys are UUIDs).
 	ResolveBulkMoveOps(ctx context.Context, db bun.IDB, nodes []*Node, newParentID uuid.UUID) ([]BlobMoveOp, error)
+
+	// ResolveRenameOp returns the blob move operation needed when renaming a node.
+	// Returns nil, nil if no blob move is needed (e.g., flat key storage where keys are UUIDs).
+	// For hierarchical storage, returns a single move op for both files and directories
+	// (os.Rename handles directories atomically).
+	ResolveRenameOp(ctx context.Context, db bun.IDB, node *Node, newName string) (*BlobMoveOp, error)
 }
 
 type DeletionPlan struct {

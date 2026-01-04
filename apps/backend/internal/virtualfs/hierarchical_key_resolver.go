@@ -77,3 +77,34 @@ func (r *HierarchicalKeyResolver) ResolveBulkMoveOps(ctx context.Context, db bun
 
 	return ops, nil
 }
+
+// ResolveRenameOp returns the blob move operation for renaming a node.
+// For hierarchical storage, both files and directories need blob moves since
+// the key is path-based. os.Rename handles directory moves atomically.
+func (r *HierarchicalKeyResolver) ResolveRenameOp(ctx context.Context, db bun.IDB, node *Node, newName string) (*BlobMoveOp, error) {
+	oldPath, err := buildNodeAbsolutePathString(ctx, db, node)
+	if err != nil {
+		return nil, err
+	}
+
+	parentPath, err := buildPathFromNodeID(ctx, db, node.ParentID)
+	if err != nil {
+		return nil, err
+	}
+
+	var newPath string
+	if parentPath == "" {
+		newPath = newName
+	} else {
+		newPath = fmt.Sprintf("%s/%s", parentPath, newName)
+	}
+
+	oldKey := blob.Key(fmt.Sprintf("%s/%s", node.DriveID, oldPath))
+	newKey := blob.Key(fmt.Sprintf("%s/%s", node.DriveID, newPath))
+
+	return &BlobMoveOp{
+		Node:   node,
+		OldKey: oldKey,
+		NewKey: newKey,
+	}, nil
+}
