@@ -108,18 +108,25 @@ if [ -n "$GPG_PRIVATE_KEY" ]; then
                 echo -e "5\ny\n" | gpg --batch --command-fd 0 --expert --edit-key "$KEY_ID" trust quit 2>/dev/null
             fi
             
-            # Configure GPG agent for passphrase caching if passphrase is provided
-            if [ -n "$GPG_PRIVATE_KEY_PASSPHRASE" ]; then
-                echo "Configuring GPG agent for passphrase caching..."
-                mkdir -p ~/.gnupg
-                cat > ~/.gnupg/gpg-agent.conf << EOF
+            # Configure GPG for non-interactive use
+            echo "Configuring GPG for non-interactive signing..."
+            mkdir -p ~/.gnupg
+            chmod 700 ~/.gnupg
+            
+            # Configure gpg.conf for loopback pinentry
+            cat > ~/.gnupg/gpg.conf << EOF
+use-agent
+pinentry-mode loopback
+EOF
+            
+            # Configure gpg-agent for passphrase caching
+            cat > ~/.gnupg/gpg-agent.conf << EOF
 default-cache-ttl 28800
 max-cache-ttl 28800
-pinentry-program /usr/bin/pinentry-curses
+allow-loopback-pinentry
 EOF
-                # Restart GPG agent
-                gpg-connect-agent reloadagent /bye 2>/dev/null || true
-            fi
+            # Restart GPG agent
+            gpg-connect-agent reloadagent /bye 2>/dev/null || true
             
             echo "GPG key setup complete!"
         else
