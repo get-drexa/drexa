@@ -10,9 +10,13 @@ import (
 	"github.com/get-drexa/drexa/internal/user"
 	"github.com/get-drexa/drexa/internal/virtualfs"
 	"github.com/gofiber/fiber/v2"
-	"github.com/google/uuid"
 	"github.com/uptrace/bun"
 )
+
+type driveInfoResponse struct {
+	*Drive
+	RootDirID string `json:"rootDirId"`
+}
 
 type HTTPHandler struct {
 	driveService   *Service
@@ -39,7 +43,7 @@ func (h *HTTPHandler) RegisterRoutes(api fiber.Router) *virtualfs.ScopedRouter {
 	drive.Use(h.authMiddleware)
 	drive.Use(h.driveMiddleware)
 
-	drive.Get("/", h.getDrive)
+	drive.Get("/", h.getDriveInfo)
 
 	return &virtualfs.ScopedRouter{Router: drive}
 }
@@ -69,12 +73,34 @@ func (h *HTTPHandler) listDrives(c *fiber.Ctx) error {
 	return c.JSON(drives)
 }
 
-func (h *HTTPHandler) getDrive(c *fiber.Ctx) error {
+func (h *HTTPHandler) getDriveInfo(c *fiber.Ctx) error {
 	drive, ok := reqctx.CurrentDrive(c).(*Drive)
 	if !ok || drive == nil {
 		return c.SendStatus(fiber.StatusNotFound)
 	}
-	return c.JSON(drive)
+
+	rootDirID, _ := c.Locals("rootDirId").(string)
+	if rootDirID == "" {
+		scopeAny := reqctx.VFSAccessScope(c)
+		scope, ok := scopeAny.(*virtualfs.Scope)
+		if !ok || scope == nil {
+			return c.SendStatus(fiber.StatusUnauthorized)
+		}
+
+		root, err := h.vfs.FindNode(c.Context(), h.db, scope.RootNodeID.String(), scope)
+		if err != nil {
+			if errors.Is(err, virtualfs.ErrNodeNotFound) || errors.Is(err, virtualfs.ErrAccessDenied) {
+				return c.SendStatus(fiber.StatusNotFound)
+			}
+			return httperr.Internal(err)
+		}
+		rootDirID = root.PublicID
+	}
+
+	return c.JSON(driveInfoResponse{
+		Drive:     drive,
+		RootDirID: rootDirID,
+	})
 }
 
 func (h *HTTPHandler) driveMiddleware(c *fiber.Ctx) error {
@@ -83,12 +109,8 @@ func (h *HTTPHandler) driveMiddleware(c *fiber.Ctx) error {
 		return c.SendStatus(fiber.StatusNotFound)
 	}
 
-	driveID, err := uuid.Parse(c.Params("driveID"))
-	if err != nil {
-		return c.SendStatus(fiber.StatusNotFound)
-	}
-
-	drive, err := h.driveService.DriveByID(c.Context(), h.db, driveID)
+	driveID := c.Params("driveID")
+	drive, err := h.driveService.DriveByPublicID(c.Context(), h.db, driveID)
 	if err != nil {
 		if errors.Is(err, ErrDriveNotFound) {
 			return c.SendStatus(fiber.StatusNotFound)
@@ -112,6 +134,8 @@ func (h *HTTPHandler) driveMiddleware(c *fiber.Ctx) error {
 	if err != nil {
 		return httperr.Internal(err)
 	}
+
+	c.Locals("rootDirId", root.PublicID)
 
 	scope := &virtualfs.Scope{
 		DriveID:      drive.ID,

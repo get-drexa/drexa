@@ -130,7 +130,7 @@ func (h *HTTPHandler) shareMiddleware(c *fiber.Ctx) error {
 // @Tags shares
 // @Accept json
 // @Produce json
-// @Param driveID path string true "Drive ID" format(uuid)
+// @Param driveID path string true "Drive ID" example:"kRp2XYTq9A55"
 // @Param shareID path string true "Share ID"
 // @Success 200 {object} Share "Share details"
 // @Failure 401 {string} string "Not authenticated"
@@ -161,7 +161,7 @@ func (h *HTTPHandler) getShare(c *fiber.Ctx) error {
 // @Tags shares
 // @Accept json
 // @Produce json
-// @Param driveID path string true "Drive ID" format(uuid)
+// @Param driveID path string true "Drive ID" example:"kRp2XYTq9A55"
 // @Param request body createShareRequest true "Share details"
 // @Success 200 {object} Share "Created share"
 // @Failure 400 {object} map[string]string "Invalid request, items not in same directory, or root directory cannot be shared"
@@ -244,7 +244,7 @@ func (h *HTTPHandler) createShare(c *fiber.Ctx) error {
 // @Tags shares
 // @Accept json
 // @Produce json
-// @Param driveID path string true "Drive ID" format(uuid)
+// @Param driveID path string true "Drive ID" example:"kRp2XYTq9A55"
 // @Param shareID path string true "Share ID"
 // @Param request body patchShareRequest true "Share details"
 // @Success 200 {object} Share "Updated share"
@@ -313,7 +313,7 @@ func (h *HTTPHandler) updateShare(c *fiber.Ctx) error {
 // @Summary Delete share
 // @Description Delete a share link, revoking access for all users
 // @Tags shares
-// @Param driveID path string true "Drive ID" format(uuid)
+// @Param driveID path string true "Drive ID" example:"kRp2XYTq9A55"
 // @Param shareID path string true "Share ID"
 // @Success 204 {string} string "Share deleted"
 // @Failure 401 {string} string "Not authenticated"

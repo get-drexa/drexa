@@ -10,12 +10,12 @@ import (
 type Drive struct {
 	bun.BaseModel `bun:"drives" swaggerignore:"true"`
 
-	ID        uuid.UUID `bun:",pk,type:uuid" json:"id"`
-	PublicID  string    `bun:"public_id,notnull" json:"publicId"`
-	OrgID     uuid.UUID `bun:"org_id,notnull,type:uuid" json:"orgId"`
-	Name      string    `bun:"name,notnull" json:"name"`
+	ID       uuid.UUID `bun:",pk,type:uuid" json:"-"`
+	PublicID string    `bun:"public_id,notnull" json:"id"`
+	OrgID    uuid.UUID `bun:"org_id,notnull,type:uuid" json:"-"`
+	Name     string    `bun:"name,notnull" json:"name"`
 
-	OwnerAccountID *uuid.UUID `bun:"owner_account_id,type:uuid" json:"ownerAccountId,omitempty"`
+	OwnerAccountID *uuid.UUID `bun:"owner_account_id,type:uuid" json:"-"`
 
 	StorageUsageBytes int64 `bun:"storage_usage_bytes,notnull" json:"storageUsageBytes"`
 	StorageQuotaBytes int64 `bun:"storage_quota_bytes,notnull" json:"storageQuotaBytes"`

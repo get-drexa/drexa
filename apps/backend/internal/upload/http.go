@@ -51,7 +51,7 @@ func (h *HTTPHandler) RegisterRoutes(api *virtualfs.ScopedRouter) {
 // @Accept json
 // @Produce json
 // @Security BearerAuth
-// @Param driveID path string true "Drive ID" format(uuid)
+// @Param driveID path string true "Drive ID" example:"kRp2XYTq9A55"
 // @Param request body createUploadRequest true "Upload details"
 // @Success 200 {object} Upload "Upload session created"
 // @Failure 400 {object} map[string]string "Parent is not a directory"
@@ -107,7 +107,7 @@ func (h *HTTPHandler) Create(c *fiber.Ctx) error {
 // @Tags uploads
 // @Accept application/octet-stream
 // @Security BearerAuth
-// @Param driveID path string true "Drive ID" format(uuid)
+// @Param driveID path string true "Drive ID" example:"kRp2XYTq9A55"
 // @Param uploadID path string true "Upload session ID"
 // @Param file body []byte true "File content (binary)"
 // @Success 204 {string} string "Content received successfully"
@@ -148,7 +148,7 @@ func (h *HTTPHandler) ReceiveContent(c *fiber.Ctx) error {
 // @Accept json
 // @Produce json
 // @Security BearerAuth
-// @Param driveID path string true "Drive ID" format(uuid)
+// @Param driveID path string true "Drive ID" example:"kRp2XYTq9A55"
 // @Param uploadID path string true "Upload session ID"
 // @Param request body updateUploadRequest true "Status update"
 // @Success 200 {object} Upload "Upload completed"

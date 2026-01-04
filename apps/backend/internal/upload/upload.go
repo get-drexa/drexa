@@ -25,5 +25,5 @@ type Upload struct {
 	// Internal target node reference
 	TargetNode *virtualfs.Node `json:"-" swaggerignore:"true"`
 	// URL to upload file content to
-	UploadURL string `json:"uploadUrl" example:"https://api.example.com/api/drives/550e8400-e29b-41d4-a716-446655440000/uploads/xNq5RVBt3K88/content"`
+	UploadURL string `json:"uploadUrl" example:"https://api.example.com/api/drives/kRp2XYTq9A55/uploads/xNq5RVBt3K88/content"`
 }

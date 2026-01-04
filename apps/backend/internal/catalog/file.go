@@ -64,7 +64,7 @@ func (h *HTTPHandler) currentFileMiddleware(c *fiber.Ctx) error {
 // @Tags files
 // @Produce json
 // @Security BearerAuth
-// @Param driveID path string true "Drive ID" format(uuid)
+// @Param driveID path string true "Drive ID" example:"kRp2XYTq9A55"
 // @Param fileID path string true "File ID"
 // @Success 200 {object} FileInfo "File metadata"
 // @Failure 401 {string} string "Not authenticated"
@@ -91,7 +91,7 @@ func (h *HTTPHandler) fetchFile(c *fiber.Ctx) error {
 // @Tags files
 // @Produce application/octet-stream
 // @Security BearerAuth
-// @Param driveID path string true "Drive ID" format(uuid)
+// @Param driveID path string true "Drive ID" example:"kRp2XYTq9A55"
 // @Param fileID path string true "File ID"
 // @Success 200 {file} binary "File content stream"
 // @Success 307 {string} string "Redirect to download URL"
@@ -140,7 +140,7 @@ func (h *HTTPHandler) downloadFile(c *fiber.Ctx) error {
 // @Accept json
 // @Produce json
 // @Security BearerAuth
-// @Param driveID path string true "Drive ID" format(uuid)
+// @Param driveID path string true "Drive ID" example:"kRp2XYTq9A55"
 // @Param fileID path string true "File ID"
 // @Param request body patchFileRequest true "File update"
 // @Success 200 {object} FileInfo "Updated file metadata"
@@ -201,7 +201,7 @@ func (h *HTTPHandler) patchFile(c *fiber.Ctx) error {
 // @Tags files
 // @Produce json
 // @Security BearerAuth
-// @Param driveID path string true "Drive ID" format(uuid)
+// @Param driveID path string true "Drive ID" example:"kRp2XYTq9A55"
 // @Param fileID path string true "File ID"
 // @Param trash query bool false "Move to trash instead of permanent delete" default(false)
 // @Success 200 {object} FileInfo "Trashed file info (when trash=true)"
@@ -264,7 +264,7 @@ func (h *HTTPHandler) deleteFile(c *fiber.Ctx) error {
 // @Description Delete multiple files permanently or move them to trash. All items must be files.
 // @Tags files
 // @Security BearerAuth
-// @Param driveID path string true "Drive ID" format(uuid)
+// @Param driveID path string true "Drive ID" example:"kRp2XYTq9A55"
 // @Param id query string true "Comma-separated list of file IDs to delete" example:"mElnUNCm8F22,kRp2XYTq9A55"
 // @Param trash query bool false "Move to trash instead of permanent delete" default(false)
 // @Success 200 {array} FileInfo "Trashed files (when trash=true)"
@@ -352,7 +352,7 @@ func (h *HTTPHandler) deleteFiles(c *fiber.Ctx) error {
 // @Description Get all share links that include this file
 // @Tags files
 // @Produce json
-// @Param driveID path string true "Drive ID" format(uuid)
+// @Param driveID path string true "Drive ID" example:"kRp2XYTq9A55"
 // @Param fileID path string true "File ID"
 // @Success 200 {array} sharing.Share "Array of shares"
 // @Failure 401 {string} string "Not authenticated"

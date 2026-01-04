@@ -147,7 +147,7 @@ func includeParam(c *fiber.Ctx) []string {
 // @Accept json
 // @Produce json
 // @Security BearerAuth
-// @Param driveID path string true "Drive ID" format(uuid)
+// @Param driveID path string true "Drive ID" example:"kRp2XYTq9A55"
 // @Param request body createDirectoryRequest true "Directory details"
 // @Param include query string false "Include additional fields" Enums(path)
 // @Success 200 {object} DirectoryInfo "Created directory"
@@ -230,7 +230,7 @@ func (h *HTTPHandler) createDirectory(c *fiber.Ctx) error {
 // @Tags directories
 // @Produce json
 // @Security BearerAuth
-// @Param driveID path string true "Drive ID" format(uuid)
+// @Param driveID path string true "Drive ID" example:"kRp2XYTq9A55"
 // @Param directoryID path string true "Directory ID"
 // @Param include query string false "Include additional fields" Enums(path)
 // @Success 200 {object} DirectoryInfo "Directory metadata"
@@ -274,7 +274,7 @@ func (h *HTTPHandler) fetchDirectory(c *fiber.Ctx) error {
 // @Tags directories
 // @Produce json
 // @Security BearerAuth
-// @Param driveID path string true "Drive ID" format(uuid)
+// @Param driveID path string true "Drive ID" example:"kRp2XYTq9A55"
 // @Param directoryID path string true "Directory ID (use 'root' for the root directory)"
 // @Param orderBy query string false "Sort field: name, createdAt, or updatedAt" Enums(name,createdAt,updatedAt)
 // @Param dir query string false "Sort direction: asc or desc" Enums(asc,desc)
@@ -405,7 +405,7 @@ func (h *HTTPHandler) listDirectory(c *fiber.Ctx) error {
 // @Accept json
 // @Produce json
 // @Security BearerAuth
-// @Param driveID path string true "Drive ID" format(uuid)
+// @Param driveID path string true "Drive ID" example:"kRp2XYTq9A55"
 // @Param directoryID path string true "Directory ID"
 // @Param request body patchDirectoryRequest true "Directory update"
 // @Success 200 {object} DirectoryInfo "Updated directory metadata"
@@ -464,7 +464,7 @@ func (h *HTTPHandler) patchDirectory(c *fiber.Ctx) error {
 // @Description Delete a directory permanently or move it to trash. Deleting a directory also affects all its contents.
 // @Tags directories
 // @Security BearerAuth
-// @Param driveID path string true "Drive ID" format(uuid)
+// @Param driveID path string true "Drive ID" example:"kRp2XYTq9A55"
 // @Param directoryID path string true "Directory ID"
 // @Param trash query bool false "Move to trash instead of permanent delete" default(false)
 // @Success 200 {object} DirectoryInfo "Trashed directory info (when trash=true)"
@@ -524,7 +524,7 @@ func (h *HTTPHandler) deleteDirectory(c *fiber.Ctx) error {
 // @Description Delete multiple directories permanently or move them to trash. Deleting directories also affects all their contents. All items must be directories.
 // @Tags directories
 // @Security BearerAuth
-// @Param driveID path string true "Drive ID" format(uuid)
+// @Param driveID path string true "Drive ID" example:"kRp2XYTq9A55"
 // @Param id query string true "Comma-separated list of directory IDs to delete" example:"kRp2XYTq9A55,xYz123AbC456"
 // @Param trash query bool false "Move to trash instead of permanent delete" default(false)
 // @Success 200 {array} DirectoryInfo "Trashed directories (when trash=true)"
@@ -619,7 +619,7 @@ func (h *HTTPHandler) deleteDirectories(c *fiber.Ctx) error {
 // @Accept json
 // @Produce json
 // @Security BearerAuth
-// @Param driveID path string true "Drive ID" format(uuid)
+// @Param driveID path string true "Drive ID" example:"kRp2XYTq9A55"
 // @Param directoryID path string true "Target directory ID"
 // @Param request body postDirectoryContentRequest true "Items to move"
 // @Success 200 {object} moveItemsToDirectoryResponse "Move operation results with moved, conflict, and error states"
@@ -769,7 +769,7 @@ func decodeListChildrenCursor(s string) (*decodedListChildrenCursor, error) {
 // @Description Get all share links that include this directory
 // @Tags directories
 // @Produce json
-// @Param driveID path string true "Drive ID" format(uuid)
+// @Param driveID path string true "Drive ID" example:"kRp2XYTq9A55"
 // @Param directoryID path string true "Directory ID"
 // @Success 200 {array} sharing.Share "Array of shares"
 // @Failure 401 {string} string "Not authenticated"

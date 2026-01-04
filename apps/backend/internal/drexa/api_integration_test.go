@@ -164,6 +164,20 @@ func TestRegistrationFlow(t *testing.T) {
 		}
 	})
 
+	t.Run("drive info", func(t *testing.T) {
+		var info struct {
+			ID        string `json:"id"`
+			RootDirID string `json:"rootDirId"`
+		}
+		doJSON(t, s.App(), http.MethodGet, fmt.Sprintf("/api/my/drives/%s", reg.Drive.ID), reg.AccessToken, nil, http.StatusOK, &info)
+		if info.ID != reg.Drive.ID {
+			t.Fatalf("unexpected drive id: got %q want %q", info.ID, reg.Drive.ID)
+		}
+		if info.RootDirID == "" {
+			t.Fatalf("expected rootDirId to be set")
+		}
+	})
+
 	t.Run("users/me", func(t *testing.T) {
 		var me struct {
 			ID          string `json:"id"`

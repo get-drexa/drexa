@@ -65,6 +65,18 @@ func (s *Service) DriveByID(ctx context.Context, db bun.IDB, id uuid.UUID) (*Dri
 	return &drive, nil
 }
 
+func (s *Service) DriveByPublicID(ctx context.Context, db bun.IDB, publicID string) (*Drive, error) {
+	var drive Drive
+	err := db.NewSelect().Model(&drive).Where("public_id = ?", publicID).Scan(ctx)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrDriveNotFound
+		}
+		return nil, err
+	}
+	return &drive, nil
+}
+
 // ListAccessibleDrives returns drives a principal account can access:
 // - personal drives: owner_account_id = account.ID
 // - shared drives: owner_account_id IS NULL (future)
