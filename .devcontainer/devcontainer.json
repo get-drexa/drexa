@@ -113,7 +113,6 @@
 		}
 	},
 	"mounts": [
-		"source=${localEnv:HOME}/.config/nvim,target=/home/node/.config/nvim,type=bind,consistency=cached",
 		"source=${localWorkspaceFolder}/.codex,target=/home/node/.codex,type=bind,consistency=cached"
 	],
 	"remoteUser": "node"
