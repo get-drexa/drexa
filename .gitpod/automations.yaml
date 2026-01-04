@@ -1,3 +1,13 @@
+tasks:
+    editor-setup:
+        name: Editor Setup
+        description: Install nvim plugins and Mason LSP tools after dotfiles are applied
+        command: |
+            rm -f ~/.local/share/nvim/mason/.lockfile
+            ./scripts/editor-setup.sh
+        triggeredBy:
+            - postDevcontainerStart
+
 services:
     bun-install:
         name: Install Dependencies
@@ -19,7 +29,7 @@ services:
                 fi
         triggeredBy:
             - postEnvironmentStart
-    
+
     bun-dev:
         name: Bun Development Server
         description: Runs the Bun development server with hot reloading
@@ -43,7 +53,7 @@ services:
                 pkill -f "bun.*dev"
         triggeredBy:
             - postEnvironmentStart
-    
+
     convex-dev:
         name: Convex Development Server
         description: Runs the Convex development server for backend functions
