@@ -1,53 +1,81 @@
 import { mutationOptions, queryOptions, skipToken } from "@tanstack/react-query"
-import { atom } from "jotai"
-import { atomFamily } from "jotai/utils"
 import { fetchApi, Nothing } from "@/lib/api"
-import { currentDriveAtom } from "@/drive/drive"
+import { type Drive } from "@/drive/drive"
+import type { Organization } from "@/organization/organization"
 import { Share } from "./share"
 
-export const fileSharesQueryAtom = atomFamily((fileId: string) =>
-	atom((get) => {
-		const drive = get(currentDriveAtom)
-		return queryOptions({
-			queryKey: ["drives", drive?.id, "shares", { fileId }],
-			queryFn: drive
+export const fileSharesQuery = ({
+	org,
+	drive,
+	fileId,
+}: {
+	org: Organization | null
+	drive: Drive | null
+	fileId: string
+}) =>
+	queryOptions({
+		queryKey: [
+			"organizations",
+			org?.slug,
+			"drives",
+			drive?.id,
+			"shares",
+			{ fileId },
+		],
+		queryFn:
+			org && drive
 				? () =>
 						fetchApi(
 							"GET",
-							`/drives/${drive.id}/files/${fileId}/shares?includesExpired=true`,
+							`/${org.slug}/drives/${drive.id}/files/${fileId}/shares?includesExpired=true`,
 							{ returns: Share.array() },
 						).then(([_, result]) => result)
 				: skipToken,
-		})
-	}),
-)
+	})
 
-export const directorySharesQueryAtom = atomFamily((directoryId: string) =>
-	atom((get) => {
-		const drive = get(currentDriveAtom)
-		return queryOptions({
-			queryKey: ["drives", drive?.id, "shares", { directoryId }],
-			queryFn: drive
+export const directorySharesQuery = ({
+	org,
+	drive,
+	directoryId,
+}: {
+	org: Organization | null
+	drive: Drive | null
+	directoryId: string
+}) =>
+	queryOptions({
+		queryKey: [
+			"organizations",
+			org?.slug,
+			"drives",
+			drive?.id,
+			"shares",
+			{ directoryId },
+		],
+		queryFn:
+			org && drive
 				? () =>
 						fetchApi(
 							"GET",
-							`/drives/${drive.id}/directories/${directoryId}/shares?includesExpired=true`,
+							`/${org.slug}/drives/${drive.id}/directories/${directoryId}/shares?includesExpired=true`,
 							{ returns: Share.array() },
 						).then(([_, result]) => result)
-				: skipToken,
-		})
-	}),
-)
+					: skipToken,
+	})
 
-export const createShareMutationAtom = atom((get) =>
+export const createShareMutationOptions = ({
+	org,
+	drive,
+}: {
+	org: Organization
+	drive: Drive | null
+}) =>
 	mutationOptions({
 		mutationFn: async ({ items }: { items: string[] }) => {
-			const drive = get(currentDriveAtom)
 			if (!drive) throw new Error("No drive selected")
 
 			const [_, result] = await fetchApi(
 				"POST",
-				`/drives/${drive.id}/shares`,
+				`/${org.slug}/drives/${drive.id}/shares`,
 				{
 					body: JSON.stringify({ items }),
 					returns: Share,
@@ -56,25 +84,34 @@ export const createShareMutationAtom = atom((get) =>
 
 			return result
 		},
-	}),
-)
+	})
 
-export const deleteShareMutationAtom = atom((get) =>
+export const deleteShareMutationOptions = ({
+	org,
+	drive,
+}: {
+	org: Organization
+	drive: Drive | null
+}) =>
 	mutationOptions({
 		mutationFn: async ({ shareId }: { shareId: string }) => {
-			const drive = get(currentDriveAtom)
 			if (!drive) throw new Error("No drive selected")
 
 			await fetchApi(
 				"DELETE",
-				`/drives/${drive.id}/shares/${shareId}`,
+				`/${org.slug}/drives/${drive.id}/shares/${shareId}`,
 				{ returns: Nothing },
 			)
 		},
-	}),
-)
+	})
 
-export const updateShareMutationAtom = atom((get) =>
+export const updateShareMutationOptions = ({
+	org,
+	drive,
+}: {
+	org: Organization
+	drive: Drive | null
+}) =>
 	mutationOptions({
 		mutationFn: async ({
 			shareId,
@@ -83,14 +120,12 @@ export const updateShareMutationAtom = atom((get) =>
 			shareId: string
 			expiresAt?: Date | null
 		}) => {
-			const drive = get(currentDriveAtom)
 			if (!drive) throw new Error("No drive selected")
 
 			await fetchApi(
 				"PATCH",
-				`/drives/${drive.id}/shares/${shareId}`,
+				`/${org.slug}/drives/${drive.id}/shares/${shareId}`,
 				{ body: JSON.stringify({ expiresAt }), returns: Share },
 			)
 		},
-	}),
-)
+	})

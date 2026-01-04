@@ -1,11 +1,5 @@
 import { useMutation, useQuery } from "@tanstack/react-query"
-import {
-	atom,
-	type PrimitiveAtom,
-	useAtomValue,
-	useSetAtom,
-	useStore,
-} from "jotai"
+import { atom, type PrimitiveAtom, useAtomValue, useSetAtom } from "jotai"
 import {
 	CheckIcon,
 	CopyIcon,
@@ -59,14 +53,17 @@ import {
 	TooltipContent,
 	TooltipTrigger,
 } from "@/components/ui/tooltip"
+import { currentDriveAtom, type Drive } from "@/drive/drive"
 import { copyToClipboardMutation } from "@/lib/clipboard"
 import { cn } from "@/lib/utils"
+import type { Organization } from "@/organization/organization"
+import { useCurrentOrganization } from "@/organization/context"
 import {
-	createShareMutationAtom,
-	deleteShareMutationAtom,
-	directorySharesQueryAtom,
-	fileSharesQueryAtom,
-	updateShareMutationAtom,
+	createShareMutationOptions,
+	deleteShareMutationOptions,
+	directorySharesQuery,
+	fileSharesQuery,
+	updateShareMutationOptions,
 } from "@/sharing/api"
 import type { DirectoryItem } from "@/vfs/vfs"
 import type { Share } from "./share"
@@ -118,9 +115,40 @@ export function ItemShareDialog({ item, open, onClose }: ItemShareDialogProps) {
 	)
 }
 
+function itemSharesQueryKey(
+	item: DirectoryItem,
+	org: Organization | null,
+	drive: Drive | null,
+): readonly unknown[] | null {
+	if (!org || !drive) return null
+	switch (item.kind) {
+		case "file":
+			return fileSharesQuery({ org, drive, fileId: item.id }).queryKey
+		case "directory":
+			return directorySharesQuery({
+				org,
+				drive,
+				directoryId: item.id,
+			}).queryKey
+		default:
+			return null
+	}
+}
+
 function PublicAccessSection({ item }: { item: DirectoryItem }) {
-	const fileSharesQuery = useAtomValue(fileSharesQueryAtom(item.id))
-	const directorySharesQuery = useAtomValue(directorySharesQueryAtom(item.id))
+	const drive = useAtomValue(currentDriveAtom)
+	const org = useCurrentOrganization()
+
+	const fileSharesQueryOptions = fileSharesQuery({
+		org,
+		drive,
+		fileId: item.id,
+	})
+	const directorySharesQueryOptions = directorySharesQuery({
+		org,
+		drive,
+		directoryId: item.id,
+	})
 
 	const sortShares = (shares: Share[]) =>
 		[...shares].sort((a, b) => {
@@ -131,13 +159,13 @@ function PublicAccessSection({ item }: { item: DirectoryItem }) {
 		})
 
 	const { data: fileShares, isLoading: isLoadingFileShares } = useQuery({
-		...fileSharesQuery,
+		...fileSharesQueryOptions,
 		enabled: item.kind === "file",
 		select: sortShares,
 	})
 	const { data: directoryShares, isLoading: isLoadingDirectoryShares } =
 		useQuery({
-			...directorySharesQuery,
+			...directorySharesQueryOptions,
 			enabled: item.kind === "directory",
 			select: sortShares,
 		})
@@ -301,24 +329,12 @@ function ShareLinkListItem({ share }: { share: Share }) {
 
 function AddShareLinkListItem() {
 	const { item } = useContext(ItemShareDialogContext)
-	const store = useStore()
+	const drive = useAtomValue(currentDriveAtom)
+	const org = useCurrentOrganization()
 	const { mutate: createShare, isPending: isCreatingShare } = useMutation({
-		...useAtomValue(createShareMutationAtom),
+		...createShareMutationOptions({ org, drive }),
 		onSuccess: (_createdShare, _vars, _, { client }) => {
-			let queryKey: readonly unknown[] | null
-			switch (item.kind) {
-				case "file":
-					queryKey = store.get(fileSharesQueryAtom(item.id)).queryKey
-					break
-				case "directory":
-					queryKey = store.get(
-						directorySharesQueryAtom(item.id),
-					).queryKey
-					break
-				default:
-					queryKey = null
-					break
-			}
+			const queryKey = itemSharesQueryKey(item, org, drive)
 			if (queryKey) {
 				client.invalidateQueries({
 					queryKey,
@@ -417,7 +433,7 @@ function RenameShareLinkPopover({
 }: React.PropsWithChildren<{
 	share: Share
 	activePopoverAtom: PrimitiveAtom<ActivePopoverKind | null>
-}>) {
+	}>) {
 	const setActivePopover = useSetAtom(activePopoverAtom)
 	const inputId = `rename-share-link-${share.id}`
 
@@ -486,27 +502,15 @@ function ConfigureShareLinkExpirationPopover({
 		share.expiresAt === null ? EXPIRATION_TYPE.never : EXPIRATION_TYPE.date,
 	)
 	const { item } = useContext(ItemShareDialogContext)
-	const store = useStore()
+	const drive = useAtomValue(currentDriveAtom)
+	const org = useCurrentOrganization()
 	const setActivePopover = useSetAtom(activePopoverAtom)
 	const dateInputRef = useRef<DateInputHandle>(null)
 
 	const { mutate: updateShare, isPending: isUpdatingShare } = useMutation({
-		...useAtomValue(updateShareMutationAtom),
+		...updateShareMutationOptions({ org, drive }),
 		onSuccess: (_updatedShare, _vars, _, { client }) => {
-			let queryKey: readonly unknown[] | null
-			switch (item.kind) {
-				case "file":
-					queryKey = store.get(fileSharesQueryAtom(item.id)).queryKey
-					break
-				case "directory":
-					queryKey = store.get(
-						directorySharesQueryAtom(item.id),
-					).queryKey
-					break
-				default:
-					queryKey = null
-					break
-			}
+			const queryKey = itemSharesQueryKey(item, org, drive)
 			if (queryKey) {
 				client.invalidateQueries({
 					queryKey,
@@ -617,28 +621,16 @@ function ShareLinkOptionsMenu({
 }: React.PropsWithChildren<{
 	share: Share
 	activePopoverAtom: PrimitiveAtom<ActivePopoverKind | null>
-}>) {
+	}>) {
 	const { item } = useContext(ItemShareDialogContext)
 	const setActivePopover = useSetAtom(activePopoverAtom)
-	const store = useStore()
+	const drive = useAtomValue(currentDriveAtom)
+	const org = useCurrentOrganization()
 
 	const { mutate: deleteShare } = useMutation({
-		...useAtomValue(deleteShareMutationAtom),
+		...deleteShareMutationOptions({ org, drive }),
 		onMutate: ({ shareId }, { client }) => {
-			let queryKey: readonly unknown[] | null
-			switch (item.kind) {
-				case "file":
-					queryKey = store.get(fileSharesQueryAtom(item.id)).queryKey
-					break
-				case "directory":
-					queryKey = store.get(
-						directorySharesQueryAtom(item.id),
-					).queryKey
-					break
-				default:
-					queryKey = null
-					break
-			}
+			const queryKey = itemSharesQueryKey(item, org, drive)
 			if (queryKey) {
 				const prevShares = client.getQueryData<Share[]>(queryKey)
 				client.setQueryData<Share[]>(
@@ -702,24 +694,12 @@ function ShareLinkOptionsMenu({
 
 function CreateShareLinkButton() {
 	const { item } = useContext(ItemShareDialogContext)
-	const store = useStore()
+	const drive = useAtomValue(currentDriveAtom)
+	const org = useCurrentOrganization()
 	const { mutate: createShare, isPending: isCreatingShare } = useMutation({
-		...useAtomValue(createShareMutationAtom),
+		...createShareMutationOptions({ org, drive }),
 		onSuccess: (_createdShare, _vars, _, { client }) => {
-			let queryKey: readonly unknown[] | null
-			switch (item.kind) {
-				case "file":
-					queryKey = store.get(fileSharesQueryAtom(item.id)).queryKey
-					break
-				case "directory":
-					queryKey = store.get(
-						directorySharesQueryAtom(item.id),
-					).queryKey
-					break
-				default:
-					queryKey = null
-					break
-			}
+			const queryKey = itemSharesQueryKey(item, org, drive)
 			if (queryKey) {
 				client.invalidateQueries({
 					queryKey,

@@ -3,13 +3,16 @@ import { type } from "arktype"
 import { Account } from "@/account/account"
 import { accountsQuery } from "@/account/api"
 import { fetchApi } from "@/lib/api"
+import { Organization, ORGANIZATION_KIND } from "@/organization/organization"
 import { currentUserQuery } from "@/user/api"
 import { User } from "@/user/user"
 import { drivesQuery } from "@/drive/api"
 import { Drive } from "@/drive/drive"
+import { listOrganizationsQuery } from "@/organization/api"
 
 const LoginResponseSchema = type({
 	user: User,
+	organizations: Organization.array(),
 })
 
 const SignUpResponse = type({
@@ -30,9 +33,12 @@ export const loginMutation = mutationOptions({
 		return result
 	},
 	onSuccess: (data, _, __, context) => {
+		context.client.setQueryData(
+			listOrganizationsQuery.queryKey,
+			data.organizations,
+		)
 		context.client.setQueryData(currentUserQuery.queryKey, data.user)
 		context.client.invalidateQueries(accountsQuery)
-		context.client.invalidateQueries(drivesQuery)
 	},
 })
 
@@ -54,6 +60,5 @@ export const signUpMutation = mutationOptions({
 	onSuccess: (data, _, __, context) => {
 		context.client.setQueryData(currentUserQuery.queryKey, data.user)
 		context.client.setQueryData(accountsQuery.queryKey, [data.account])
-		context.client.setQueryData(drivesQuery.queryKey, [data.drive])
 	},
 })

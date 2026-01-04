@@ -14,12 +14,14 @@ export const Upload = type({
 export type Upload = typeof Upload.infer
 
 export async function uploadFile({
+	orgSlug,
 	drive,
 	file,
 	targetDirectory,
 	onStart,
 	onProgress,
 }: {
+	orgSlug: string
 	drive: Drive
 	file: File
 	targetDirectory: DirectoryInfoWithPath
@@ -28,7 +30,7 @@ export async function uploadFile({
 }) {
 	const [, upload] = await fetchApi(
 		"POST",
-		`/drives/${drive.id}/uploads`,
+		`/${orgSlug}/drives/${drive.id}/uploads`,
 		{
 			body: JSON.stringify({
 				name: file.name,
@@ -45,12 +47,16 @@ export async function uploadFile({
 		onProgress,
 	})
 
-	await fetchApi("PATCH", `/drives/${drive.id}/uploads/${upload.id}`, {
-		body: JSON.stringify({
-			status: "completed",
-		}),
-		returns: Upload,
-	})
+	await fetchApi(
+		"PATCH",
+		`/${orgSlug}/drives/${drive.id}/uploads/${upload.id}`,
+		{
+			body: JSON.stringify({
+				status: "completed",
+			}),
+			returns: Upload,
+		},
+	)
 
 	return upload
 }

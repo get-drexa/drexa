@@ -3,12 +3,10 @@ import { atom } from "jotai"
 
 export const Drive = type({
 	id: "string",
-	publicId: "string",
-	orgId: "string",
-	"ownerAccountId?": "string",
 	name: "string",
 	createdAt: "string.date.iso.parse",
 	updatedAt: "string.date.iso.parse",
+	rootDirId: "string",
 	storageUsageBytes: "number",
 	storageQuotaBytes: "number",
 })

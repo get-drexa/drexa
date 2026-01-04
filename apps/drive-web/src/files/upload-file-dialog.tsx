@@ -32,6 +32,7 @@ import { formatError } from "@/lib/error"
 import { directoryContentQueryKey } from "@/vfs/api"
 import type { DirectoryInfoWithPath } from "@/vfs/vfs"
 import { currentDriveAtom } from "@/drive/drive"
+import { useCurrentOrganization } from "@/organization/context"
 import {
 	clearAllFileUploadStatusesAtom,
 	clearFileUploadStatusesAtom,
@@ -63,6 +64,7 @@ function useUploadFilesAtom({
 	targetDirectory: DirectoryInfoWithPath
 }) {
 	const store = useStore()
+	const org = useCurrentOrganization()
 
 	const options = useMemo(
 		() =>
@@ -70,9 +72,11 @@ function useUploadFilesAtom({
 				mutationFn: async (files: PickedFile[]) => {
 					const drive = store.get(currentDriveAtom)
 					if (!drive) throw new Error("No drive selected")
+					const orgSlug = org.slug
 
 					const promises = files.map((pickedFile) =>
 						uploadFile({
+							orgSlug,
 							drive,
 							file: pickedFile.file,
 							targetDirectory,
@@ -140,6 +144,7 @@ function useUploadFilesAtom({
 					if (drive) {
 						client.invalidateQueries({
 							queryKey: directoryContentQueryKey(
+								org.slug,
 								drive.id,
 								targetDirectory.id,
 							),
@@ -151,7 +156,7 @@ function useUploadFilesAtom({
 					toast.error(formatError(error))
 				},
 			}),
-		[store, targetDirectory],
+		[org.slug, store, targetDirectory],
 	)
 
 	return useMemo(() => atomWithMutation(() => options), [options])

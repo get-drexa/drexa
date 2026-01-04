@@ -6,10 +6,9 @@ import {
 	skipToken,
 } from "@tanstack/react-query"
 import { type } from "arktype"
-import { atom } from "jotai"
-import { atomFamily } from "jotai/utils"
+import { type Drive } from "@/drive/drive"
 import { fetchApi } from "@/lib/api"
-import { currentDriveAtom } from "@/drive/drive"
+import type { Organization } from "@/organization/organization"
 import {
 	DirectoryContent,
 	DirectoryInfo,
@@ -24,51 +23,54 @@ export const DirectoryContentResponse = type({
 })
 export type DirectoryContentResponseType = typeof DirectoryContentResponse.infer
 
-/**
- * This atom derives the file url for a given file.
- * It is recommended to use {@link useFileUrl} instead of using this atom directly.
- */
-export const fileUrlAtom = atomFamily((fileId: string) =>
-	atom((get) => {
-		const drive = get(currentDriveAtom)
-		if (!drive) {
-			return ""
-		}
-		return `${import.meta.env.VITE_API_URL}/drives/${drive.id}/files/${fileId}/content`
-	}),
-)
-
-export const rootDirectoryQueryAtom = atom((get) => {
-	const drive = get(currentDriveAtom)
-	return queryOptions({
-		queryKey: ["drives", drive?.id, "directories", "root"],
-		queryFn: drive
-			? () =>
-					fetchApi(
-						"GET",
-						`/drives/${drive.id}/directories/root?include=path`,
-						{ returns: DirectoryInfoWithPath },
-					).then(([_, result]) => result)
-			: skipToken,
-	})
-})
-
-export const directoryInfoQueryAtom = atomFamily((directoryId: string) =>
-	atom((get) => {
-		const drive = get(currentDriveAtom)
-		return queryOptions({
-			queryKey: ["drives", drive?.id, "directories", directoryId],
-			queryFn: drive
+export const rootDirectoryQuery = ({
+	org,
+	drive,
+}: {
+	org: Organization | null
+	drive: Drive | null
+}) =>
+	queryOptions({
+		queryKey: ["organizations", org?.slug, "drives", drive?.id, "root"],
+		queryFn:
+			org && drive
 				? () =>
 						fetchApi(
 							"GET",
-							`/drives/${drive.id}/directories/${directoryId}?include=path`,
+							`/${org.slug}/drives/${drive.id}/directories/root?include=path`,
 							{ returns: DirectoryInfoWithPath },
 						).then(([_, result]) => result)
 				: skipToken,
-		})
-	}),
-)
+	})
+
+export const directoryInfoQuery = ({
+	org,
+	drive,
+	directoryId,
+}: {
+	org: Organization | null
+	drive: Drive | null
+	directoryId: string
+}) =>
+	queryOptions({
+		queryKey: [
+			"organizations",
+			org?.slug,
+			"drives",
+			drive?.id,
+			"directories",
+			directoryId,
+		],
+		queryFn:
+			org && drive
+				? () =>
+						fetchApi(
+							"GET",
+							`/${org.slug}/drives/${drive.id}/directories/${directoryId}?include=path`,
+							{ returns: DirectoryInfoWithPath },
+						).then(([_, result]) => result)
+				: skipToken,
+	})
 
 export const DIRECTORY_CONTENT_ORDER_BY = {
 	name: "name",
@@ -100,6 +102,7 @@ type DirectoryContentPageParam = {
 }
 
 export const directoryContentQueryKey = (
+	orgSlug: string | undefined,
 	driveId: string | undefined,
 	directoryId: string,
 	params?: {
@@ -107,6 +110,8 @@ export const directoryContentQueryKey = (
 		direction?: DirectoryContentOrderDirection
 	},
 ): readonly unknown[] => [
+	"organizations",
+	orgSlug,
 	"drives",
 	driveId,
 	"directories",
@@ -123,53 +128,60 @@ export type DirectoryContentQuery = ReturnType<
 		DirectoryContentPageParam
 	>
 >
-export const directoryContentQueryAtom = atomFamily(
-	({ directoryId, orderBy, direction, limit }: DirectoryContentQueryParams) =>
-		atom((get) => {
-			const drive = get(currentDriveAtom)
-			return infiniteQueryOptions({
-				queryKey: directoryContentQueryKey(drive?.id, directoryId, {
-					orderBy,
-					direction,
-				}),
-				initialPageParam: {
-					orderBy,
-					direction,
-					limit,
-					cursor: "",
-				},
-				queryFn: ({ pageParam }) =>
-					drive
-						? fetchApi(
-								"GET",
-								`/drives/${drive.id}/directories/${directoryId}/content?orderBy=${pageParam.orderBy}&dir=${pageParam.direction}&limit=${pageParam.limit}${pageParam.cursor ? `&cursor=${pageParam.cursor}` : ""}`,
-								{ returns: DirectoryContentResponse },
-							).then(([_, result]) => result)
-						: Promise.reject(new Error("No drive selected")),
-				getNextPageParam: (lastPage, _pages, lastPageParam) =>
-					lastPage.nextCursor
-						? {
-								...lastPageParam,
-								cursor: lastPage.nextCursor,
-							}
-						: null,
-			})
-		}),
-	(paramsA, paramsB) =>
-		paramsA.directoryId === paramsB.directoryId &&
-		paramsA.orderBy === paramsB.orderBy &&
-		paramsA.direction === paramsB.direction &&
-		paramsA.limit === paramsB.limit,
-)
 
-export const createDirectoryMutationAtom = atom((get) => {
-	const drive = get(currentDriveAtom)
-	return mutationOptions({
+export const directoryContentQuery = ({
+	org,
+	drive,
+	directoryId,
+	orderBy,
+	direction,
+	limit,
+}: {
+	org: Organization | null
+	drive: Drive | null
+} & DirectoryContentQueryParams) =>
+	infiniteQueryOptions({
+		queryKey: directoryContentQueryKey(org?.slug, drive?.id, directoryId, {
+			orderBy,
+			direction,
+		}),
+		initialPageParam: {
+			orderBy,
+			direction,
+			limit,
+			cursor: "",
+		} satisfies DirectoryContentPageParam,
+		queryFn:
+			org && drive
+				? ({ pageParam }) =>
+						fetchApi(
+							"GET",
+							`/${org.slug}/drives/${drive.id}/directories/${directoryId}/content?orderBy=${pageParam.orderBy}&dir=${pageParam.direction}&limit=${pageParam.limit}${pageParam.cursor ? `&cursor=${pageParam.cursor}` : ""}`,
+							{ returns: DirectoryContentResponse },
+						).then(([_, result]) => result)
+				: skipToken,
+		getNextPageParam: (lastPage, _pages, lastPageParam) =>
+			lastPage.nextCursor
+				? {
+						...lastPageParam,
+						cursor: lastPage.nextCursor,
+					}
+				: null,
+		})
+
+export const createDirectoryMutationOptions = ({
+	org,
+	drive,
+}: {
+	org: Organization
+	drive: Drive | null
+}) =>
+	mutationOptions({
 		mutationFn: async (data: { name: string; parentId: string }) => {
 			if (!drive) throw new Error("No drive selected")
 			return fetchApi(
 				"POST",
-				`/drives/${drive.id}/directories?include=path`,
+				`/${org.slug}/drives/${drive.id}/directories?include=path`,
 				{
 					body: JSON.stringify({
 						name: data.name,
@@ -180,14 +192,12 @@ export const createDirectoryMutationAtom = atom((get) => {
 			).then(([_, result]) => result)
 		},
 		onSuccess: (_data, { parentId }, _context, { client }) => {
-			if (drive) {
-				client.invalidateQueries({
-					queryKey: directoryContentQueryKey(drive.id, parentId),
-				})
-			}
+			if (!drive) return
+			client.invalidateQueries({
+				queryKey: directoryContentQueryKey(org.slug, drive.id, parentId),
+			})
 		},
 	})
-})
 
 export const MoveDirectoryItemsResult = type({
 	items: DirectoryItem.array(),
@@ -200,16 +210,21 @@ export const MoveDirectoryItemsResult = type({
 })
 export type MoveDirectoryItemsResult = typeof MoveDirectoryItemsResult.infer
 
-export const moveDirectoryItemsMutationAtom = atom((get) =>
+export const moveDirectoryItemsMutationOptions = ({
+	org,
+	drive,
+}: {
+	org: Organization
+	drive: Drive | null
+}) =>
 	mutationOptions({
 		mutationFn: async ({
 			targetDirectory,
 			items,
-		}: {
+			}: {
 			targetDirectory: DirectoryInfo | string
 			items: DirectoryItem[]
 		}) => {
-			const drive = get(currentDriveAtom)
 			if (!drive) {
 				throw new Error("Drive not found")
 			}
@@ -221,7 +236,7 @@ export const moveDirectoryItemsMutationAtom = atom((get) =>
 
 			const [, result] = await fetchApi(
 				"POST",
-				`/drives/${drive.id}/directories/${dirId}/content`,
+				`/${org.slug}/drives/${drive.id}/directories/${dirId}/content`,
 				{
 					body: JSON.stringify({
 						items: items.map((item) => item.id),
@@ -232,7 +247,6 @@ export const moveDirectoryItemsMutationAtom = atom((get) =>
 			return result
 		},
 		onSuccess: (_data, { targetDirectory, items }, _result, { client }) => {
-			const drive = get(currentDriveAtom)
 			if (!drive) return
 
 			const dirId =
@@ -241,12 +255,13 @@ export const moveDirectoryItemsMutationAtom = atom((get) =>
 					: targetDirectory.id
 			// Invalidate using base key (without params) to invalidate all queries for these directories
 			client.invalidateQueries({
-				queryKey: directoryContentQueryKey(drive.id, dirId),
+				queryKey: directoryContentQueryKey(org.slug, drive.id, dirId),
 			})
 			for (const item of items) {
 				if (item.parentId) {
 					client.invalidateQueries({
 						queryKey: directoryContentQueryKey(
+							org.slug,
 							drive.id,
 							item.parentId,
 						),
@@ -254,13 +269,17 @@ export const moveDirectoryItemsMutationAtom = atom((get) =>
 				}
 			}
 		},
-	}),
-)
+	})
 
-export const moveToTrashMutationAtom = atom((get) =>
+export const moveToTrashMutationOptions = ({
+	org,
+	drive,
+}: {
+	org: Organization
+	drive: Drive | null
+}) =>
 	mutationOptions({
 		mutationFn: async (items: DirectoryItem[]) => {
-			const drive = get(currentDriveAtom)
 			if (!drive) {
 				throw new Error("Drive not found")
 			}
@@ -285,7 +304,7 @@ export const moveToTrashMutationAtom = atom((get) =>
 				fileDeleteParams.set("trash", "true")
 				deleteFilesPromise = fetchApi(
 					"DELETE",
-					`/drives/${drive.id}/files?${fileDeleteParams.toString()}`,
+					`/${org.slug}/drives/${drive.id}/files?${fileDeleteParams.toString()}`,
 					{
 						returns: FileInfo.array(),
 					},
@@ -301,7 +320,7 @@ export const moveToTrashMutationAtom = atom((get) =>
 				directoryDeleteParams.set("trash", "true")
 				deleteDirectoriesPromise = fetchApi(
 					"DELETE",
-					`/drives/${drive.id}/directories?${directoryDeleteParams.toString()}`,
+					`/${org.slug}/drives/${drive.id}/directories?${directoryDeleteParams.toString()}`,
 					{
 						returns: DirectoryInfo.array(),
 					},
@@ -318,35 +337,38 @@ export const moveToTrashMutationAtom = atom((get) =>
 			return [...deletedFiles, ...deletedDirectories]
 		},
 		onSuccess: (_data, items, _result, { client }) => {
-			const drive = get(currentDriveAtom)
-			if (drive) {
-				// Invalidate using base key (without params) to invalidate all queries for these directories
-				for (const item of items) {
-					if (item.parentId) {
-						client.invalidateQueries({
-							queryKey: directoryContentQueryKey(
-								drive.id,
-								item.parentId,
-							),
-						})
-					}
+			if (!drive) return
+			// Invalidate using base key (without params) to invalidate all queries for these directories
+			for (const item of items) {
+				if (item.parentId) {
+					client.invalidateQueries({
+						queryKey: directoryContentQueryKey(
+							org.slug,
+							drive.id,
+							item.parentId,
+						),
+					})
 				}
 			}
 		},
-	}),
-)
+	})
 
-export const renameFileMutationAtom = atom((get) =>
+export const renameFileMutationOptions = ({
+	org,
+	drive,
+}: {
+	org: Organization
+	drive: Drive | null
+}) =>
 	mutationOptions({
 		mutationFn: async (file: FileInfo) => {
-			const drive = get(currentDriveAtom)
 			if (!drive) {
 				throw new Error("Drive not found")
 			}
 
 			const [, result] = await fetchApi(
 				"PATCH",
-				`/drives/${drive.id}/files/${file.id}`,
+				`/${org.slug}/drives/${drive.id}/files/${file.id}`,
 				{
 					body: JSON.stringify({ name: file.name }),
 					returns: FileInfo,
@@ -355,20 +377,24 @@ export const renameFileMutationAtom = atom((get) =>
 
 			return result
 		},
-	}),
-)
+	})
 
-export const renameDirectoryMutationAtom = atom((get) =>
+export const renameDirectoryMutationOptions = ({
+	org,
+	drive,
+}: {
+	org: Organization
+	drive: Drive | null
+}) =>
 	mutationOptions({
 		mutationFn: async (directory: DirectoryInfo) => {
-			const drive = get(currentDriveAtom)
 			if (!drive) {
 				throw new Error("Drive not found")
 			}
 
 			const [, result] = await fetchApi(
 				"PATCH",
-				`/drives/${drive.id}/directories/${directory.id}`,
+				`/${org.slug}/drives/${drive.id}/directories/${directory.id}`,
 				{
 					body: JSON.stringify({ name: directory.name }),
 					returns: DirectoryInfo,
@@ -378,10 +404,11 @@ export const renameDirectoryMutationAtom = atom((get) =>
 			return result
 		},
 		onSuccess: (data, _variables, _context, { client }) => {
+			if (!drive) return
 			client.setQueryData(
-				get(directoryInfoQueryAtom(data.id)).queryKey,
+				directoryInfoQuery({ org, drive, directoryId: data.id })
+					.queryKey,
 				(prev) => (prev ? { ...prev, name: data.name } : undefined),
 			)
 		},
-	}),
-)
+	})

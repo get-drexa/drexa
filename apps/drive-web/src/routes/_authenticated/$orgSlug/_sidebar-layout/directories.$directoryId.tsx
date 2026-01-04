@@ -15,6 +15,7 @@ import {
 import { lazy, Suspense, useCallback, useContext } from "react"
 import { toast } from "sonner"
 import { currentDriveAtom } from "@/drive/drive"
+import { useCurrentOrganization } from "@/organization/context"
 import { DirectoryIcon } from "@/components/icons/directory-icon"
 import { TextFileIcon } from "@/components/icons/text-file-icon"
 import { Button } from "@/components/ui/button"
@@ -54,10 +55,10 @@ import type {
 import {
 	DIRECTORY_CONTENT_ORDER_BY,
 	DIRECTORY_CONTENT_ORDER_DIRECTION,
-	directoryContentQueryAtom,
+	directoryContentQuery,
 	directoryContentQueryKey,
-	directoryInfoQueryAtom,
-	moveToTrashMutationAtom,
+	directoryInfoQuery,
+	moveToTrashMutationOptions,
 } from "@/vfs/api"
 import {
 	optimisticallyRemoveDirectoryItems,
@@ -69,7 +70,7 @@ import type {
 	DirectoryItem,
 	FileInfo,
 } from "@/vfs/vfs"
-import { ItemShareDialog } from "../../../sharing/item-share-dialog"
+import { ItemShareDialog } from "@/sharing/item-share-dialog"
 
 // Conditional lazy import - Vite will tree-shake this entire import in production
 // because import.meta.env.DEV is evaluated at build time
@@ -93,7 +94,7 @@ const DirectoryContentPageParams = type({
 })
 
 export const Route = createFileRoute(
-	"/_authenticated/_sidebar-layout/directories/$directoryId",
+	"/_authenticated/$orgSlug/_sidebar-layout/directories/$directoryId",
 )({
 	validateSearch: DirectoryContentPageParams,
 	component: RouteComponent,
@@ -144,14 +145,16 @@ const mockTableAtom = import.meta.env.DEV
 
 // MARK: page entry
 function RouteComponent() {
-	const { directoryId } = Route.useParams()
+	const { directoryId, orgSlug } = Route.useParams()
+	const drive = useAtomValue(currentDriveAtom)
+	const org = useCurrentOrganization()
 	const { data: directoryInfo, isLoading: isLoadingDirectoryInfo } = useQuery(
-		useAtomValue(directoryInfoQueryAtom(directoryId)),
+		directoryInfoQuery({ org, drive, directoryId }),
 	)
 
 	const directoryUrlById = useCallback(
-		(directoryId: string) => `/directories/${directoryId}`,
-		[],
+		(directoryId: string) => `/${orgSlug}/directories/${directoryId}`,
+		[orgSlug],
 	)
 
 	if (isLoadingDirectoryInfo) {
@@ -260,16 +263,18 @@ function _DirectoryContentTable() {
 	const useMock = useAtomValue(mockTableAtom)
 	const { directory } = useContext(DirectoryPageContext)
 	const navigate = Route.useNavigate()
+	const drive = useAtomValue(currentDriveAtom)
+	const org = useCurrentOrganization()
 
 	const search = Route.useSearch()
-	const query = useAtomValue(
-		directoryContentQueryAtom({
-			directoryId: directory.id,
-			orderBy: search.orderBy,
-			direction: search.direction,
-			limit: 100,
-		}),
-	)
+	const query = directoryContentQuery({
+		org,
+		drive,
+		directoryId: directory.id,
+		orderBy: search.orderBy,
+		direction: search.direction,
+		limit: 100,
+	})
 
 	const setOpenedFile = useSetAtom(openedFileAtom)
 	const setContextMenuTargetItems = useSetAtom(contextMenuTargetItemsAtom)
@@ -281,9 +286,10 @@ function _DirectoryContentTable() {
 		[setOpenedFile],
 	)
 
+	const { orgSlug } = Route.useParams()
 	const directoryUrlFn = useCallback(
-		(directory: DirectoryInfo) => `/directories/${directory.id}`,
-		[],
+		(directory: DirectoryInfo) => `/${orgSlug}/directories/${directory.id}`,
+		[orgSlug],
 	)
 
 	const handleContextMenuRequest = useCallback(
@@ -379,11 +385,12 @@ function DirectoryContentContextMenu({
 	const setBackgroundTaskProgress = useSetAtom(backgroundTaskProgressAtom)
 	const setCutItems = useSetAtom(cutItemsAtom)
 	const drive = useAtomValue(currentDriveAtom)
+	const org = useCurrentOrganization()
 	const { directory } = useContext(DirectoryPageContext)
 	const search = Route.useSearch()
 	const setActiveDialogData = useSetAtom(activeDialogDataAtom)
 
-	const moveToTrashMutation = useAtomValue(moveToTrashMutationAtom)
+	const moveToTrashMutation = moveToTrashMutationOptions({ org, drive })
 	const { mutate: moveToTrash } = useMutation({
 		...moveToTrashMutation,
 		onMutate: (items, { client }) => {
@@ -394,7 +401,7 @@ function DirectoryContentContextMenu({
 				return null
 			}
 			return optimisticallyRemoveDirectoryItems(client, {
-				queryKey: directoryContentQueryKey(drive.id, directory.id, {
+				queryKey: directoryContentQueryKey(org.slug, drive.id, directory.id, {
 					orderBy: search.orderBy,
 					direction: search.direction,
 				}),

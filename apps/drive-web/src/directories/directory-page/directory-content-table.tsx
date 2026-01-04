@@ -40,9 +40,11 @@ import {
 	type DirectoryContentOrderDirection,
 	type DirectoryContentQuery,
 	type MoveDirectoryItemsResult,
-	moveDirectoryItemsMutationAtom,
+	moveDirectoryItemsMutationOptions,
 } from "@/vfs/api"
 import type { DirectoryInfo, DirectoryItem, FileInfo } from "@/vfs/vfs"
+import { currentDriveAtom } from "@/drive/drive"
+import { useCurrentOrganization } from "@/organization/context"
 import {
 	DEFAULT_DIRECTORY_CONTENT_ORDER_BY,
 	DEFAULT_DIRECTORY_CONTENT_ORDER_DIRECTION,
@@ -205,9 +207,12 @@ export function DirectoryContentTable({
 
 	const store = useStore()
 	const navigate = useNavigate()
-	const moveDirectoryItemsMutation = useAtomValue(
-		moveDirectoryItemsMutationAtom,
-	)
+	const org = useCurrentOrganization()
+	const drive = useAtomValue(currentDriveAtom)
+	const moveDirectoryItemsMutation = moveDirectoryItemsMutationOptions({
+		org,
+		drive,
+	})
 
 	const { mutate: moveDroppedItems } = useMutation({
 		...moveDirectoryItemsMutation,

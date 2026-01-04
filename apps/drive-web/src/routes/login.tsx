@@ -19,6 +19,9 @@ import {
 } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { cn } from "@/lib/utils"
+import { useStore } from "jotai"
+import { ORGANIZATION_KIND } from "@/organization/organization"
+import { organizationQuery } from "@/organization/api"
 
 export const Route = createFileRoute("/login")({
 	component: RouteComponent,
@@ -73,10 +76,19 @@ function LoginForm() {
 		...loginMutation,
 		onSuccess: (data, vars, result, context) => {
 			loginMutation.onSuccess?.(data, vars, result, context)
-			navigate({
-				to: "/",
-				replace: true,
-			})
+			const personalOrg = data.organizations.find(
+				(org) => org.kind === ORGANIZATION_KIND.personal,
+			)
+			if (personalOrg) {
+				context.client.ensureQueryData(
+					organizationQuery(personalOrg.slug),
+				)
+				navigate({
+					to: "/$orgSlug",
+					params: { orgSlug: personalOrg.slug },
+					replace: true,
+				})
+			}
 		},
 	})
 

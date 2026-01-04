@@ -5,21 +5,19 @@
  * It is included in `src/index.html`.
  */
 
-import { createRouter, RouterProvider } from "@tanstack/react-router"
+import { RouterProvider } from "@tanstack/react-router"
+import { TanStackRouterDevtools } from "@tanstack/router-devtools"
 import { StrictMode } from "react"
 import { createRoot } from "react-dom/client"
 import { ThemeProvider } from "@/components/theme-provider"
-// Import the generated route tree
-import { routeTree } from "./routeTree.gen"
-
-// Create a new router instance
-const router = createRouter({ routeTree })
+import { router } from "./router"
 
 const elem = document.getElementById("root")!
 const app = (
 	<StrictMode>
 		<ThemeProvider defaultTheme="system" storageKey="fileone-ui-theme">
 			<RouterProvider router={router} />
+			<TanStackRouterDevtools router={router} />
 		</ThemeProvider>
 	</StrictMode>
 )

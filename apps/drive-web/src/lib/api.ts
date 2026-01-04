@@ -5,25 +5,27 @@ export type ApiRoute =
 	| "/auth/tokens"
 	| "/accounts"
 	| `/accounts/${string}`
-	| "/drives"
-	| `/drives/${string}`
-	| `/drives/${string}/uploads`
-	| `/drives/${string}/uploads/${string}/content`
-	| `/drives/${string}/uploads/${string}`
-	| `/drives/${string}/files${string}`
-	| `/drives/${string}/files/${string}`
-	| `/drives/${string}/files/${string}/content`
-	| `/drives/${string}/files/${string}/shares${string}`
-	| `/drives/${string}/directories`
-	| `/drives/${string}/directories/${string}`
-	| `/drives/${string}/directories/${string}/content`
-	| `/drives/${string}/directories/${string}/shares${string}`
-	| `/drives/${string}/shares`
-	| `/drives/${string}/shares/${string}`
+	| `/${string}/drives`
+	| `/${string}/drives/${string}`
+	| `/${string}/drives/${string}/uploads`
+	| `/${string}/drives/${string}/uploads/${string}/content`
+	| `/${string}/drives/${string}/uploads/${string}`
+	| `/${string}/drives/${string}/files${string}`
+	| `/${string}/drives/${string}/files/${string}`
+	| `/${string}/drives/${string}/files/${string}/content`
+	| `/${string}/drives/${string}/files/${string}/shares${string}`
+	| `/${string}/drives/${string}/directories${string}`
+	| `/${string}/drives/${string}/directories/${string}`
+	| `/${string}/drives/${string}/directories/${string}/content`
+	| `/${string}/drives/${string}/directories/${string}/shares${string}`
+	| `/${string}/drives/${string}/shares`
+	| `/${string}/drives/${string}/shares/${string}`
 	| `/shares/${string}`
 	| `/shares/${string}/directories${string}`
 	| `/shares/${string}/files${string}`
+	| `/organizations/${string}`
 	| "/users/me"
+	| "/users/me/organizations"
 
 export type HttpMethod = "GET" | "POST" | "PUT" | "DELETE" | "PATCH"
 
@@ -44,11 +46,7 @@ export class ApiError extends Error {
 export const Nothing = type({})
 export type Nothing = typeof Nothing.infer
 
-export async function fetchApi<Schema extends type.Any>(
-	method: HttpMethod,
-	route: ApiRoute,
-	init: RequestInit & { returns: Schema },
-): Promise<[response: Response, data: Schema["inferOut"]]> {
+export function buildApiUrl(route: ApiRoute): URL {
 	let path: string
 	if (baseApiUrl.pathname) {
 		if (baseApiUrl.pathname.endsWith("/")) {
@@ -59,7 +57,15 @@ export async function fetchApi<Schema extends type.Any>(
 	} else {
 		path = route
 	}
-	const url = new URL(path, baseApiUrl)
+	return new URL(path, baseApiUrl)
+}
+
+export async function fetchApi<Schema extends type.Any>(
+	method: HttpMethod,
+	route: ApiRoute,
+	init: RequestInit & { returns: Schema },
+): Promise<[response: Response, data: Schema["inferOut"]]> {
+	const url = buildApiUrl(route)
 	const response = await fetch(url, {
 		credentials: "include",
 		...init,

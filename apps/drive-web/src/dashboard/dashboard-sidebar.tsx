@@ -1,15 +1,19 @@
 import { useMutation, useQuery } from "@tanstack/react-query"
-import { Link, useLocation, useParams } from "@tanstack/react-router"
+import {
+	getRouteApi,
+	Link,
+	useParams,
+	useRouterState,
+} from "@tanstack/react-router"
 import { useAtom, useAtomValue, useSetAtom } from "jotai"
 import {
 	CircleXIcon,
-	ClockIcon,
 	FilesIcon,
 	FolderInputIcon,
+	HouseIcon,
 	LogOutIcon,
 	ScissorsIcon,
 	SettingsIcon,
-	TrashIcon,
 	User2Icon,
 } from "lucide-react"
 import { toast } from "sonner"
@@ -31,10 +35,10 @@ import {
 	SidebarMenuItem,
 } from "@/components/ui/sidebar"
 import { formatError } from "@/lib/error"
-import {
-	moveDirectoryItemsMutationAtom,
-	rootDirectoryQueryAtom,
-} from "@/vfs/api"
+import { currentDriveAtom } from "@/drive/drive"
+import { listOrganizationDrivesQuery } from "@/organization/api"
+import { useCurrentOrganization } from "@/organization/context"
+import { moveDirectoryItemsMutationOptions } from "@/vfs/api"
 import { Button } from "../components/ui/button"
 import { LoadingSpinner } from "../components/ui/loading-spinner"
 import { clearCutItemsAtom, cutItemsAtom } from "../files/store"
@@ -66,71 +70,54 @@ export function DashboardSidebar() {
 }
 
 function MainSidebarMenu() {
-	const location = useLocation()
-
-	const isActive = (path: string) => {
-		if (path === "/") {
-			return location.pathname === "/"
-		}
-		return location.pathname.startsWith(path)
-	}
+	const org = useCurrentOrganization()
+	const matchingRoute = getRouteApi(
+		"/_authenticated/$orgSlug/_sidebar-layout/",
+	)
+	const isActive = useRouterState({
+		select: (state) =>
+			state.matches.some((match) => match.routeId === matchingRoute.id),
+	})
 
 	return (
 		<SidebarMenu>
 			<SidebarMenuItem>
-				<SidebarMenuButton asChild isActive={isActive("/recent")}>
-					<Link to="/recent">
-						<ClockIcon />
-						<span>Recent</span>
+				<SidebarMenuButton asChild isActive={isActive}>
+					<Link to="/$orgSlug" params={{ orgSlug: org.slug }}>
+						<HouseIcon />
+						<span>Home</span>
 					</Link>
 				</SidebarMenuButton>
 			</SidebarMenuItem>
 			<AllFilesItem />
-			<TrashItem />
 		</SidebarMenu>
 	)
 }
 
 function AllFilesItem() {
-	const location = useLocation()
-	const { data: rootDirectory } = useQuery(
-		useAtomValue(rootDirectoryQueryAtom),
+	const org = useCurrentOrganization()
+	const matchingRoute = getRouteApi(
+		"/_authenticated/$orgSlug/_sidebar-layout/drives/$driveId",
 	)
+	const isActive = useRouterState({
+		select: (state) =>
+			state.matches.some((match) => match.routeId === matchingRoute.id),
+	})
 
-	if (!rootDirectory) return null
+	const { data: drives } = useQuery(listOrganizationDrivesQuery(org.slug))
+	const drive = drives?.at(0)
+
+	if (!drive) return null
 
 	return (
 		<SidebarMenuItem>
-			<SidebarMenuButton
-				asChild
-				isActive={location.pathname.startsWith("/directories")}
-			>
-				<Link to={`/directories/${rootDirectory.id}`}>
+			<SidebarMenuButton asChild isActive={isActive}>
+				<Link
+					to="/$orgSlug/drives/$driveId"
+					params={{ orgSlug: org.slug, driveId: drive.id }}
+				>
 					<FilesIcon />
 					<span>All Files</span>
-				</Link>
-			</SidebarMenuButton>
-		</SidebarMenuItem>
-	)
-}
-
-function TrashItem() {
-	const location = useLocation()
-	const { data: rootDirectory } = useQuery(
-		useAtomValue(rootDirectoryQueryAtom),
-	)
-
-	if (!rootDirectory) return null
-
-	return (
-		<SidebarMenuItem>
-			<SidebarMenuButton
-				asChild
-				isActive={location.pathname.startsWith("/trash/directories")}
-			>
-				<Link to={`/trash/directories/${rootDirectory.id}`}>
-					<TrashIcon />
-					<span>Trash</span>
 				</Link>
 			</SidebarMenuButton>
 		</SidebarMenuItem>
@@ -160,9 +147,12 @@ function CutItemsCard() {
 	const clearCutItems = useSetAtom(clearCutItemsAtom)
 	const setBackgroundTaskProgress = useSetAtom(backgroundTaskProgressAtom)
 
-	const moveDirectoryItemsMutation = useAtomValue(
-		moveDirectoryItemsMutationAtom,
-	)
+	const org = useCurrentOrganization()
+	const drive = useAtomValue(currentDriveAtom)
+	const moveDirectoryItemsMutation = moveDirectoryItemsMutationOptions({
+		org,
+		drive,
+	})
 
 	const { mutate: moveItems } = useMutation({
 		...moveDirectoryItemsMutation,

@@ -1,15 +1,14 @@
 import { useAtomValue } from "jotai"
-import { useEffect } from "react"
-import { fileUrlAtom } from "./api"
+import { currentDriveAtom } from "@/drive/drive"
+import { useCurrentOrganization } from "@/organization/context"
+import { buildApiUrl } from "@/lib/api"
 import type { FileInfo } from "./vfs"
 
 export function useFileUrl(file: FileInfo) {
-	const fileUrl = useAtomValue(fileUrlAtom(file.id))
-	useEffect(
-		() => () => {
-			fileUrlAtom.remove(file.id)
-		},
-		[file.id],
-	)
-	return fileUrl
+	const org = useCurrentOrganization()
+	const drive = useAtomValue(currentDriveAtom)
+	if (!drive) return ""
+	return buildApiUrl(
+		`/${org.slug}/drives/${drive.id}/files/${file.id}/content`,
+	).toString()
 }

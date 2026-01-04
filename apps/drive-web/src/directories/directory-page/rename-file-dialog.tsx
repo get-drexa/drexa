@@ -2,6 +2,8 @@ import { useMutation } from "@tanstack/react-query"
 import { useAtomValue } from "jotai"
 import { useId } from "react"
 import { Button } from "@/components/ui/button"
+import { currentDriveAtom } from "@/drive/drive"
+import { useCurrentOrganization } from "@/organization/context"
 import {
 	Dialog,
 	DialogClose,
@@ -11,7 +13,10 @@ import {
 	DialogTitle,
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
-import { renameDirectoryMutationAtom, renameFileMutationAtom } from "@/vfs/api"
+import {
+	renameDirectoryMutationOptions,
+	renameFileMutationOptions,
+} from "@/vfs/api"
 import type { DirectoryItem } from "@/vfs/vfs"
 
 type RenameFileDialogProps = {
@@ -27,8 +32,10 @@ export function RenameFileDialog({
 }: RenameFileDialogProps) {
 	const formId = useId()
 
-	const renameFileMutation = useAtomValue(renameFileMutationAtom)
-	const renameDirectoryMutation = useAtomValue(renameDirectoryMutationAtom)
+	const org = useCurrentOrganization()
+	const drive = useAtomValue(currentDriveAtom)
+	const renameFileMutation = renameFileMutationOptions({ org, drive })
+	const renameDirectoryMutation = renameDirectoryMutationOptions({ org, drive })
 
 	const { mutate: renameFile, isPending: isRenamingFile } = useMutation({
 		...renameFileMutation,

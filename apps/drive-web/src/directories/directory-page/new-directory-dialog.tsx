@@ -3,6 +3,8 @@ import { useAtomValue } from "jotai"
 import { useId } from "react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
+import { currentDriveAtom } from "@/drive/drive"
+import { useCurrentOrganization } from "@/organization/context"
 import {
 	Dialog,
 	DialogClose,
@@ -12,7 +14,7 @@ import {
 	DialogTitle,
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
-import { createDirectoryMutationAtom } from "@/vfs/api"
+import { createDirectoryMutationOptions } from "@/vfs/api"
 import type { DirectoryInfo } from "@/vfs/vfs"
 
 export function NewDirectoryDialog({
@@ -26,7 +28,9 @@ export function NewDirectoryDialog({
 }) {
 	const formId = useId()
 
-	const createDirectoryMutation = useAtomValue(createDirectoryMutationAtom)
+	const org = useCurrentOrganization()
+	const drive = useAtomValue(currentDriveAtom)
+	const createDirectoryMutation = createDirectoryMutationOptions({ org, drive })
 
 	const { mutate: createDirectory, isPending: isCreating } = useMutation({
 		...createDirectoryMutation,

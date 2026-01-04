@@ -8,16 +8,23 @@
 // You should NOT make any changes in this file as it will be overwritten.
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
+import { createFileRoute } from '@tanstack/react-router'
+
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as SignUpRouteImport } from './routes/sign-up'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as AuthenticatedRouteImport } from './routes/_authenticated'
 import { Route as AuthenticatedIndexRouteImport } from './routes/_authenticated/index'
 import { Route as LoginCallbackRouteImport } from './routes/login_.callback'
-import { Route as AuthenticatedSidebarLayoutRouteImport } from './routes/_authenticated/_sidebar-layout'
-import { Route as AuthenticatedSidebarLayoutHomeRouteImport } from './routes/_authenticated/_sidebar-layout/home'
+import { Route as AuthenticatedOrgSlugSidebarLayoutRouteImport } from './routes/_authenticated/$orgSlug/_sidebar-layout'
+import { Route as AuthenticatedOrgSlugSidebarLayoutIndexRouteImport } from './routes/_authenticated/$orgSlug/_sidebar-layout/index'
 import { Route as SharesShareIdDirectoriesDirectoryIdRouteImport } from './routes/shares/$shareId.directories.$directoryId'
-import { Route as AuthenticatedSidebarLayoutDirectoriesDirectoryIdRouteImport } from './routes/_authenticated/_sidebar-layout/directories.$directoryId'
+import { Route as AuthenticatedOrgSlugSidebarLayoutDrivesDriveIdRouteImport } from './routes/_authenticated/$orgSlug/_sidebar-layout/drives.$driveId'
+import { Route as AuthenticatedOrgSlugSidebarLayoutDirectoriesDirectoryIdRouteImport } from './routes/_authenticated/$orgSlug/_sidebar-layout/directories.$directoryId'
+
+const AuthenticatedOrgSlugRouteImport = createFileRoute(
+  '/_authenticated/$orgSlug',
+)()
 
 const SignUpRoute = SignUpRouteImport.update({
   id: '/sign-up',
@@ -33,6 +40,11 @@ const AuthenticatedRoute = AuthenticatedRouteImport.update({
   id: '/_authenticated',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AuthenticatedOrgSlugRoute = AuthenticatedOrgSlugRouteImport.update({
+  id: '/$orgSlug',
+  path: '/$orgSlug',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
 const AuthenticatedIndexRoute = AuthenticatedIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -43,16 +55,16 @@ const LoginCallbackRoute = LoginCallbackRouteImport.update({
   path: '/login/callback',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AuthenticatedSidebarLayoutRoute =
-  AuthenticatedSidebarLayoutRouteImport.update({
+const AuthenticatedOrgSlugSidebarLayoutRoute =
+  AuthenticatedOrgSlugSidebarLayoutRouteImport.update({
     id: '/_sidebar-layout',
-    getParentRoute: () => AuthenticatedRoute,
+    getParentRoute: () => AuthenticatedOrgSlugRoute,
   } as any)
-const AuthenticatedSidebarLayoutHomeRoute =
-  AuthenticatedSidebarLayoutHomeRouteImport.update({
-    id: '/home',
-    path: '/home',
-    getParentRoute: () => AuthenticatedSidebarLayoutRoute,
+const AuthenticatedOrgSlugSidebarLayoutIndexRoute =
+  AuthenticatedOrgSlugSidebarLayoutIndexRouteImport.update({
+    id: '/',
+    path: '/',
+    getParentRoute: () => AuthenticatedOrgSlugSidebarLayoutRoute,
   } as any)
 const SharesShareIdDirectoriesDirectoryIdRoute =
   SharesShareIdDirectoriesDirectoryIdRouteImport.update({
@@ -60,11 +72,17 @@ const SharesShareIdDirectoriesDirectoryIdRoute =
     path: '/shares/$shareId/directories/$directoryId',
     getParentRoute: () => rootRouteImport,
   } as any)
-const AuthenticatedSidebarLayoutDirectoriesDirectoryIdRoute =
-  AuthenticatedSidebarLayoutDirectoriesDirectoryIdRouteImport.update({
+const AuthenticatedOrgSlugSidebarLayoutDrivesDriveIdRoute =
+  AuthenticatedOrgSlugSidebarLayoutDrivesDriveIdRouteImport.update({
+    id: '/drives/$driveId',
+    path: '/drives/$driveId',
+    getParentRoute: () => AuthenticatedOrgSlugSidebarLayoutRoute,
+  } as any)
+const AuthenticatedOrgSlugSidebarLayoutDirectoriesDirectoryIdRoute =
+  AuthenticatedOrgSlugSidebarLayoutDirectoriesDirectoryIdRouteImport.update({
     id: '/directories/$directoryId',
     path: '/directories/$directoryId',
-    getParentRoute: () => AuthenticatedSidebarLayoutRoute,
+    getParentRoute: () => AuthenticatedOrgSlugSidebarLayoutRoute,
   } as any)
 
 export interface FileRoutesByFullPath {
@@ -72,30 +90,35 @@ export interface FileRoutesByFullPath {
   '/sign-up': typeof SignUpRoute
   '/login/callback': typeof LoginCallbackRoute
   '/': typeof AuthenticatedIndexRoute
-  '/home': typeof AuthenticatedSidebarLayoutHomeRoute
-  '/directories/$directoryId': typeof AuthenticatedSidebarLayoutDirectoriesDirectoryIdRoute
+  '/$orgSlug': typeof AuthenticatedOrgSlugSidebarLayoutRouteWithChildren
   '/shares/$shareId/directories/$directoryId': typeof SharesShareIdDirectoriesDirectoryIdRoute
+  '/$orgSlug/': typeof AuthenticatedOrgSlugSidebarLayoutIndexRoute
+  '/$orgSlug/directories/$directoryId': typeof AuthenticatedOrgSlugSidebarLayoutDirectoriesDirectoryIdRoute
+  '/$orgSlug/drives/$driveId': typeof AuthenticatedOrgSlugSidebarLayoutDrivesDriveIdRoute
 }
 export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/sign-up': typeof SignUpRoute
   '/login/callback': typeof LoginCallbackRoute
   '/': typeof AuthenticatedIndexRoute
-  '/home': typeof AuthenticatedSidebarLayoutHomeRoute
-  '/directories/$directoryId': typeof AuthenticatedSidebarLayoutDirectoriesDirectoryIdRoute
+  '/$orgSlug': typeof AuthenticatedOrgSlugSidebarLayoutIndexRoute
   '/shares/$shareId/directories/$directoryId': typeof SharesShareIdDirectoriesDirectoryIdRoute
+  '/$orgSlug/directories/$directoryId': typeof AuthenticatedOrgSlugSidebarLayoutDirectoriesDirectoryIdRoute
+  '/$orgSlug/drives/$driveId': typeof AuthenticatedOrgSlugSidebarLayoutDrivesDriveIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/_authenticated': typeof AuthenticatedRouteWithChildren
   '/login': typeof LoginRoute
   '/sign-up': typeof SignUpRoute
-  '/_authenticated/_sidebar-layout': typeof AuthenticatedSidebarLayoutRouteWithChildren
   '/login_/callback': typeof LoginCallbackRoute
   '/_authenticated/': typeof AuthenticatedIndexRoute
-  '/_authenticated/_sidebar-layout/home': typeof AuthenticatedSidebarLayoutHomeRoute
-  '/_authenticated/_sidebar-layout/directories/$directoryId': typeof AuthenticatedSidebarLayoutDirectoriesDirectoryIdRoute
+  '/_authenticated/$orgSlug': typeof AuthenticatedOrgSlugRouteWithChildren
+  '/_authenticated/$orgSlug/_sidebar-layout': typeof AuthenticatedOrgSlugSidebarLayoutRouteWithChildren
   '/shares/$shareId/directories/$directoryId': typeof SharesShareIdDirectoriesDirectoryIdRoute
+  '/_authenticated/$orgSlug/_sidebar-layout/': typeof AuthenticatedOrgSlugSidebarLayoutIndexRoute
+  '/_authenticated/$orgSlug/_sidebar-layout/directories/$directoryId': typeof AuthenticatedOrgSlugSidebarLayoutDirectoriesDirectoryIdRoute
+  '/_authenticated/$orgSlug/_sidebar-layout/drives/$driveId': typeof AuthenticatedOrgSlugSidebarLayoutDrivesDriveIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -104,29 +127,34 @@ export interface FileRouteTypes {
     | '/sign-up'
     | '/login/callback'
     | '/'
-    | '/home'
-    | '/directories/$directoryId'
+    | '/$orgSlug'
     | '/shares/$shareId/directories/$directoryId'
+    | '/$orgSlug/'
+    | '/$orgSlug/directories/$directoryId'
+    | '/$orgSlug/drives/$driveId'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/login'
     | '/sign-up'
     | '/login/callback'
     | '/'
-    | '/home'
-    | '/directories/$directoryId'
+    | '/$orgSlug'
     | '/shares/$shareId/directories/$directoryId'
+    | '/$orgSlug/directories/$directoryId'
+    | '/$orgSlug/drives/$driveId'
   id:
     | '__root__'
     | '/_authenticated'
     | '/login'
     | '/sign-up'
-    | '/_authenticated/_sidebar-layout'
     | '/login_/callback'
     | '/_authenticated/'
-    | '/_authenticated/_sidebar-layout/home'
-    | '/_authenticated/_sidebar-layout/directories/$directoryId'
+    | '/_authenticated/$orgSlug'
+    | '/_authenticated/$orgSlug/_sidebar-layout'
     | '/shares/$shareId/directories/$directoryId'
+    | '/_authenticated/$orgSlug/_sidebar-layout/'
+    | '/_authenticated/$orgSlug/_sidebar-layout/directories/$directoryId'
+    | '/_authenticated/$orgSlug/_sidebar-layout/drives/$driveId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -160,6 +188,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_authenticated/$orgSlug': {
+      id: '/_authenticated/$orgSlug'
+      path: '/$orgSlug'
+      fullPath: '/$orgSlug'
+      preLoaderRoute: typeof AuthenticatedOrgSlugRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_authenticated/': {
       id: '/_authenticated/'
       path: '/'
@@ -174,19 +209,19 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LoginCallbackRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/_authenticated/_sidebar-layout': {
-      id: '/_authenticated/_sidebar-layout'
-      path: ''
-      fullPath: ''
-      preLoaderRoute: typeof AuthenticatedSidebarLayoutRouteImport
-      parentRoute: typeof AuthenticatedRoute
+    '/_authenticated/$orgSlug/_sidebar-layout': {
+      id: '/_authenticated/$orgSlug/_sidebar-layout'
+      path: '/$orgSlug'
+      fullPath: '/$orgSlug'
+      preLoaderRoute: typeof AuthenticatedOrgSlugSidebarLayoutRouteImport
+      parentRoute: typeof AuthenticatedOrgSlugRoute
     }
-    '/_authenticated/_sidebar-layout/home': {
-      id: '/_authenticated/_sidebar-layout/home'
-      path: '/home'
-      fullPath: '/home'
-      preLoaderRoute: typeof AuthenticatedSidebarLayoutHomeRouteImport
-      parentRoute: typeof AuthenticatedSidebarLayoutRoute
+    '/_authenticated/$orgSlug/_sidebar-layout/': {
+      id: '/_authenticated/$orgSlug/_sidebar-layout/'
+      path: '/'
+      fullPath: '/$orgSlug/'
+      preLoaderRoute: typeof AuthenticatedOrgSlugSidebarLayoutIndexRouteImport
+      parentRoute: typeof AuthenticatedOrgSlugSidebarLayoutRoute
     }
     '/shares/$shareId/directories/$directoryId': {
       id: '/shares/$shareId/directories/$directoryId'
@@ -195,41 +230,64 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SharesShareIdDirectoriesDirectoryIdRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/_authenticated/_sidebar-layout/directories/$directoryId': {
-      id: '/_authenticated/_sidebar-layout/directories/$directoryId'
+    '/_authenticated/$orgSlug/_sidebar-layout/drives/$driveId': {
+      id: '/_authenticated/$orgSlug/_sidebar-layout/drives/$driveId'
+      path: '/drives/$driveId'
+      fullPath: '/$orgSlug/drives/$driveId'
+      preLoaderRoute: typeof AuthenticatedOrgSlugSidebarLayoutDrivesDriveIdRouteImport
+      parentRoute: typeof AuthenticatedOrgSlugSidebarLayoutRoute
+    }
+    '/_authenticated/$orgSlug/_sidebar-layout/directories/$directoryId': {
+      id: '/_authenticated/$orgSlug/_sidebar-layout/directories/$directoryId'
       path: '/directories/$directoryId'
-      fullPath: '/directories/$directoryId'
-      preLoaderRoute: typeof AuthenticatedSidebarLayoutDirectoriesDirectoryIdRouteImport
-      parentRoute: typeof AuthenticatedSidebarLayoutRoute
+      fullPath: '/$orgSlug/directories/$directoryId'
+      preLoaderRoute: typeof AuthenticatedOrgSlugSidebarLayoutDirectoriesDirectoryIdRouteImport
+      parentRoute: typeof AuthenticatedOrgSlugSidebarLayoutRoute
     }
   }
 }
 
-interface AuthenticatedSidebarLayoutRouteChildren {
-  AuthenticatedSidebarLayoutHomeRoute: typeof AuthenticatedSidebarLayoutHomeRoute
-  AuthenticatedSidebarLayoutDirectoriesDirectoryIdRoute: typeof AuthenticatedSidebarLayoutDirectoriesDirectoryIdRoute
+interface AuthenticatedOrgSlugSidebarLayoutRouteChildren {
+  AuthenticatedOrgSlugSidebarLayoutIndexRoute: typeof AuthenticatedOrgSlugSidebarLayoutIndexRoute
+  AuthenticatedOrgSlugSidebarLayoutDirectoriesDirectoryIdRoute: typeof AuthenticatedOrgSlugSidebarLayoutDirectoriesDirectoryIdRoute
+  AuthenticatedOrgSlugSidebarLayoutDrivesDriveIdRoute: typeof AuthenticatedOrgSlugSidebarLayoutDrivesDriveIdRoute
 }
 
-const AuthenticatedSidebarLayoutRouteChildren: AuthenticatedSidebarLayoutRouteChildren =
+const AuthenticatedOrgSlugSidebarLayoutRouteChildren: AuthenticatedOrgSlugSidebarLayoutRouteChildren =
   {
-    AuthenticatedSidebarLayoutHomeRoute: AuthenticatedSidebarLayoutHomeRoute,
-    AuthenticatedSidebarLayoutDirectoriesDirectoryIdRoute:
-      AuthenticatedSidebarLayoutDirectoriesDirectoryIdRoute,
+    AuthenticatedOrgSlugSidebarLayoutIndexRoute:
+      AuthenticatedOrgSlugSidebarLayoutIndexRoute,
+    AuthenticatedOrgSlugSidebarLayoutDirectoriesDirectoryIdRoute:
+      AuthenticatedOrgSlugSidebarLayoutDirectoriesDirectoryIdRoute,
+    AuthenticatedOrgSlugSidebarLayoutDrivesDriveIdRoute:
+      AuthenticatedOrgSlugSidebarLayoutDrivesDriveIdRoute,
   }
 
-const AuthenticatedSidebarLayoutRouteWithChildren =
-  AuthenticatedSidebarLayoutRoute._addFileChildren(
-    AuthenticatedSidebarLayoutRouteChildren,
+const AuthenticatedOrgSlugSidebarLayoutRouteWithChildren =
+  AuthenticatedOrgSlugSidebarLayoutRoute._addFileChildren(
+    AuthenticatedOrgSlugSidebarLayoutRouteChildren,
   )
 
+interface AuthenticatedOrgSlugRouteChildren {
+  AuthenticatedOrgSlugSidebarLayoutRoute: typeof AuthenticatedOrgSlugSidebarLayoutRouteWithChildren
+}
+
+const AuthenticatedOrgSlugRouteChildren: AuthenticatedOrgSlugRouteChildren = {
+  AuthenticatedOrgSlugSidebarLayoutRoute:
+    AuthenticatedOrgSlugSidebarLayoutRouteWithChildren,
+}
+
+const AuthenticatedOrgSlugRouteWithChildren =
+  AuthenticatedOrgSlugRoute._addFileChildren(AuthenticatedOrgSlugRouteChildren)
+
 interface AuthenticatedRouteChildren {
-  AuthenticatedSidebarLayoutRoute: typeof AuthenticatedSidebarLayoutRouteWithChildren
   AuthenticatedIndexRoute: typeof AuthenticatedIndexRoute
+  AuthenticatedOrgSlugRoute: typeof AuthenticatedOrgSlugRouteWithChildren
 }
 
 const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
-  AuthenticatedSidebarLayoutRoute: AuthenticatedSidebarLayoutRouteWithChildren,
   AuthenticatedIndexRoute: AuthenticatedIndexRoute,
+  AuthenticatedOrgSlugRoute: AuthenticatedOrgSlugRouteWithChildren,
 }
 
 const AuthenticatedRouteWithChildren = AuthenticatedRoute._addFileChildren(
