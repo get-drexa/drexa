@@ -32,5 +32,5 @@ USER node
 # Set working directory
 WORKDIR /workspace
 
-# Verify installations
-RUN bun i -g @openai/codex && bun --version
+# Verify bun installation
+RUN bun --version
