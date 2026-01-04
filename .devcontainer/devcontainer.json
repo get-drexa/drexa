@@ -13,7 +13,8 @@
 		"ghcr.io/devcontainers/features/go:1": {
 			"version": "1.25",
 			"golangciLintVersion": "latest"
-		}
+		},
+		"ghcr.io/georgofenbeck/features/lazygit-linuxbinary:1": {}
 	},
 	"customizations": {
 		"vscode": {
@@ -112,8 +113,5 @@
 			"onAutoForward": "notify"
 		}
 	},
-	"mounts": [
-		"source=${localWorkspaceFolder}/.codex,target=/home/node/.codex,type=bind,consistency=cached"
-	],
 	"remoteUser": "node"
 }
