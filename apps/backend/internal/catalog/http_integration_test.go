@@ -20,6 +20,7 @@ import (
 	"github.com/get-drexa/drexa/internal/catalog"
 	"github.com/get-drexa/drexa/internal/database"
 	"github.com/get-drexa/drexa/internal/drive"
+	"github.com/get-drexa/drexa/internal/httperr"
 	"github.com/get-drexa/drexa/internal/organization"
 	"github.com/get-drexa/drexa/internal/registration"
 	"github.com/get-drexa/drexa/internal/sharing"
@@ -124,7 +125,9 @@ func setupTestEnv(t *testing.T, ctx context.Context) *testEnv {
 		ActorID:    regResult.Account.ID,
 	}
 
-	app := fiber.New()
+	app := fiber.New(fiber.Config{
+		ErrorHandler: httperr.ErrorHandler,
+	})
 	api := app.Group("/api")
 
 	// Set up org-scoped routes like the real server does
@@ -779,6 +782,367 @@ func TestHTTP_CatalogEndpoints(t *testing.T) {
 
 		if res.StatusCode != http.StatusNotFound {
 			t.Errorf("expected 404 after permanent delete, got %d", res.StatusCode)
+		}
+	})
+
+	// Move items tests
+	t.Run("move files to directory", func(t *testing.T) {
+		root, err := env.vfs.FindNode(ctx, env.db, env.rootDirID.String(), env.scope)
+		if err != nil {
+			t.Fatalf("FindNode root: %v", err)
+		}
+
+		// Create source files in root
+		moveFile1, err := env.vfs.CreateFile(ctx, env.db, virtualfs.CreateFileOptions{
+			ParentID: root.ID,
+			Name:     "move1.txt",
+		}, env.scope)
+		if err != nil {
+			t.Fatalf("CreateFile move1: %v", err)
+		}
+		err = env.vfs.WriteFile(ctx, env.db, moveFile1, virtualfs.FileContentFromReader(bytes.NewReader([]byte("move1"))), env.scope)
+		if err != nil {
+			t.Fatalf("WriteFile move1: %v", err)
+		}
+
+		moveFile2, err := env.vfs.CreateFile(ctx, env.db, virtualfs.CreateFileOptions{
+			ParentID: root.ID,
+			Name:     "move2.txt",
+		}, env.scope)
+		if err != nil {
+			t.Fatalf("CreateFile move2: %v", err)
+		}
+		err = env.vfs.WriteFile(ctx, env.db, moveFile2, virtualfs.FileContentFromReader(bytes.NewReader([]byte("move2"))), env.scope)
+		if err != nil {
+			t.Fatalf("WriteFile move2: %v", err)
+		}
+
+		// Create target directory
+		targetDir, err := env.vfs.CreateDirectory(ctx, env.db, root.ID, "move-target", env.scope)
+		if err != nil {
+			t.Fatalf("CreateDirectory move-target: %v", err)
+		}
+
+		var resp struct {
+			Items []struct {
+				ID   string `json:"id"`
+				Name string `json:"name"`
+			} `json:"items"`
+			Moved     []string `json:"moved"`
+			Conflicts []string `json:"conflicts"`
+		}
+		body := map[string][]string{"items": {moveFile1.PublicID, moveFile2.PublicID}}
+		doJSONAuth(t, env.app, http.MethodPost, driveURL(fmt.Sprintf("/directories/%s/content", targetDir.PublicID)), env.accessToken, body, http.StatusOK, &resp)
+
+		if len(resp.Moved) != 2 {
+			t.Errorf("expected 2 moved items, got %d", len(resp.Moved))
+		}
+		if len(resp.Conflicts) != 0 {
+			t.Errorf("expected 0 conflicts, got %d", len(resp.Conflicts))
+		}
+	})
+
+	t.Run("move items from different directories fails", func(t *testing.T) {
+		root, err := env.vfs.FindNode(ctx, env.db, env.rootDirID.String(), env.scope)
+		if err != nil {
+			t.Fatalf("FindNode root: %v", err)
+		}
+
+		// Create file in root
+		fileInRoot, err := env.vfs.CreateFile(ctx, env.db, virtualfs.CreateFileOptions{
+			ParentID: root.ID,
+			Name:     "in-root.txt",
+		}, env.scope)
+		if err != nil {
+			t.Fatalf("CreateFile in-root: %v", err)
+		}
+		err = env.vfs.WriteFile(ctx, env.db, fileInRoot, virtualfs.FileContentFromReader(bytes.NewReader([]byte("root"))), env.scope)
+		if err != nil {
+			t.Fatalf("WriteFile in-root: %v", err)
+		}
+
+		// Create subdirectory with file
+		subDir, err := env.vfs.CreateDirectory(ctx, env.db, root.ID, "subdir-for-move", env.scope)
+		if err != nil {
+			t.Fatalf("CreateDirectory subdir-for-move: %v", err)
+		}
+
+		fileInSub, err := env.vfs.CreateFile(ctx, env.db, virtualfs.CreateFileOptions{
+			ParentID: subDir.ID,
+			Name:     "in-sub.txt",
+		}, env.scope)
+		if err != nil {
+			t.Fatalf("CreateFile in-sub: %v", err)
+		}
+		err = env.vfs.WriteFile(ctx, env.db, fileInSub, virtualfs.FileContentFromReader(bytes.NewReader([]byte("sub"))), env.scope)
+		if err != nil {
+			t.Fatalf("WriteFile in-sub: %v", err)
+		}
+
+		// Create target directory
+		targetDir, err := env.vfs.CreateDirectory(ctx, env.db, root.ID, "target-for-fail", env.scope)
+		if err != nil {
+			t.Fatalf("CreateDirectory target-for-fail: %v", err)
+		}
+
+		// Try to move files from different directories
+		var resp struct {
+			Error string `json:"error"`
+		}
+		body := map[string][]string{"items": {fileInRoot.PublicID, fileInSub.PublicID}}
+		doJSONAuth(t, env.app, http.MethodPost, driveURL(fmt.Sprintf("/directories/%s/content", targetDir.PublicID)), env.accessToken, body, http.StatusBadRequest, &resp)
+
+		if resp.Error != "All items must be in the same directory" {
+			t.Errorf("expected 'All items must be in the same directory', got %q", resp.Error)
+		}
+	})
+
+	t.Run("move items with name conflict", func(t *testing.T) {
+		root, err := env.vfs.FindNode(ctx, env.db, env.rootDirID.String(), env.scope)
+		if err != nil {
+			t.Fatalf("FindNode root: %v", err)
+		}
+
+		// Create source file
+		srcFile, err := env.vfs.CreateFile(ctx, env.db, virtualfs.CreateFileOptions{
+			ParentID: root.ID,
+			Name:     "conflict-file.txt",
+		}, env.scope)
+		if err != nil {
+			t.Fatalf("CreateFile conflict-file: %v", err)
+		}
+		err = env.vfs.WriteFile(ctx, env.db, srcFile, virtualfs.FileContentFromReader(bytes.NewReader([]byte("src"))), env.scope)
+		if err != nil {
+			t.Fatalf("WriteFile conflict-file: %v", err)
+		}
+
+		// Create target directory with file of same name
+		targetDir, err := env.vfs.CreateDirectory(ctx, env.db, root.ID, "conflict-target", env.scope)
+		if err != nil {
+			t.Fatalf("CreateDirectory conflict-target: %v", err)
+		}
+
+		existingFile, err := env.vfs.CreateFile(ctx, env.db, virtualfs.CreateFileOptions{
+			ParentID: targetDir.ID,
+			Name:     "conflict-file.txt",
+		}, env.scope)
+		if err != nil {
+			t.Fatalf("CreateFile existing: %v", err)
+		}
+		err = env.vfs.WriteFile(ctx, env.db, existingFile, virtualfs.FileContentFromReader(bytes.NewReader([]byte("existing"))), env.scope)
+		if err != nil {
+			t.Fatalf("WriteFile existing: %v", err)
+		}
+
+		// Move should report conflict
+		var resp struct {
+			Items []struct {
+				ID   string `json:"id"`
+				Name string `json:"name"`
+			} `json:"items"`
+			Moved     []string `json:"moved"`
+			Conflicts []string `json:"conflicts"`
+		}
+		body := map[string][]string{"items": {srcFile.PublicID}}
+		doJSONAuth(t, env.app, http.MethodPost, driveURL(fmt.Sprintf("/directories/%s/content", targetDir.PublicID)), env.accessToken, body, http.StatusOK, &resp)
+
+		if len(resp.Conflicts) != 1 {
+			t.Errorf("expected 1 conflict, got %d", len(resp.Conflicts))
+		}
+		if len(resp.Moved) != 0 {
+			t.Errorf("expected 0 moved, got %d", len(resp.Moved))
+		}
+	})
+
+	t.Run("move items not found", func(t *testing.T) {
+		root, err := env.vfs.FindNode(ctx, env.db, env.rootDirID.String(), env.scope)
+		if err != nil {
+			t.Fatalf("FindNode root: %v", err)
+		}
+
+		targetDir, err := env.vfs.CreateDirectory(ctx, env.db, root.ID, "target-notfound", env.scope)
+		if err != nil {
+			t.Fatalf("CreateDirectory target-notfound: %v", err)
+		}
+
+		var resp struct {
+			Error string `json:"error"`
+		}
+		body := map[string][]string{"items": {"nonexistent123", "nonexistent456"}}
+		doJSONAuth(t, env.app, http.MethodPost, driveURL(fmt.Sprintf("/directories/%s/content", targetDir.PublicID)), env.accessToken, body, http.StatusNotFound, &resp)
+
+		if resp.Error != "One or more items not found" {
+			t.Errorf("expected 'One or more items not found', got %q", resp.Error)
+		}
+	})
+
+	// Error cases for createDirectory
+	t.Run("create directory with nonexistent parent", func(t *testing.T) {
+		var resp struct {
+			Error string `json:"error"`
+		}
+		body := map[string]string{"parentID": "nonexistent123", "name": "orphan"}
+		doJSONAuth(t, env.app, http.MethodPost, driveURL("/directories"), env.accessToken, body, http.StatusBadRequest, &resp)
+
+		if resp.Error != "Parent not found" {
+			t.Errorf("expected 'Parent not found', got %q", resp.Error)
+		}
+	})
+
+	t.Run("create directory with file as parent", func(t *testing.T) {
+		var resp struct {
+			Error string `json:"error"`
+		}
+		body := map[string]string{"parentID": file1.PublicID, "name": "under-file"}
+		doJSONAuth(t, env.app, http.MethodPost, driveURL("/directories"), env.accessToken, body, http.StatusBadRequest, &resp)
+
+		if resp.Error != "Parent is not a directory" {
+			t.Errorf("expected 'Parent is not a directory', got %q", resp.Error)
+		}
+	})
+
+	t.Run("create directory with duplicate name", func(t *testing.T) {
+		root, err := env.vfs.FindNode(ctx, env.db, env.rootDirID.String(), env.scope)
+		if err != nil {
+			t.Fatalf("FindNode root: %v", err)
+		}
+
+		// Create first directory
+		_, err = env.vfs.CreateDirectory(ctx, env.db, root.ID, "duplicate-dir", env.scope)
+		if err != nil {
+			t.Fatalf("CreateDirectory duplicate-dir: %v", err)
+		}
+
+		// Try to create another with same name
+		var resp struct {
+			Error string `json:"error"`
+		}
+		body := map[string]string{"parentID": root.PublicID, "name": "duplicate-dir"}
+		doJSONAuth(t, env.app, http.MethodPost, driveURL("/directories"), env.accessToken, body, http.StatusConflict, &resp)
+
+		if resp.Error != "Directory already exists" {
+			t.Errorf("expected 'Directory already exists', got %q", resp.Error)
+		}
+	})
+
+	// Error cases for bulk delete
+	t.Run("bulk delete files rejects directories", func(t *testing.T) {
+		root, err := env.vfs.FindNode(ctx, env.db, env.rootDirID.String(), env.scope)
+		if err != nil {
+			t.Fatalf("FindNode root: %v", err)
+		}
+
+		dirToDelete, err := env.vfs.CreateDirectory(ctx, env.db, root.ID, "dir-in-files-delete", env.scope)
+		if err != nil {
+			t.Fatalf("CreateDirectory: %v", err)
+		}
+
+		var resp struct {
+			Error string `json:"error"`
+		}
+		url := driveURL(fmt.Sprintf("/files?id=%s", dirToDelete.PublicID))
+		doJSONAuth(t, env.app, http.MethodDelete, url, env.accessToken, nil, http.StatusBadRequest, &resp)
+
+		if resp.Error != "all items must be files" {
+			t.Errorf("expected 'all items must be files', got %q", resp.Error)
+		}
+	})
+
+	t.Run("bulk delete directories rejects files", func(t *testing.T) {
+		fileToDelete, err := env.vfs.CreateFile(ctx, env.db, virtualfs.CreateFileOptions{
+			ParentID: env.rootDirID,
+			Name:     "file-in-dirs-delete.txt",
+		}, env.scope)
+		if err != nil {
+			t.Fatalf("CreateFile: %v", err)
+		}
+		err = env.vfs.WriteFile(ctx, env.db, fileToDelete, virtualfs.FileContentFromReader(bytes.NewReader([]byte("x"))), env.scope)
+		if err != nil {
+			t.Fatalf("WriteFile: %v", err)
+		}
+
+		var resp struct {
+			Error string `json:"error"`
+		}
+		url := driveURL(fmt.Sprintf("/directories?id=%s", fileToDelete.PublicID))
+		doJSONAuth(t, env.app, http.MethodDelete, url, env.accessToken, nil, http.StatusBadRequest, &resp)
+
+		if resp.Error != "all items must be directories" {
+			t.Errorf("expected 'all items must be directories', got %q", resp.Error)
+		}
+	})
+
+	// Pagination tests
+	t.Run("list directory with limit", func(t *testing.T) {
+		root, err := env.vfs.FindNode(ctx, env.db, env.rootDirID.String(), env.scope)
+		if err != nil {
+			t.Fatalf("FindNode root: %v", err)
+		}
+
+		// Create a directory with multiple items
+		paginationDir, err := env.vfs.CreateDirectory(ctx, env.db, root.ID, "pagination-test", env.scope)
+		if err != nil {
+			t.Fatalf("CreateDirectory pagination-test: %v", err)
+		}
+
+		for i := 0; i < 5; i++ {
+			_, err := env.vfs.CreateDirectory(ctx, env.db, paginationDir.ID, fmt.Sprintf("item-%d", i), env.scope)
+			if err != nil {
+				t.Fatalf("CreateDirectory item-%d: %v", i, err)
+			}
+		}
+
+		var resp struct {
+			Items []struct {
+				ID   string `json:"id"`
+				Name string `json:"name"`
+			} `json:"items"`
+			NextCursor string `json:"nextCursor"`
+		}
+		// Must specify orderBy to match cursor encoding
+		doJSONAuth(t, env.app, http.MethodGet, driveURL(fmt.Sprintf("/directories/%s/content?limit=2&orderBy=name", paginationDir.PublicID)), env.accessToken, nil, http.StatusOK, &resp)
+
+		if len(resp.Items) != 2 {
+			t.Errorf("expected 2 items, got %d", len(resp.Items))
+		}
+		if resp.NextCursor == "" {
+			t.Errorf("expected nextCursor to be set")
+		}
+
+		// Fetch next page - must use same orderBy
+		var resp2 struct {
+			Items []struct {
+				ID   string `json:"id"`
+				Name string `json:"name"`
+			} `json:"items"`
+			NextCursor string `json:"nextCursor"`
+		}
+		doJSONAuth(t, env.app, http.MethodGet, driveURL(fmt.Sprintf("/directories/%s/content?limit=2&orderBy=name&cursor=%s", paginationDir.PublicID, resp.NextCursor)), env.accessToken, nil, http.StatusOK, &resp2)
+
+		if len(resp2.Items) != 2 {
+			t.Errorf("expected 2 items on second page, got %d", len(resp2.Items))
+		}
+	})
+
+	t.Run("list directory with invalid limit", func(t *testing.T) {
+		var resp struct {
+			Error string `json:"error"`
+		}
+		doJSONAuth(t, env.app, http.MethodGet, driveURL("/directories/root/content?limit=0"), env.accessToken, nil, http.StatusBadRequest, &resp)
+
+		if resp.Error != "Limit must be at least 1" {
+			t.Errorf("expected 'Limit must be at least 1', got %q", resp.Error)
+		}
+	})
+
+	t.Run("list directory with invalid cursor", func(t *testing.T) {
+		var resp struct {
+			Error string `json:"error"`
+		}
+		doJSONAuth(t, env.app, http.MethodGet, driveURL("/directories/root/content?cursor=invalid"), env.accessToken, nil, http.StatusBadRequest, &resp)
+
+		if resp.Error != "invalid cursor" {
+			t.Errorf("expected 'invalid cursor', got %q", resp.Error)
 		}
 	})
 }
