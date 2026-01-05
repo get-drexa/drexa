@@ -19,6 +19,7 @@ import (
 	"github.com/get-drexa/drexa/internal/blob"
 	"github.com/get-drexa/drexa/internal/database"
 	"github.com/get-drexa/drexa/internal/drive"
+	"github.com/get-drexa/drexa/internal/httperr"
 	"github.com/get-drexa/drexa/internal/organization"
 	"github.com/get-drexa/drexa/internal/registration"
 	"github.com/get-drexa/drexa/internal/user"
@@ -76,7 +77,9 @@ func TestHTTP_RegisterAccount_TokenDeliveryBody(t *testing.T) {
 		SecretKey: []byte("drexa-test-secret"),
 	})
 
-	app := fiber.New()
+	app := fiber.New(fiber.Config{
+		ErrorHandler: httperr.ErrorHandler,
+	})
 	api := app.Group("/api")
 	registration.NewHTTPHandler(regSvc, authSvc, db, auth.CookieConfig{}).RegisterRoutes(api)
 
@@ -176,7 +179,9 @@ func TestHTTP_RegisterAccount_TokenDeliveryCookie(t *testing.T) {
 		SecretKey: []byte("drexa-test-secret"),
 	})
 
-	app := fiber.New()
+	app := fiber.New(fiber.Config{
+		ErrorHandler: httperr.ErrorHandler,
+	})
 	api := app.Group("/api")
 	registration.NewHTTPHandler(regSvc, authSvc, db, auth.CookieConfig{}).RegisterRoutes(api)
 

@@ -18,6 +18,7 @@ import (
 	"github.com/get-drexa/drexa/internal/blob"
 	"github.com/get-drexa/drexa/internal/database"
 	"github.com/get-drexa/drexa/internal/drive"
+	"github.com/get-drexa/drexa/internal/httperr"
 	"github.com/get-drexa/drexa/internal/organization"
 	"github.com/get-drexa/drexa/internal/registration"
 	"github.com/get-drexa/drexa/internal/user"
@@ -91,7 +92,9 @@ func TestHTTP_OrganizationEndpoints(t *testing.T) {
 
 	authMiddleware := auth.NewAuthMiddleware(authSvc, db, auth.CookieConfig{})
 
-	app := fiber.New()
+	app := fiber.New(fiber.Config{
+		ErrorHandler: httperr.ErrorHandler,
+	})
 	api := app.Group("/api")
 	usersAPI := user.NewHTTPHandler(userSvc, db, authMiddleware).RegisterRoutes(api)
 

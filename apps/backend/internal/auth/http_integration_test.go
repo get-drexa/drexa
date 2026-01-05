@@ -17,6 +17,7 @@ import (
 	"github.com/get-drexa/drexa/internal/account"
 	"github.com/get-drexa/drexa/internal/auth"
 	"github.com/get-drexa/drexa/internal/database"
+	"github.com/get-drexa/drexa/internal/httperr"
 	"github.com/get-drexa/drexa/internal/organization"
 	"github.com/get-drexa/drexa/internal/password"
 	"github.com/get-drexa/drexa/internal/user"
@@ -247,7 +248,9 @@ func newAuthApp(t *testing.T, ctx context.Context) *fiber.App {
 		SecretKey: []byte("drexa-test-secret"),
 	})
 
-	app := fiber.New()
+	app := fiber.New(fiber.Config{
+		ErrorHandler: httperr.ErrorHandler,
+	})
 	api := app.Group("/api")
 	auth.NewHTTPHandler(authSvc, orgSvc, db, auth.CookieConfig{}).RegisterRoutes(api)
 
