@@ -105,7 +105,7 @@ if (firstPage.nextCursor) {
 }
 ```
 
-`drives.list()` returns `Drive[]`; `drive.get()` returns `DriveInfo`, which additionally includes `rootDirId`. `directories.get("root")` also resolves the current scope's root. Keep sorting options unchanged when following a pagination cursor.
+`drives.list()` returns `DriveListItem[]`, including each drive's root directory public ID as `rootDir`. `drive.get()` returns `DriveInfo`, which exposes that ID as `rootDirId`. `directories.get("root")` also resolves the current scope's root. Keep sorting options unchanged when following a pagination cursor.
 
 ## Create, rename, move, and trash
 

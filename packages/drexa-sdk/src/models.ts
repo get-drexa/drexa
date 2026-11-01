@@ -40,6 +40,8 @@ export const Drive = type({
 	storageQuotaBytes: "number",
 })
 export type Drive = typeof Drive.infer
+export const DriveListItem = Drive.and({ rootDir: "string" })
+export type DriveListItem = typeof DriveListItem.infer
 export const DriveInfo = Drive.and({ rootDirId: "string" })
 export type DriveInfo = typeof DriveInfo.infer
 

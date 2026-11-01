@@ -15,6 +15,7 @@ export type {
 	DirectoryItem,
 	Drive,
 	DriveInfo,
+	DriveListItem,
 	DriveScope,
 	FileInfo,
 	ListDirectoryOptions,

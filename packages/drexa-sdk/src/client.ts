@@ -3,8 +3,8 @@ import {
 	Account,
 	type CreateShareInput,
 	type CreateUploadInput,
-	Drive,
 	DriveInfo,
+	DriveListItem,
 	type DriveScope,
 	type LoginInput,
 	LoginResponse,
@@ -105,7 +105,7 @@ export class DrexaClient {
 			this.transport.json(
 				"GET",
 				this.transport.url(`/${segment(orgSlug)}/drives`),
-				Drive.array(),
+				DriveListItem.array(),
 				undefined,
 				options,
 			),

@@ -1,6 +1,11 @@
 import { describe, expect, test } from "bun:test"
 import * as sdk from "./index"
-import { ApiError, type ClientOptions, DrexaClient, type Drive } from "./index"
+import {
+	ApiError,
+	type ClientOptions,
+	DrexaClient,
+	type DriveListItem,
+} from "./index"
 
 const timestamp = "2026-01-05T01:25:37Z"
 const drive = {
@@ -45,13 +50,21 @@ describe("Drexa SDK", () => {
 		expect(Object.keys(sdk).sort()).toEqual(["ApiError", "DrexaClient"])
 	})
 
-	test("parses drive list dates without requiring detail-only rootDirId", async () => {
-		const { client, requests } = fixture(() => Response.json([drive]))
-		const result: Drive[] = await client.drives.list("my")
+	test("parses drive list dates and root directory IDs", async () => {
+		const { client, requests } = fixture(() =>
+			Response.json([{ ...drive, rootDir: "root1" }]),
+		)
+		const result: DriveListItem[] = await client.drives.list("my")
 		expect(result[0]?.createdAt).toEqual(new Date(timestamp))
+		expect(result[0]?.rootDir).toBe("root1")
 		expect(requests[0]?.url).toBe(
 			"https://example.test/prefix/api/my/drives",
 		)
+	})
+
+	test("requires rootDir in drive list responses", async () => {
+		const { client } = fixture(() => Response.json([drive]))
+		await expect(client.drives.list("my")).rejects.toThrow("rootDir")
 	})
 
 	test("validates drive detail responses and malformed payloads", async () => {
