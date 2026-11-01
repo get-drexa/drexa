@@ -3,7 +3,6 @@ package upload
 import (
 	"context"
 	"errors"
-	"fmt"
 	"io"
 	"sync"
 	"time"
@@ -13,15 +12,25 @@ import (
 	"github.com/uptrace/bun"
 )
 
-type Service struct {
+type Service interface {
+	CreateUpload(ctx context.Context, opts CreateUploadOptions, scope *virtualfs.Scope) (*Upload, error)
+	ReceiveUpload(ctx context.Context, uploadID string, reader io.Reader, scope *virtualfs.Scope) error
+	CompleteUpload(ctx context.Context, uploadID string, scope *virtualfs.Scope) (*Upload, error)
+}
+
+var _ Service = (*service)(nil)
+
+type service struct {
+	db        bun.IDB
 	vfs       *virtualfs.VirtualFS
 	blobStore blob.Store
 
 	pendingUploads sync.Map
 }
 
-func NewService(vfs *virtualfs.VirtualFS, blobStore blob.Store) *Service {
-	return &Service{
+func NewService(db bun.IDB, vfs *virtualfs.VirtualFS, blobStore blob.Store) Service {
+	return &service{
+		db:        db,
 		vfs:       vfs,
 		blobStore: blobStore,
 
@@ -34,16 +43,17 @@ type CreateUploadOptions struct {
 	Name     string
 }
 
-func (s *Service) CreateUpload(ctx context.Context, db bun.IDB, opts CreateUploadOptions, scope *virtualfs.Scope) (*Upload, error) {
+func (s *service) CreateUpload(ctx context.Context, opts CreateUploadOptions, scope *virtualfs.Scope) (*Upload, error) {
 	if scope == nil {
 		return nil, ErrUnauthorized
 	}
 
-	parentNode, err := s.vfs.FindNodeByPublicID(ctx, db, opts.ParentID, scope)
+	parentNode, err := s.vfs.FindNodeByPublicID(ctx, s.db, opts.ParentID, scope)
 	if err != nil {
 		if errors.Is(err, virtualfs.ErrNodeNotFound) {
 			return nil, ErrNotFound
 		}
+
 		return nil, err
 	}
 
@@ -51,7 +61,7 @@ func (s *Service) CreateUpload(ctx context.Context, db bun.IDB, opts CreateUploa
 		return nil, ErrParentNotDirectory
 	}
 
-	node, err := s.vfs.CreateFile(ctx, db, virtualfs.CreateFileOptions{
+	node, err := s.vfs.CreateFile(ctx, s.db, virtualfs.CreateFileOptions{
 		ParentID: parentNode.ID,
 		Name:     opts.Name,
 	}, scope)
@@ -59,16 +69,19 @@ func (s *Service) CreateUpload(ctx context.Context, db bun.IDB, opts CreateUploa
 		if errors.Is(err, virtualfs.ErrNodeConflict) {
 			return nil, ErrConflict
 		}
+
 		return nil, err
 	}
 
 	var uploadURL string
+
 	if s.blobStore.SupportsDirectUpload() {
 		uploadURL, err = s.blobStore.GenerateUploadURL(ctx, node.BlobKey, blob.UploadURLOptions{
 			Duration: 1 * time.Hour,
 		})
 		if err != nil {
-			_ = s.vfs.PermanentlyDeleteNode(ctx, db, node, scope)
+			_ = s.vfs.PermanentlyDeleteNode(ctx, s.db, node, scope)
+
 			return nil, err
 		}
 	} else {
@@ -87,8 +100,7 @@ func (s *Service) CreateUpload(ctx context.Context, db bun.IDB, opts CreateUploa
 	return upload, nil
 }
 
-func (s *Service) ReceiveUpload(ctx context.Context, db bun.IDB, uploadID string, reader io.Reader, scope *virtualfs.Scope) error {
-	fmt.Printf("reader: %v\n", reader)
+func (s *service) ReceiveUpload(ctx context.Context, uploadID string, reader io.Reader, scope *virtualfs.Scope) error {
 	n, ok := s.pendingUploads.Load(uploadID)
 	if !ok {
 		return ErrNotFound
@@ -107,7 +119,7 @@ func (s *Service) ReceiveUpload(ctx context.Context, db bun.IDB, uploadID string
 		return ErrNotFound
 	}
 
-	err := s.vfs.WriteFile(ctx, db, upload.TargetNode, virtualfs.FileContentFromReader(reader), scope)
+	err := s.vfs.WriteFile(ctx, s.db, upload.TargetNode, virtualfs.FileContentFromReader(reader), scope)
 	if err != nil {
 		return err
 	}
@@ -117,7 +129,7 @@ func (s *Service) ReceiveUpload(ctx context.Context, db bun.IDB, uploadID string
 	return nil
 }
 
-func (s *Service) CompleteUpload(ctx context.Context, db bun.IDB, uploadID string, scope *virtualfs.Scope) (*Upload, error) {
+func (s *service) CompleteUpload(ctx context.Context, uploadID string, scope *virtualfs.Scope) (*Upload, error) {
 	n, ok := s.pendingUploads.Load(uploadID)
 	if !ok {
 		return nil, ErrNotFound
@@ -138,14 +150,16 @@ func (s *Service) CompleteUpload(ctx context.Context, db bun.IDB, uploadID strin
 
 	if upload.TargetNode.Status == virtualfs.NodeStatusReady && upload.Status == StatusCompleted {
 		s.pendingUploads.Delete(uploadID)
+
 		return upload, nil
 	}
 
-	err := s.vfs.WriteFile(ctx, db, upload.TargetNode, virtualfs.FileContentFromBlobKey(upload.TargetNode.BlobKey), scope)
+	err := s.vfs.WriteFile(ctx, s.db, upload.TargetNode, virtualfs.FileContentFromBlobKey(upload.TargetNode.BlobKey), scope)
 	if err != nil {
 		if errors.Is(err, blob.ErrNotFound) {
 			return nil, ErrContentNotUploaded
 		}
+
 		return nil, err
 	}
 

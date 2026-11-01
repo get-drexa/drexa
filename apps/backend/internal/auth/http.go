@@ -8,7 +8,6 @@ import (
 	"github.com/get-drexa/drexa/internal/organization"
 	"github.com/get-drexa/drexa/internal/user"
 	"github.com/gofiber/fiber/v2"
-	"github.com/uptrace/bun"
 )
 
 const (
@@ -62,14 +61,12 @@ type tokenResponse struct {
 }
 
 type HTTPHandler struct {
-	service             *Service
-	organizationService *organization.Service
-	db                  *bun.DB
-	cookieConfig        CookieConfig
+	service      Service
+	cookieConfig CookieConfig
 }
 
-func NewHTTPHandler(s *Service, organizationService *organization.Service, db *bun.DB, cookieConfig CookieConfig) *HTTPHandler {
-	return &HTTPHandler{service: s, organizationService: organizationService, db: db, cookieConfig: cookieConfig}
+func NewHTTPHandler(s Service, cookieConfig CookieConfig) *HTTPHandler {
+	return &HTTPHandler{service: s, cookieConfig: cookieConfig}
 }
 
 func (h *HTTPHandler) RegisterRoutes(api fiber.Router) {
@@ -99,41 +96,28 @@ func (h *HTTPHandler) Login(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid token delivery method"})
 	}
 
-	tx, err := h.db.BeginTx(c.Context(), nil)
-	if err != nil {
-		return httperr.Internal(err)
-	}
-	defer tx.Rollback()
-
-	result, err := h.service.LoginWithEmailAndPassword(c.Context(), tx, req.Email, req.Password)
+	result, err := h.service.LoginWithEmailAndPassword(c.Context(), req.Email, req.Password)
 	if err != nil {
 		if errors.Is(err, ErrInvalidCredentials) {
 			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "Invalid credentials"})
 		}
-		return httperr.Internal(err)
-	}
 
-	orgs, err := h.organizationService.ListOrganizationsForUser(c.Context(), tx, result.User.ID)
-	if err != nil {
-		return httperr.Internal(err)
-	}
-
-	if err := tx.Commit(); err != nil {
 		return httperr.Internal(err)
 	}
 
 	switch req.TokenDelivery {
 	case TokenDeliveryCookie:
 		SetAuthCookies(c, result.AccessToken, result.RefreshToken, h.cookieConfig)
+
 		return c.JSON(loginResponse{
 			User:          *result.User,
-			Organizations: orgs,
+			Organizations: result.Organizations,
 		})
 
 	case TokenDeliveryBody:
 		return c.JSON(loginResponse{
 			User:          *result.User,
-			Organizations: orgs,
+			Organizations: result.Organizations,
 			AccessToken:   result.AccessToken,
 			RefreshToken:  result.RefreshToken,
 		})
@@ -152,6 +136,7 @@ func (h *HTTPHandler) Login(c *fiber.Ctx) error {
 // @Success 200 {object} tokenResponse "New tokens"
 // @Failure 400 {object} map[string]string "Invalid request body"
 // @Failure 401 {object} map[string]string "Invalid, expired, or reused refresh token"
+// @Failure 409 {object} map[string]string "refresh_token_rotated: retry with the latest token"
 // @Router /auth/tokens [post]
 func (h *HTTPHandler) refreshAccessToken(c *fiber.Ctx) error {
 	req := new(refreshAccessTokenRequest)
@@ -159,30 +144,32 @@ func (h *HTTPHandler) refreshAccessToken(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid request"})
 	}
 
-	tx, err := h.db.BeginTx(c.Context(), nil)
+	result, err := h.service.RefreshAccessToken(c.Context(), req.RefreshToken)
 	if err != nil {
-		return httperr.Internal(err)
-	}
-	defer tx.Rollback()
+		if errors.Is(err, ErrRefreshTokenRotated) {
+			return refreshConflictResponse(c)
+		}
 
-	result, err := h.service.RefreshAccessToken(c.Context(), tx, req.RefreshToken)
-	if err != nil {
 		if errors.Is(err, ErrInvalidRefreshToken) ||
 			errors.Is(err, ErrRefreshTokenExpired) ||
 			errors.Is(err, ErrRefreshTokenReused) {
-			_ = tx.Commit()
 			slog.Info("invalid refresh token", "error", err)
+
 			return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"error": "invalid refresh token"})
 		}
-		return httperr.Internal(err)
-	}
 
-	if err := tx.Commit(); err != nil {
 		return httperr.Internal(err)
 	}
 
 	return c.JSON(tokenResponse{
 		AccessToken:  result.AccessToken,
 		RefreshToken: result.RefreshToken,
+	})
+}
+
+func refreshConflictResponse(c *fiber.Ctx) error {
+	return c.Status(fiber.StatusConflict).JSON(fiber.Map{
+		"code":  "refresh_token_rotated",
+		"error": "refresh token already rotated; retry with the latest token",
 	})
 }

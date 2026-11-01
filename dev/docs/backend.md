@@ -5,6 +5,17 @@
 - Keep packages focused: auth, user, account, catalog (HTTP for VFS), upload, virtualfs, blob, database.
 - Use public IDs in API responses and inputs; internal UUIDs stay server-side.
 
+# Services and stores
+
+- Expose services as interfaces with private implementations and a compile-time assertion (`var _ Service = (*service)(nil)`).
+- Inject service interfaces into handlers. Keep request parsing, response mapping, cookies, and streaming in the HTTP layer.
+- Inject stores into user, account, organization, and drive services; keep their SQL in `db_store.go`.
+- Application services own transactions. Construct participating stores with the same `bun.Tx`; pass it to VFS and auth operations that join the transaction.
+- Registration, login, refresh, share mutations, and catalog mutations return results only after a successful commit.
+- Refresh-token rejection can require committing revocation or cleanup. Preserve that behavior for both endpoints and cookie middleware.
+- Lock refresh-token rows during rotation and verify the secret before reuse handling. Allow a fixed 10-second grace from the original `ConsumedAt`, without issuing tokens or extending grace. Auto-refresh collisions keep valid access authentication and leave cookies untouched; refresh-only collisions return 409 and require the latest token. Verified reuse after grace revokes the grant.
+- Resolve organization membership and drive/share access in services so handlers and middleware use the same rules.
+
 # Routing + auth conventions
 
 - Drive-scoped resources live under `/drives/:driveID`; always apply auth + drive middleware.

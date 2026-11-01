@@ -8,20 +8,17 @@ import (
 	"github.com/get-drexa/drexa/internal/user"
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
-	"github.com/uptrace/bun"
 )
 
 type HTTPHandler struct {
-	accountService  *Service
-	db              *bun.DB
-	authMiddleware  fiber.Handler
+	accountService Service
+	authMiddleware fiber.Handler
 }
 
-func NewHTTPHandler(accountService *Service, db *bun.DB, authMiddleware fiber.Handler) *HTTPHandler {
+func NewHTTPHandler(accountService Service, authMiddleware fiber.Handler) *HTTPHandler {
 	return &HTTPHandler{
-		accountService:  accountService,
-		db:              db,
-		authMiddleware:  authMiddleware,
+		accountService: accountService,
+		authMiddleware: authMiddleware,
 	}
 }
 
@@ -32,10 +29,11 @@ func (h *HTTPHandler) RegisterRoutes(api fiber.Router) {
 
 func (h *HTTPHandler) listAccounts(c *fiber.Ctx) error {
 	u := reqctx.AuthenticatedUser(c).(*user.User)
-	accounts, err := h.accountService.ListAccounts(c.Context(), h.db, u.ID)
+	accounts, err := h.accountService.ListAccounts(c.Context(), u.ID)
 	if err != nil {
 		return httperr.Internal(err)
 	}
+
 	return c.JSON(accounts)
 }
 
@@ -46,12 +44,14 @@ func (h *HTTPHandler) getAccount(c *fiber.Ctx) error {
 		return c.SendStatus(fiber.StatusNotFound)
 	}
 
-	acc, err := h.accountService.AccountByID(c.Context(), h.db, u.ID, accountID)
+	acc, err := h.accountService.AccountByID(c.Context(), u.ID, accountID)
 	if err != nil {
 		if errors.Is(err, ErrAccountNotFound) {
 			return c.SendStatus(fiber.StatusNotFound)
 		}
+
 		return httperr.Internal(err)
 	}
+
 	return c.JSON(acc)
 }

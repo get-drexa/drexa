@@ -10,10 +10,16 @@ import (
 	"github.com/get-drexa/drexa/internal/reqctx"
 	"github.com/get-drexa/drexa/internal/user"
 	"github.com/gofiber/fiber/v2"
-	"github.com/uptrace/bun"
 )
 
 var errUnauthorized = errors.New("unauthorized")
+
+type requestAuthKey struct{}
+
+type requestAuthResult struct {
+	attempt *authAttempt
+	err     error
+}
 
 // authAttempt is the normalized result of parsing and (optionally) authenticating
 // a request.
@@ -42,7 +48,7 @@ type authAttempt struct {
 	RefreshToken string
 }
 
-func authenticateRequest(c *fiber.Ctx, s *Service, db *bun.DB, cookieConfig CookieConfig) (*authAttempt, error) {
+func authenticateRequest(c *fiber.Ctx, s Service, cookieConfig CookieConfig) (*authAttempt, error) {
 	var at string
 	var rt string
 	var setCookies bool
@@ -53,6 +59,7 @@ func authenticateRequest(c *fiber.Ctx, s *Service, db *bun.DB, cookieConfig Cook
 		if len(parts) != 2 || parts[0] != "Bearer" {
 			return nil, errUnauthorized
 		}
+
 		at = parts[1]
 		setCookies = false
 	} else {
@@ -68,18 +75,12 @@ func authenticateRequest(c *fiber.Ctx, s *Service, db *bun.DB, cookieConfig Cook
 
 	if at == "" {
 		// if there is no access token, attempt to get new access token using the refresh token.
-		tx, err := db.BeginTx(c.Context(), nil)
+		newTokens, err := s.RefreshAccessToken(c.Context(), rt)
 		if err != nil {
-			return nil, err
-		}
-		defer tx.Rollback()
+			if errors.Is(err, ErrInvalidRefreshToken) || errors.Is(err, ErrRefreshTokenExpired) || errors.Is(err, ErrRefreshTokenReused) {
+				return nil, errUnauthorized
+			}
 
-		newTokens, err := s.RefreshAccessToken(c.Context(), tx, rt)
-		if err != nil {
-			return nil, errUnauthorized
-		}
-
-		if err := tx.Commit(); err != nil {
 			return nil, err
 		}
 
@@ -88,14 +89,16 @@ func authenticateRequest(c *fiber.Ctx, s *Service, db *bun.DB, cookieConfig Cook
 		rt = newTokens.RefreshToken
 	}
 
-	authResult, err := s.AuthenticateWithAccessToken(c.Context(), db, at)
+	authResult, err := s.AuthenticateWithAccessToken(c.Context(), at)
 	if err != nil {
 		var e *InvalidAccessTokenError
+
 		if errors.As(err, &e) {
 			return nil, errUnauthorized
 		}
 
 		var nf *user.NotFoundError
+
 		if errors.As(err, &nf) {
 			return nil, errUnauthorized
 		}
@@ -110,50 +113,68 @@ func authenticateRequest(c *fiber.Ctx, s *Service, db *bun.DB, cookieConfig Cook
 	}, nil
 }
 
-func maybeAutoRefresh(c *fiber.Ctx, s *Service, db *bun.DB, cookieConfig CookieConfig, attempt *authAttempt) {
+func maybeAutoRefresh(c *fiber.Ctx, s Service, cookieConfig CookieConfig, attempt *authAttempt) {
 	if attempt == nil || attempt.AuthResult == nil {
 		return
 	}
+
 	if !attempt.SetCookies || attempt.RefreshToken == "" {
 		return
 	}
+
 	if time.Until(attempt.AuthResult.Claims.ExpiresAt.Time) >= 5*time.Minute {
 		return
 	}
 
-	tx, txErr := db.BeginTx(c.Context(), nil)
-	if txErr != nil {
+	newTokens, err := s.RefreshAccessToken(c.Context(), attempt.RefreshToken)
+	if errors.Is(err, ErrRefreshTokenRotated) {
+		// The access token is valid. Preserve cookies from the winning request.
 		return
 	}
-	defer tx.Rollback()
 
-	newTokens, err := s.RefreshAccessToken(c.Context(), tx, attempt.RefreshToken)
 	if err != nil {
 		slog.Debug("auto-refresh failed", "error", err)
-		return
-	}
-
-	if err := tx.Commit(); err != nil {
 		return
 	}
 
 	SetAuthCookies(c, newTokens.AccessToken, newTokens.RefreshToken, cookieConfig)
 }
 
+// authenticateOnce shares authentication and refresh across all auth middleware
+// in this request. Response cookies do not replace the original request cookies,
+// so authenticating again could reuse a refresh token we have already rotated.
+func authenticateOnce(c *fiber.Ctx, s Service, cookieConfig CookieConfig) (*authAttempt, error) {
+	if result, ok := c.Locals(requestAuthKey{}).(*requestAuthResult); ok {
+		return result.attempt, result.err
+	}
+
+	attempt, err := authenticateRequest(c, s, cookieConfig)
+	if err == nil {
+		reqctx.SetAuthenticatedUser(c, attempt.AuthResult.User)
+		maybeAutoRefresh(c, s, cookieConfig, attempt)
+	}
+
+	c.Locals(requestAuthKey{}, &requestAuthResult{attempt: attempt, err: err})
+
+	return attempt, err
+}
+
 // NewAuthMiddleware creates a middleware that authenticates requests via Bearer token or cookies.
 // To obtain the authenticated user in subsequent handlers, see reqctx.AuthenticatedUser.
-func NewAuthMiddleware(s *Service, db *bun.DB, cookieConfig CookieConfig) fiber.Handler {
+func NewAuthMiddleware(s Service, cookieConfig CookieConfig) fiber.Handler {
 	return func(c *fiber.Ctx) error {
-		attempt, err := authenticateRequest(c, s, db, cookieConfig)
+		_, err := authenticateOnce(c, s, cookieConfig)
 		if err != nil {
+			if errors.Is(err, ErrRefreshTokenRotated) {
+				return refreshConflictResponse(c)
+			}
+
 			if errors.Is(err, errUnauthorized) {
 				return c.SendStatus(fiber.StatusUnauthorized)
 			}
+
 			return httperr.Internal(err)
 		}
-
-		reqctx.SetAuthenticatedUser(c, attempt.AuthResult.User)
-		maybeAutoRefresh(c, s, db, cookieConfig, attempt)
 
 		return c.Next()
 	}
@@ -163,7 +184,8 @@ func NewAuthMiddleware(s *Service, db *bun.DB, cookieConfig CookieConfig) fiber.
 // credentials (Authorization header or auth cookies).
 //
 // Unlike NewAuthMiddleware, this middleware never rejects the request with 401. If
-// authentication fails, it proceeds as an anonymous request.
+// authentication fails, it proceeds as an anonymous request. A refresh collision
+// returns 409 without clearing cookies so the client can retry with its new token.
 //
 // This is useful for endpoints that are publicly accessible but can also behave
 // differently for authenticated callers (e.g. share consumption routes that may
@@ -172,8 +194,8 @@ func NewAuthMiddleware(s *Service, db *bun.DB, cookieConfig CookieConfig) fiber.
 //
 // Usage:
 //
-//	router.Use(auth.NewOptionalAuthMiddleware(authService, db, cookieConfig))
-func NewOptionalAuthMiddleware(s *Service, db *bun.DB, cookieConfig CookieConfig) fiber.Handler {
+//	router.Use(auth.NewOptionalAuthMiddleware(authService, cookieConfig))
+func NewOptionalAuthMiddleware(s Service, cookieConfig CookieConfig) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		authHeader := c.Get("Authorization")
 		hasAuthHeader := authHeader != ""
@@ -182,19 +204,22 @@ func NewOptionalAuthMiddleware(s *Service, db *bun.DB, cookieConfig CookieConfig
 			return c.Next()
 		}
 
-		attempt, err := authenticateRequest(c, s, db, cookieConfig)
+		_, err := authenticateOnce(c, s, cookieConfig)
 		if err != nil {
+			if errors.Is(err, ErrRefreshTokenRotated) {
+				return refreshConflictResponse(c)
+			}
+
 			if errors.Is(err, errUnauthorized) {
 				if !hasAuthHeader && hasAuthCookies {
 					ClearAuthCookies(c, cookieConfig)
 				}
+
 				return c.Next()
 			}
+
 			return httperr.Internal(err)
 		}
-
-		reqctx.SetAuthenticatedUser(c, attempt.AuthResult.User)
-		maybeAutoRefresh(c, s, db, cookieConfig, attempt)
 
 		return c.Next()
 	}

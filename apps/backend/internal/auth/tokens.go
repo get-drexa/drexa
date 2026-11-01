@@ -18,6 +18,7 @@ const (
 	refreshTokenDataLength = 32
 	refreshTokenLength     = refreshTokenKeyLength + refreshTokenDataLength
 	refreshTokenValidFor   = time.Hour * 24 * 30
+	refreshTokenReuseGrace = 10 * time.Second
 )
 
 type TokenConfig struct {
@@ -109,6 +110,7 @@ func ParseAccessToken(token string, c *TokenConfig) (*jwt.RegisteredClaims, erro
 	if err != nil {
 		return nil, newInvalidAccessTokenError(err)
 	}
+
 	return parsed.Claims.(*jwt.RegisteredClaims), nil
 }
 

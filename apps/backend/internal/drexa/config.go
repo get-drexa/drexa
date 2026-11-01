@@ -80,10 +80,12 @@ func ConfigFromFile(path string) (*Config, error) {
 		if os.IsNotExist(err) {
 			return nil, fmt.Errorf("config file not found: %s", path)
 		}
+
 		return nil, err
 	}
 
 	var config Config
+
 	if err := yaml.Unmarshal(data, &config); err != nil {
 		return nil, err
 	}
@@ -94,22 +96,26 @@ func ConfigFromFile(path string) (*Config, error) {
 		if err != nil {
 			return nil, errors.New("JWT_SECRET_KEY env var is not valid base64")
 		}
+
 		config.JWT.SecretKey = key
 	} else if config.JWT.SecretKeyBase64 != "" {
 		key, err := base64.StdEncoding.DecodeString(config.JWT.SecretKeyBase64)
 		if err != nil {
 			return nil, errors.New("jwt.secret_key_base64 is not valid base64")
 		}
+
 		config.JWT.SecretKey = key
 	} else if config.JWT.SecretKeyPath != "" {
 		keyData, err := os.ReadFile(config.JWT.SecretKeyPath)
 		if err != nil {
 			return nil, err
 		}
+
 		key, err := base64.StdEncoding.DecodeString(string(keyData))
 		if err != nil {
 			return nil, errors.New("jwt.secret_key_path file content is not valid base64")
 		}
+
 		config.JWT.SecretKey = key
 	}
 
@@ -138,9 +144,11 @@ func (c *Config) Validate() []error {
 	if c.JWT.Issuer == "" {
 		errs = append(errs, errors.New("jwt.issuer is required"))
 	}
+
 	if c.JWT.Audience == "" {
 		errs = append(errs, errors.New("jwt.audience is required"))
 	}
+
 	if len(c.JWT.SecretKey) == 0 {
 		errs = append(errs, errors.New("jwt secret key is required (set JWT_SECRET_KEY env var, jwt.secret_key_base64, or jwt.secret_key_path)"))
 	}
@@ -161,10 +169,12 @@ func (c *Config) Validate() []error {
 	if c.Storage.Backend == StorageBackendFS && c.Storage.RootPath == "" {
 		errs = append(errs, errors.New("storage.root_path is required when backend is 'fs'"))
 	}
+
 	if c.Storage.Backend == StorageBackendS3 {
 		if c.Storage.Bucket == "" {
 			errs = append(errs, errors.New("storage.bucket is required when backend is 's3'"))
 		}
+
 		if c.Storage.Mode == StorageModeHierarchical {
 			errs = append(errs, errors.New("storage.mode must be 'flat' when backend is 's3'"))
 		}

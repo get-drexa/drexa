@@ -59,15 +59,19 @@ func TestHTTP_Login_TokenDeliveryBody(t *testing.T) {
 	if resp.User.ID == "" || resp.User.Email != "reg@example.com" {
 		t.Fatalf("unexpected user: %+v", resp.User)
 	}
+
 	if len(resp.Organizations) != 1 {
 		t.Fatalf("expected 1 organization, got %d", len(resp.Organizations))
 	}
+
 	if resp.Organizations[0].Kind != string(organization.KindPersonal) {
 		t.Fatalf("unexpected org kind: %q", resp.Organizations[0].Kind)
 	}
+
 	if resp.Organizations[0].Slug != organization.ReservedSlug {
 		t.Fatalf("unexpected personal org slug: %q", resp.Organizations[0].Slug)
 	}
+
 	if resp.AccessToken == "" || resp.RefreshToken == "" {
 		t.Fatalf("expected tokens in body")
 	}
@@ -88,6 +92,7 @@ func TestHTTP_Login_TokenDeliveryCookie(t *testing.T) {
 	res, b := doRequest(t, app, http.MethodPost, "/api/auth/login", body, http.StatusOK)
 
 	var payload map[string]any
+
 	if err := json.Unmarshal(b, &payload); err != nil {
 		t.Fatalf("unmarshal response: %v body=%s", err, string(b))
 	}
@@ -95,6 +100,7 @@ func TestHTTP_Login_TokenDeliveryCookie(t *testing.T) {
 	if _, ok := payload["accessToken"]; ok {
 		t.Fatalf("expected accessToken to be omitted for cookie delivery")
 	}
+
 	if _, ok := payload["refreshToken"]; ok {
 		t.Fatalf("expected refreshToken to be omitted for cookie delivery")
 	}
@@ -104,17 +110,21 @@ func TestHTTP_Login_TokenDeliveryCookie(t *testing.T) {
 	for _, c := range cookies {
 		byName[c.Name] = c
 	}
+
 	at, ok := byName["access_token"]
 	if !ok {
 		t.Fatalf("expected access_token cookie to be set (set-cookie=%v)", res.Header.Values("Set-Cookie"))
 	}
+
 	rt, ok := byName["refresh_token"]
 	if !ok {
 		t.Fatalf("expected refresh_token cookie to be set (set-cookie=%v)", res.Header.Values("Set-Cookie"))
 	}
+
 	if at.Value == "" || rt.Value == "" {
 		t.Fatalf("expected auth cookies to have values")
 	}
+
 	if !at.HttpOnly || !rt.HttpOnly {
 		t.Fatalf("expected auth cookies to be HttpOnly")
 	}
@@ -171,6 +181,7 @@ func TestHTTP_Tokens_Rotation(t *testing.T) {
 		AccessToken  string `json:"accessToken"`
 		RefreshToken string `json:"refreshToken"`
 	}
+
 	doJSON(t, app, http.MethodPost, "/api/auth/login", loginBody, http.StatusOK, &loginResp)
 	if loginResp.RefreshToken == "" {
 		t.Fatalf("expected refresh token from login")
@@ -180,19 +191,25 @@ func TestHTTP_Tokens_Rotation(t *testing.T) {
 		AccessToken  string `json:"accessToken"`
 		RefreshToken string `json:"refreshToken"`
 	}
+
 	doJSON(t, app, http.MethodPost, "/api/auth/tokens", map[string]any{
 		"refreshToken": loginResp.RefreshToken,
 	}, http.StatusOK, &tokenResp1)
 	if tokenResp1.RefreshToken == "" || tokenResp1.AccessToken == "" {
 		t.Fatalf("expected new tokens from refresh")
 	}
+
 	if tokenResp1.RefreshToken == loginResp.RefreshToken {
 		t.Fatalf("expected refresh token rotation")
 	}
 
 	doJSON(t, app, http.MethodPost, "/api/auth/tokens", map[string]any{
 		"refreshToken": loginResp.RefreshToken,
-	}, http.StatusUnauthorized, nil)
+	}, http.StatusConflict, nil)
+
+	doJSON(t, app, http.MethodPost, "/api/auth/tokens", map[string]any{
+		"refreshToken": tokenResp1.RefreshToken,
+	}, http.StatusOK, nil)
 }
 
 func TestHTTP_Tokens_InvalidRefreshToken(t *testing.T) {
@@ -229,6 +246,7 @@ func TestHTTP_AuthMiddleware(t *testing.T) {
 		if err != nil {
 			t.Fatalf("request failed: %v", err)
 		}
+
 		res.Body.Close()
 
 		if res.StatusCode != http.StatusUnauthorized {
@@ -243,6 +261,7 @@ func TestHTTP_AuthMiddleware(t *testing.T) {
 		if err != nil {
 			t.Fatalf("request failed: %v", err)
 		}
+
 		res.Body.Close()
 
 		if res.StatusCode != http.StatusUnauthorized {
@@ -257,6 +276,7 @@ func TestHTTP_AuthMiddleware(t *testing.T) {
 		if err != nil {
 			t.Fatalf("request failed: %v", err)
 		}
+
 		res.Body.Close()
 
 		if res.StatusCode != http.StatusUnauthorized {
@@ -269,6 +289,7 @@ func TestHTTP_AuthMiddleware(t *testing.T) {
 		var loginResp struct {
 			AccessToken string `json:"accessToken"`
 		}
+
 		doJSON(t, app, http.MethodPost, "/api/auth/login", map[string]any{
 			"email":         "reg@example.com",
 			"password":      "password123",
@@ -281,6 +302,7 @@ func TestHTTP_AuthMiddleware(t *testing.T) {
 		if err != nil {
 			t.Fatalf("request failed: %v", err)
 		}
+
 		res.Body.Close()
 
 		if res.StatusCode != http.StatusOK {
@@ -298,6 +320,7 @@ func TestHTTP_AuthMiddleware(t *testing.T) {
 		if err != nil {
 			t.Fatalf("request failed: %v", err)
 		}
+
 		res.Body.Close()
 
 		if res.StatusCode != http.StatusUnauthorized {
@@ -313,6 +336,7 @@ func newAuthApp(t *testing.T, ctx context.Context) *fiber.App {
 	if err != nil {
 		t.Skipf("postgres testcontainer unavailable (docker not running/configured?): %v", err)
 	}
+
 	t.Cleanup(func() { _ = pg.Terminate(ctx) })
 
 	postgresURL, err := pg.ConnectionString(ctx, "sslmode=disable")
@@ -327,16 +351,16 @@ func newAuthApp(t *testing.T, ctx context.Context) *fiber.App {
 		t.Fatalf("RunMigrations: %v", err)
 	}
 
-	userSvc := user.NewService()
-	orgSvc := organization.NewService()
-	accSvc := account.NewService()
+	userSvc := user.NewService(user.NewDBStore(db))
+	orgSvc := organization.NewService(organization.NewDBStore(db), account.NewDBStore(db))
+	accSvc := account.NewService(account.NewDBStore(db))
 
 	hashed, err := password.HashString("password123")
 	if err != nil {
 		t.Fatalf("HashString: %v", err)
 	}
 
-	u, err := userSvc.RegisterUser(ctx, db, user.UserRegistrationOptions{
+	u, err := userSvc.RegisterUser(ctx, user.UserRegistrationOptions{
 		Email:       "reg@example.com",
 		DisplayName: "Reg User",
 		Password:    hashed,
@@ -345,16 +369,16 @@ func newAuthApp(t *testing.T, ctx context.Context) *fiber.App {
 		t.Fatalf("RegisterUser: %v", err)
 	}
 
-	org, err := orgSvc.CreatePersonalOrganization(ctx, db, "Personal")
+	org, err := orgSvc.CreatePersonalOrganization(ctx, "Personal")
 	if err != nil {
 		t.Fatalf("CreatePersonalOrganization: %v", err)
 	}
 
-	if _, err := accSvc.CreateAccount(ctx, db, org.ID, u.ID, account.RoleAdmin, account.StatusActive); err != nil {
+	if _, err := accSvc.CreateAccount(ctx, org.ID, u.ID, account.RoleAdmin, account.StatusActive); err != nil {
 		t.Fatalf("CreateAccount: %v", err)
 	}
 
-	authSvc := auth.NewService(userSvc, auth.TokenConfig{
+	authSvc := auth.NewService(db, user.NewDBStore(db), auth.TokenConfig{
 		Issuer:    "drexa-test",
 		Audience:  "drexa-test",
 		SecretKey: []byte("drexa-test-secret"),
@@ -364,7 +388,7 @@ func newAuthApp(t *testing.T, ctx context.Context) *fiber.App {
 		ErrorHandler: httperr.ErrorHandler,
 	})
 	api := app.Group("/api")
-	auth.NewHTTPHandler(authSvc, orgSvc, db, auth.CookieConfig{}).RegisterRoutes(api)
+	auth.NewHTTPHandler(authSvc, auth.CookieConfig{}).RegisterRoutes(api)
 
 	return app
 }
@@ -376,6 +400,7 @@ func newAuthAppWithProtectedRoute(t *testing.T, ctx context.Context) *fiber.App 
 	if err != nil {
 		t.Skipf("postgres testcontainer unavailable (docker not running/configured?): %v", err)
 	}
+
 	t.Cleanup(func() { _ = pg.Terminate(ctx) })
 
 	postgresURL, err := pg.ConnectionString(ctx, "sslmode=disable")
@@ -390,16 +415,16 @@ func newAuthAppWithProtectedRoute(t *testing.T, ctx context.Context) *fiber.App 
 		t.Fatalf("RunMigrations: %v", err)
 	}
 
-	userSvc := user.NewService()
-	orgSvc := organization.NewService()
-	accSvc := account.NewService()
+	userSvc := user.NewService(user.NewDBStore(db))
+	orgSvc := organization.NewService(organization.NewDBStore(db), account.NewDBStore(db))
+	accSvc := account.NewService(account.NewDBStore(db))
 
 	hashed, err := password.HashString("password123")
 	if err != nil {
 		t.Fatalf("HashString: %v", err)
 	}
 
-	u, err := userSvc.RegisterUser(ctx, db, user.UserRegistrationOptions{
+	u, err := userSvc.RegisterUser(ctx, user.UserRegistrationOptions{
 		Email:       "reg@example.com",
 		DisplayName: "Reg User",
 		Password:    hashed,
@@ -408,28 +433,28 @@ func newAuthAppWithProtectedRoute(t *testing.T, ctx context.Context) *fiber.App 
 		t.Fatalf("RegisterUser: %v", err)
 	}
 
-	org, err := orgSvc.CreatePersonalOrganization(ctx, db, "Personal")
+	org, err := orgSvc.CreatePersonalOrganization(ctx, "Personal")
 	if err != nil {
 		t.Fatalf("CreatePersonalOrganization: %v", err)
 	}
 
-	if _, err := accSvc.CreateAccount(ctx, db, org.ID, u.ID, account.RoleAdmin, account.StatusActive); err != nil {
+	if _, err := accSvc.CreateAccount(ctx, org.ID, u.ID, account.RoleAdmin, account.StatusActive); err != nil {
 		t.Fatalf("CreateAccount: %v", err)
 	}
 
-	authSvc := auth.NewService(userSvc, auth.TokenConfig{
+	authSvc := auth.NewService(db, user.NewDBStore(db), auth.TokenConfig{
 		Issuer:    "drexa-test",
 		Audience:  "drexa-test",
 		SecretKey: []byte("drexa-test-secret"),
 	})
 
-	authMiddleware := auth.NewAuthMiddleware(authSvc, db, auth.CookieConfig{})
+	authMiddleware := auth.NewAuthMiddleware(authSvc, auth.CookieConfig{})
 
 	app := fiber.New(fiber.Config{
 		ErrorHandler: httperr.ErrorHandler,
 	})
 	api := app.Group("/api")
-	auth.NewHTTPHandler(authSvc, orgSvc, db, auth.CookieConfig{}).RegisterRoutes(api)
+	auth.NewHTTPHandler(authSvc, auth.CookieConfig{}).RegisterRoutes(api)
 
 	// Add a protected route that requires authentication
 	api.Get("/protected", authMiddleware, func(c *fiber.Ctx) error {
@@ -450,6 +475,7 @@ func doRequest(
 	t.Helper()
 
 	var reqBody *bytes.Reader
+
 	if body == nil {
 		reqBody = bytes.NewReader(nil)
 	} else {
@@ -457,6 +483,7 @@ func doRequest(
 		if err != nil {
 			t.Fatalf("json marshal: %v", err)
 		}
+
 		reqBody = bytes.NewReader(b)
 	}
 
@@ -467,6 +494,7 @@ func doRequest(
 	if err != nil {
 		t.Fatalf("%s %s: %v", method, path, err)
 	}
+
 	defer res.Body.Close()
 
 	b, _ := io.ReadAll(res.Body)
@@ -492,6 +520,7 @@ func doJSON(
 	if out == nil {
 		return
 	}
+
 	if err := json.Unmarshal(b, out); err != nil {
 		t.Fatalf("%s %s: decode response: %v body=%s", method, path, err, string(b))
 	}

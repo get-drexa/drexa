@@ -21,10 +21,12 @@ func authCookies(c *fiber.Ctx) map[string]string {
 	if at != "" {
 		m[cookieKeyAccessToken] = at
 	}
+
 	rt := c.Cookies(cookieKeyRefreshToken)
 	if rt != "" {
 		m[cookieKeyRefreshToken] = rt
 	}
+
 	return m
 }
 
@@ -42,6 +44,7 @@ func SetAuthCookies(c *fiber.Ctx, accessToken, refreshToken string, cfg CookieCo
 		HTTPOnly: true,
 		Secure:   secure,
 	}
+
 	if cfg.Domain != "" {
 		accessTokenCookie.Domain = cfg.Domain
 	}
@@ -55,6 +58,7 @@ func SetAuthCookies(c *fiber.Ctx, accessToken, refreshToken string, cfg CookieCo
 		HTTPOnly: true,
 		Secure:   secure,
 	}
+
 	if cfg.Domain != "" {
 		refreshTokenCookie.Domain = cfg.Domain
 	}
@@ -77,6 +81,7 @@ func ClearAuthCookies(c *fiber.Ctx, cfg CookieConfig) {
 		HTTPOnly: true,
 		Secure:   secure,
 	}
+
 	if cfg.Domain != "" {
 		accessTokenCookie.Domain = cfg.Domain
 	}
@@ -90,6 +95,7 @@ func ClearAuthCookies(c *fiber.Ctx, cfg CookieConfig) {
 		HTTPOnly: true,
 		Secure:   secure,
 	}
+
 	if cfg.Domain != "" {
 		refreshTokenCookie.Domain = cfg.Domain
 	}

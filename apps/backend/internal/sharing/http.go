@@ -13,15 +13,11 @@ import (
 	"github.com/get-drexa/drexa/internal/user"
 	"github.com/get-drexa/drexa/internal/virtualfs"
 	"github.com/gofiber/fiber/v2"
-	"github.com/uptrace/bun"
+	"github.com/google/uuid"
 )
 
 type HTTPHandler struct {
-	sharingService         *Service
-	accountService         *account.Service
-	driveService           *drive.Service
-	vfs                    *virtualfs.VirtualFS
-	db                     *bun.DB
+	sharingService         Service
 	optionalAuthMiddleware fiber.Handler
 }
 
@@ -41,15 +37,8 @@ type patchShareRequest struct {
 	ExpiresAt nullable.Time `json:"expiresAt" example:"2025-01-15T00:00:00Z"`
 }
 
-func NewHTTPHandler(sharingService *Service, accountService *account.Service, driveService *drive.Service, vfs *virtualfs.VirtualFS, db *bun.DB, optionalAuthMiddleware fiber.Handler) *HTTPHandler {
-	return &HTTPHandler{
-		sharingService:         sharingService,
-		accountService:         accountService,
-		driveService:           driveService,
-		vfs:                    vfs,
-		db:                     db,
-		optionalAuthMiddleware: optionalAuthMiddleware,
-	}
+func NewHTTPHandler(service Service, optionalAuthMiddleware fiber.Handler) *HTTPHandler {
+	return &HTTPHandler{sharingService: service, optionalAuthMiddleware: optionalAuthMiddleware}
 }
 
 func (h *HTTPHandler) RegisterShareConsumeRoutes(r fiber.Router) *virtualfs.ScopedRouter {
@@ -57,6 +46,7 @@ func (h *HTTPHandler) RegisterShareConsumeRoutes(r fiber.Router) *virtualfs.Scop
 	// credentials (cookies or Authorization header), attempt auth so share scopes can be resolved for
 	// account-scoped shares.
 	g := r.Group("/shares/:shareID", h.optionalAuthMiddleware, h.shareMiddleware)
+
 	return &virtualfs.ScopedRouter{Router: g}
 }
 
@@ -69,54 +59,24 @@ func (h *HTTPHandler) RegisterShareManagementRoutes(api *virtualfs.ScopedRouter)
 }
 
 func (h *HTTPHandler) shareMiddleware(c *fiber.Ctx) error {
-	shareID := c.Params("shareID")
 
-	share, err := h.sharingService.FindShareByPublicID(c.Context(), h.db, shareID)
-	if err != nil {
-		if errors.Is(err, ErrShareNotFound) {
-			return c.SendStatus(fiber.StatusNotFound)
-		}
-		return httperr.Internal(err)
+	var userID, orgID uuid.UUID
+
+	if u, _ := reqctx.AuthenticatedUser(c).(*user.User); u != nil {
+		userID = u.ID
 	}
 
-	drive, err := h.driveService.DriveByID(c.Context(), h.db, share.DriveID)
-	if err != nil {
-		return httperr.Internal(err)
+	if org, _ := reqctx.CurrentOrganization(c).(*organization.Organization); org != nil {
+		orgID = org.ID
 	}
 
-	org, _ := reqctx.CurrentOrganization(c).(*organization.Organization)
-	if org != nil && drive.OrgID != org.ID {
-		return c.SendStatus(fiber.StatusNotFound)
-	}
-
-	var consumerAccount *account.Account
-	u, _ := reqctx.AuthenticatedUser(c).(*user.User)
-	if u != nil {
-		consumerAccount, err = h.accountService.FindUserAccountInOrg(c.Context(), h.db, drive.OrgID, u.ID)
-		if err != nil {
-			if errors.Is(err, account.ErrAccountNotFound) {
-				consumerAccount = nil
-			} else {
-				return httperr.Internal(err)
-			}
-		} else if consumerAccount.Status != account.StatusActive {
-			consumerAccount = nil
-		}
-	}
-
-	scope, err := h.sharingService.ResolveScopeForShare(c.Context(), h.db, consumerAccount, share)
+	scope, err := h.sharingService.ResolveAccess(c.Context(), c.Params("shareID"), userID, orgID)
 	if err != nil {
 		if errors.Is(err, ErrShareNotFound) || errors.Is(err, ErrShareExpired) || errors.Is(err, ErrShareRevoked) {
 			return c.SendStatus(fiber.StatusNotFound)
 		}
-		return httperr.Internal(err)
-	}
 
-	if scope == nil {
-		// no scope can be resolved for the share
-		// the user is not authorized to access the share
-		// return 404 to hide the existence of the share
-		return c.SendStatus(fiber.StatusNotFound)
+		return httperr.Internal(err)
 	}
 
 	reqctx.SetVFSAccessScope(c, scope)
@@ -138,18 +98,19 @@ func (h *HTTPHandler) shareMiddleware(c *fiber.Ctx) error {
 // @Security BearerAuth
 // @Router /drives/{driveID}/shares/{shareID} [get]
 func (h *HTTPHandler) getShare(c *fiber.Ctx) error {
-	shareID := c.Params("shareID")
-	share, err := h.sharingService.FindShareByPublicID(c.Context(), h.db, shareID)
+
+	drv, _ := reqctx.CurrentDrive(c).(*drive.Drive)
+	if drv == nil {
+		return c.SendStatus(fiber.StatusNotFound)
+	}
+
+	share, err := h.sharingService.FindShareForDrive(c.Context(), drv.ID, c.Params("shareID"))
 	if err != nil {
 		if errors.Is(err, ErrShareNotFound) {
 			return c.SendStatus(fiber.StatusNotFound)
 		}
-		return httperr.Internal(err)
-	}
 
-	drive, _ := reqctx.CurrentDrive(c).(*drive.Drive)
-	if drive == nil || share.DriveID != drive.ID {
-		return c.SendStatus(fiber.StatusNotFound)
+		return httperr.Internal(err)
 	}
 
 	return c.JSON(share)
@@ -170,68 +131,45 @@ func (h *HTTPHandler) getShare(c *fiber.Ctx) error {
 // @Security BearerAuth
 // @Router /drives/{driveID}/shares [post]
 func (h *HTTPHandler) createShare(c *fiber.Ctx) error {
+
 	scope, ok := scopeFromCtx(c)
 	if !ok {
 		return c.SendStatus(fiber.StatusUnauthorized)
 	}
 
-	acc, ok := reqctx.CurrentAccount(c).(*account.Account)
-	if !ok || acc == nil {
-		return c.SendStatus(fiber.StatusUnauthorized)
-	}
-
-	drive, _ := reqctx.CurrentDrive(c).(*drive.Drive)
-	if drive == nil {
+	acc, _ := reqctx.CurrentAccount(c).(*account.Account)
+	drv, _ := reqctx.CurrentDrive(c).(*drive.Drive)
+	if acc == nil || drv == nil {
 		return c.SendStatus(fiber.StatusUnauthorized)
 	}
 
 	var req createShareRequest
+
 	if err := c.BodyParser(&req); err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "invalid request",
-		})
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid request"})
 	}
 
-	if len(req.Items) == 0 {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "expects at least one item to share",
-		})
-	}
+	var expiresAt time.Time
 
-	tx, err := h.db.BeginTx(c.Context(), nil)
-	if err != nil {
-		return httperr.Internal(err)
-	}
-	defer tx.Rollback()
-
-	nodes, err := h.vfs.FindNodesByPublicID(c.Context(), tx, req.Items, scope)
-	if err != nil {
-		return httperr.Internal(err)
-	}
-	if len(nodes) != len(req.Items) {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "One or more items not found"})
-	}
-
-	opts := CreateShareOptions{
-		Items: nodes,
-	}
 	if req.ExpiresAt != nil {
-		opts.ExpiresAt = *req.ExpiresAt
+		expiresAt = *req.ExpiresAt
 	}
 
-	share, err := h.sharingService.CreateShare(c.Context(), tx, drive.ID, acc.ID, opts)
+	share, err := h.sharingService.CreateShareForItems(c.Context(), drv.ID, acc, req.Items, expiresAt, scope)
 	if err != nil {
-		if errors.Is(err, ErrNotSameParent) {
+		switch {
+		case errors.Is(err, ErrShareNoItems):
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "expects at least one item to share"})
+		case errors.Is(err, ErrItemsNotFound):
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "One or more items not found"})
+		case errors.Is(err, ErrShareNotFound), errors.Is(err, virtualfs.ErrAccessDenied):
+			return c.SendStatus(fiber.StatusNotFound)
+		case errors.Is(err, ErrNotSameParent):
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "items must be in the same directory"})
-		}
-		if errors.Is(err, ErrCannotShareRoot) {
+		case errors.Is(err, ErrCannotShareRoot):
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "cannot share root directory"})
 		}
-		return httperr.Internal(err)
-	}
 
-	err = tx.Commit()
-	if err != nil {
 		return httperr.Internal(err)
 	}
 
@@ -254,38 +192,18 @@ func (h *HTTPHandler) createShare(c *fiber.Ctx) error {
 // @Security BearerAuth
 // @Router /drives/{driveID}/shares/{shareID} [patch]
 func (h *HTTPHandler) updateShare(c *fiber.Ctx) error {
-	shareID := c.Params("shareID")
 
-	share, err := h.sharingService.FindShareByPublicID(c.Context(), h.db, shareID)
-	if err != nil {
-		if errors.Is(err, ErrShareNotFound) {
-			return c.SendStatus(fiber.StatusNotFound)
-		}
-		return httperr.Internal(err)
-	}
-
-	drive, _ := reqctx.CurrentDrive(c).(*drive.Drive)
-	if drive == nil || share.DriveID != drive.ID {
-		return c.SendStatus(fiber.StatusNotFound)
-	}
-
+	drv, _ := reqctx.CurrentDrive(c).(*drive.Drive)
 	acc, _ := reqctx.CurrentAccount(c).(*account.Account)
-	if acc == nil || (acc.Role != account.RoleAdmin && share.CreatedByAccountID != acc.ID) {
+	if drv == nil || acc == nil {
 		return c.SendStatus(fiber.StatusNotFound)
 	}
 
 	var req patchShareRequest
-	if err := c.BodyParser(&req); err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
-			"error": "invalid request",
-		})
-	}
 
-	tx, err := h.db.BeginTx(c.Context(), nil)
-	if err != nil {
-		return httperr.Internal(err)
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid request"})
 	}
-	defer tx.Rollback()
 
 	opts := UpdateShareOptions{}
 	if req.ExpiresAt.Set {
@@ -296,13 +214,12 @@ func (h *HTTPHandler) updateShare(c *fiber.Ctx) error {
 		}
 	}
 
-	err = h.sharingService.UpdateShare(c.Context(), tx, share, opts)
+	share, err := h.sharingService.UpdateShareForAccount(c.Context(), drv.ID, acc, c.Params("shareID"), opts)
 	if err != nil {
-		return httperr.Internal(err)
-	}
+		if errors.Is(err, ErrShareNotFound) {
+			return c.SendStatus(fiber.StatusNotFound)
+		}
 
-	err = tx.Commit()
-	if err != nil {
 		return httperr.Internal(err)
 	}
 
@@ -321,42 +238,19 @@ func (h *HTTPHandler) updateShare(c *fiber.Ctx) error {
 // @Security BearerAuth
 // @Router /drives/{driveID}/shares/{shareID} [delete]
 func (h *HTTPHandler) deleteShare(c *fiber.Ctx) error {
-	shareID := c.Params("shareID")
 
-	share, err := h.sharingService.FindShareByPublicID(c.Context(), h.db, shareID)
-	if err != nil {
-		if errors.Is(err, ErrShareNotFound) {
-			return c.SendStatus(fiber.StatusNotFound)
-		}
-		return httperr.Internal(err)
-	}
-
-	drive, _ := reqctx.CurrentDrive(c).(*drive.Drive)
-	if drive == nil || share.DriveID != drive.ID {
-		return c.SendStatus(fiber.StatusNotFound)
-	}
-
+	drv, _ := reqctx.CurrentDrive(c).(*drive.Drive)
 	acc, _ := reqctx.CurrentAccount(c).(*account.Account)
-	if acc == nil || (acc.Role != account.RoleAdmin && share.CreatedByAccountID != acc.ID) {
+	if drv == nil || acc == nil {
 		return c.SendStatus(fiber.StatusNotFound)
 	}
 
-	tx, err := h.db.BeginTx(c.Context(), nil)
-	if err != nil {
-		return httperr.Internal(err)
-	}
-	defer tx.Rollback()
-
-	err = h.sharingService.DeleteShareByPublicID(c.Context(), tx, shareID)
+	err := h.sharingService.DeleteShareForAccount(c.Context(), drv.ID, acc, c.Params("shareID"))
 	if err != nil {
 		if errors.Is(err, ErrShareNotFound) {
 			return c.SendStatus(fiber.StatusNotFound)
 		}
-		return httperr.Internal(err)
-	}
 
-	err = tx.Commit()
-	if err != nil {
 		return httperr.Internal(err)
 	}
 
@@ -368,9 +262,11 @@ func scopeFromCtx(c *fiber.Ctx) (*virtualfs.Scope, bool) {
 	if scopeAny == nil {
 		return nil, false
 	}
+
 	scope, ok := scopeAny.(*virtualfs.Scope)
 	if !ok || scope == nil {
 		return nil, false
 	}
+
 	return scope, true
 }

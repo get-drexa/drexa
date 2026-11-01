@@ -68,11 +68,14 @@ func TestNormalizeSlug(t *testing.T) {
 				if err == nil {
 					t.Fatalf("expected error, got none (slug=%q)", got)
 				}
+
 				return
 			}
+
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
+
 			if got != tt.want {
 				t.Fatalf("unexpected slug: got %q want %q", got, tt.want)
 			}

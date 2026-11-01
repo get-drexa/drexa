@@ -27,11 +27,14 @@ func NormalizeSlug(input string) (string, error) {
 	if len(slug) < slugMinLength || len(slug) > slugMaxLength {
 		return "", ErrInvalidSlug
 	}
+
 	if slug == ReservedSlug {
 		return "", ErrInvalidSlug
 	}
+
 	if !slugPattern.MatchString(slug) {
 		return "", ErrInvalidSlug
 	}
+
 	return slug, nil
 }

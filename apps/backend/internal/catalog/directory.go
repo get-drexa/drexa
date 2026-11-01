@@ -106,25 +106,13 @@ func (h *HTTPHandler) currentDirectoryMiddleware(c *fiber.Ctx) error {
 
 	directoryID := c.Params("directoryID")
 
-	var node *virtualfs.Node
-	if directoryID == "root" {
-		n, err := h.vfs.FindNode(c.Context(), h.db, scope.RootNodeID.String(), scope)
-		if err != nil {
-			if errors.Is(err, virtualfs.ErrNodeNotFound) {
-				return c.SendStatus(fiber.StatusNotFound)
-			}
-			return httperr.Internal(err)
+	node, err := h.service.FindDirectory(c.Context(), directoryID, scope)
+	if err != nil {
+		if errors.Is(err, virtualfs.ErrNodeNotFound) {
+			return c.SendStatus(fiber.StatusNotFound)
 		}
-		node = n
-	} else {
-		n, err := h.vfs.FindNodeByPublicID(c.Context(), h.db, directoryID, scope)
-		if err != nil {
-			if errors.Is(err, virtualfs.ErrNodeNotFound) {
-				return c.SendStatus(fiber.StatusNotFound)
-			}
-			return httperr.Internal(err)
-		}
-		node = n
+
+		return httperr.Internal(err)
 	}
 
 	c.Locals("directory", node)
@@ -166,60 +154,24 @@ func (h *HTTPHandler) createDirectory(c *fiber.Ctx) error {
 		return c.SendStatus(fiber.StatusBadRequest)
 	}
 
-	tx, err := h.db.BeginTx(c.Context(), nil)
+	result, err := h.service.CreateDirectory(c.Context(), req.ParentID, req.Name, slices.Contains(includeParam(c), "path"), scope)
 	if err != nil {
-		return httperr.Internal(err)
-	}
-	defer tx.Rollback()
-
-	parent, err := h.vfs.FindNodeByPublicID(c.Context(), tx, req.ParentID, scope)
-	if err != nil {
-		if errors.Is(err, virtualfs.ErrNodeNotFound) {
+		switch {
+		case errors.Is(err, ErrParentNotFound):
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Parent not found"})
-		}
-		return httperr.Internal(err)
-	}
-
-	if parent.Kind != virtualfs.NodeKindDirectory {
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Parent is not a directory"})
-	}
-
-	node, err := h.vfs.CreateDirectory(c.Context(), tx, parent.ID, req.Name, scope)
-	if err != nil {
-		if errors.Is(err, virtualfs.ErrNodeConflict) {
+		case errors.Is(err, ErrParentNotDirectory):
+			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Parent is not a directory"})
+		case errors.Is(err, virtualfs.ErrNodeConflict):
 			return c.Status(fiber.StatusConflict).JSON(fiber.Map{"error": "Directory already exists"})
-		}
-		if errors.Is(err, virtualfs.ErrAccessDenied) {
+		case errors.Is(err, virtualfs.ErrAccessDenied):
 			return c.SendStatus(fiber.StatusNotFound)
 		}
+
 		return httperr.Internal(err)
 	}
 
-	i := DirectoryInfo{
-		Kind:      DirItemKindDirectory,
-		ID:        node.PublicID,
-		Name:      node.Name,
-		CreatedAt: node.CreatedAt,
-		UpdatedAt: node.UpdatedAt,
-		DeletedAt: node.DeletedAt,
-	}
-
-	include := includeParam(c)
-	if slices.Contains(include, "path") {
-		p, err := h.vfs.RealPath(c.Context(), tx, node, scope)
-		if err != nil {
-			if errors.Is(err, virtualfs.ErrAccessDenied) {
-				return c.SendStatus(fiber.StatusNotFound)
-			}
-			return httperr.Internal(err)
-		}
-		i.Path = p
-	}
-
-	err = tx.Commit()
-	if err != nil {
-		return httperr.Internal(err)
-	}
+	i := directoryInfoFromNode(result.Node)
+	i.Path = result.Path
 
 	return c.JSON(i)
 }
@@ -255,13 +207,15 @@ func (h *HTTPHandler) fetchDirectory(c *fiber.Ctx) error {
 
 	include := includeParam(c)
 	if slices.Contains(include, "path") {
-		p, err := h.vfs.RealPath(c.Context(), h.db, node, scope)
+		p, err := h.service.RealPath(c.Context(), node, scope)
 		if err != nil {
 			if errors.Is(err, virtualfs.ErrAccessDenied) {
 				return c.SendStatus(fiber.StatusNotFound)
 			}
+
 			return httperr.Internal(err)
 		}
+
 		i.Path = p
 	}
 
@@ -319,24 +273,26 @@ func (h *HTTPHandler) listDirectory(c *fiber.Ctx) error {
 		if err != nil {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid limit"})
 		}
+
 		if limit < 1 {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Limit must be at least 1"})
 		}
+
 		opts.Limit = limit
 	}
 
 	if cursor := c.Query("cursor"); cursor != "" {
 		dc, err := decodeListChildrenCursor(cursor)
-		fmt.Printf("dc: %v\n", dc)
 		if err != nil {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid cursor"})
 		}
 
-		n, err := h.vfs.FindNodeByPublicID(c.Context(), h.db, dc.nodeID, scope)
+		n, err := h.service.FindNode(c.Context(), dc.nodeID, scope)
 		if err != nil {
 			if errors.Is(err, virtualfs.ErrNodeNotFound) {
 				return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid cursor"})
 			}
+
 			return httperr.Internal(err)
 		}
 
@@ -347,14 +303,16 @@ func (h *HTTPHandler) listDirectory(c *fiber.Ctx) error {
 		}
 	}
 
-	children, cursor, err := h.vfs.ListChildren(c.Context(), h.db, node, opts, scope)
+	children, cursor, err := h.service.ListChildren(c.Context(), node, opts, scope)
 	if err != nil {
 		if errors.Is(err, virtualfs.ErrNodeNotFound) {
 			return c.SendStatus(fiber.StatusNotFound)
 		}
+
 		if errors.Is(err, virtualfs.ErrAccessDenied) {
 			return c.SendStatus(fiber.StatusNotFound)
 		}
+
 		return httperr.Internal(err)
 	}
 
@@ -425,27 +383,11 @@ func (h *HTTPHandler) patchDirectory(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid request"})
 	}
 
-	tx, err := h.db.BeginTx(c.Context(), nil)
-	if err != nil {
-		return httperr.Internal(err)
-	}
-	defer tx.Rollback()
-
-	if patch.Name != "" {
-		err := h.vfs.RenameNode(c.Context(), tx, node, patch.Name, scope)
-		if err != nil {
-			if errors.Is(err, virtualfs.ErrNodeNotFound) {
-				return c.SendStatus(fiber.StatusNotFound)
-			}
-			if errors.Is(err, virtualfs.ErrAccessDenied) {
-				return c.SendStatus(fiber.StatusNotFound)
-			}
-			return httperr.Internal(err)
+	if err := h.service.RenameNode(c.Context(), node, patch.Name, scope); err != nil {
+		if errors.Is(err, virtualfs.ErrNodeNotFound) || errors.Is(err, virtualfs.ErrAccessDenied) {
+			return c.SendStatus(fiber.StatusNotFound)
 		}
-	}
 
-	err = tx.Commit()
-	if err != nil {
 		return httperr.Internal(err)
 	}
 
@@ -479,44 +421,22 @@ func (h *HTTPHandler) deleteDirectory(c *fiber.Ctx) error {
 		return c.SendStatus(fiber.StatusUnauthorized)
 	}
 
-	tx, err := h.db.BeginTx(c.Context(), nil)
+	trash := c.Query("trash") == "true"
+	deleted, err := h.service.DeleteNode(c.Context(), node, trash, scope)
 	if err != nil {
+		if errors.Is(err, virtualfs.ErrAccessDenied) || errors.Is(err, virtualfs.ErrNodeNotFound) {
+			return c.SendStatus(fiber.StatusNotFound)
+		}
+
 		return httperr.Internal(err)
 	}
-	defer tx.Rollback()
 
-	shouldTrash := c.Query("trash") == "true"
-	if shouldTrash {
-		_, err := h.vfs.SoftDeleteNode(c.Context(), tx, node, scope)
-		if err != nil {
-			if errors.Is(err, virtualfs.ErrAccessDenied) {
-				return c.SendStatus(fiber.StatusNotFound)
-			}
-			return httperr.Internal(err)
-		}
-
-		err = tx.Commit()
-		if err != nil {
-			return httperr.Internal(err)
-		}
-
-		return c.JSON(directoryInfoFromNode(node))
-	} else {
-		err = h.vfs.PermanentlyDeleteNode(c.Context(), tx, node, scope)
-		if err != nil {
-			if errors.Is(err, virtualfs.ErrAccessDenied) {
-				return c.SendStatus(fiber.StatusNotFound)
-			}
-			return httperr.Internal(err)
-		}
-
-		err = tx.Commit()
-		if err != nil {
-			return httperr.Internal(err)
-		}
-
-		return c.SendStatus(fiber.StatusNoContent)
+	if trash {
+		return c.JSON(directoryInfoFromNode(deleted))
 	}
+
+	return c.SendStatus(fiber.StatusNoContent)
+
 }
 
 // deleteDirectories removes multiple directories
@@ -550,65 +470,29 @@ func (h *HTTPHandler) deleteDirectories(c *fiber.Ctx) error {
 
 	shouldTrash := c.Query("trash") == "true"
 
-	tx, err := h.db.BeginTx(c.Context(), nil)
+	deleted, err := h.service.DeleteNodes(c.Context(), ids, virtualfs.NodeKindDirectory, shouldTrash, scope)
 	if err != nil {
+		if errors.Is(err, virtualfs.ErrUnsupportedOperation) {
+			return httperr.NewHTTPError(fiber.StatusBadRequest, "all items must be directories", err)
+		}
+
+		if errors.Is(err, virtualfs.ErrAccessDenied) {
+			return c.SendStatus(fiber.StatusNotFound)
+		}
+
 		return httperr.Internal(err)
 	}
-	defer tx.Rollback()
 
-	nodes, err := h.vfs.FindNodesByPublicID(c.Context(), tx, ids, scope)
-	if err != nil {
-		return httperr.Internal(err)
-	}
-
-	if len(nodes) == 0 {
+	if !shouldTrash || len(deleted) == 0 {
 		return c.SendStatus(fiber.StatusNoContent)
 	}
 
-	for _, node := range nodes {
-		if node.Kind != virtualfs.NodeKindDirectory {
-			return httperr.NewHTTPError(fiber.StatusBadRequest, "all items must be directories", nil)
-		}
+	res := make([]DirectoryInfo, 0, len(deleted))
+	for _, node := range deleted {
+		res = append(res, directoryInfoFromNode(node))
 	}
 
-	if shouldTrash {
-		deleted, err := h.vfs.SoftDeleteNodes(c.Context(), tx, nodes, scope)
-		if err != nil {
-			if errors.Is(err, virtualfs.ErrAccessDenied) {
-				return c.SendStatus(fiber.StatusNotFound)
-			}
-			return httperr.Internal(err)
-		}
-
-		err = tx.Commit()
-		if err != nil {
-			return httperr.Internal(err)
-		}
-
-		res := make([]DirectoryInfo, 0, len(deleted))
-		for _, node := range deleted {
-			res = append(res, directoryInfoFromNode(node))
-		}
-
-		return c.JSON(res)
-	} else {
-		for _, node := range nodes {
-			err = h.vfs.PermanentlyDeleteNode(c.Context(), tx, node, scope)
-			if err != nil {
-				if errors.Is(err, virtualfs.ErrAccessDenied) {
-					return c.SendStatus(fiber.StatusNotFound)
-				}
-				return httperr.Internal(err)
-			}
-		}
-
-		err = tx.Commit()
-		if err != nil {
-			return httperr.Internal(err)
-		}
-
-		return c.SendStatus(fiber.StatusNoContent)
-	}
+	return c.JSON(res)
 
 }
 
@@ -644,37 +528,19 @@ func (h *HTTPHandler) moveItemsToDirectory(c *fiber.Ctx) error {
 		return c.SendStatus(fiber.StatusNoContent)
 	}
 
-	tx, err := h.db.BeginTx(c.Context(), nil)
+	result, err := h.service.MoveNodes(c.Context(), req.Items, targetDir.ID, scope)
 	if err != nil {
-		return httperr.Internal(err)
-	}
-	defer tx.Rollback()
-
-	nodes, err := h.vfs.FindNodesByPublicID(c.Context(), tx, req.Items, scope)
-	if err != nil {
-		return httperr.Internal(err)
-	}
-	if len(nodes) != len(req.Items) {
-		return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "One or more items not found"})
-	}
-
-	// Move all nodes to the target directory
-	result, err := h.vfs.MoveNodesInSameDirectory(c.Context(), tx, nodes, targetDir.ID, scope)
-	if err != nil {
-		if errors.Is(err, virtualfs.ErrUnsupportedOperation) {
+		switch {
+		case errors.Is(err, ErrItemsNotFound):
+			return c.Status(fiber.StatusNotFound).JSON(fiber.Map{"error": "One or more items not found"})
+		case errors.Is(err, virtualfs.ErrUnsupportedOperation):
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "All items must be in the same directory"})
-		}
-		if errors.Is(err, virtualfs.ErrNodeConflict) {
+		case errors.Is(err, virtualfs.ErrNodeConflict):
 			return c.Status(fiber.StatusConflict).JSON(fiber.Map{"error": "Name conflict in target directory"})
-		}
-		if errors.Is(err, virtualfs.ErrAccessDenied) {
+		case errors.Is(err, virtualfs.ErrAccessDenied):
 			return c.SendStatus(fiber.StatusNotFound)
 		}
-		return httperr.Internal(err)
-	}
 
-	err = tx.Commit()
-	if err != nil {
 		return httperr.Internal(err)
 	}
 
@@ -689,10 +555,12 @@ func (h *HTTPHandler) moveItemsToDirectory(c *fiber.Ctx) error {
 		res.Items = append(res.Items, toDirectoryItem(node))
 		res.Moved = append(res.Moved, node.PublicID)
 	}
+
 	for _, node := range result.Conflicts {
 		res.Items = append(res.Items, toDirectoryItem(node))
 		res.Conflicts = append(res.Conflicts, node.PublicID)
 	}
+
 	for _, err := range result.Errors {
 		res.Errors = append(res.Errors, moveItemError{
 			ID:    err.Node.PublicID,
@@ -705,6 +573,7 @@ func (h *HTTPHandler) moveItemsToDirectory(c *fiber.Ctx) error {
 
 func encodeListChildrenCursor(cursor *virtualfs.ListChildrenCursor) string {
 	var by int
+
 	switch cursor.OrderBy {
 	case virtualfs.ListChildrenOrderByName:
 		by = 0
@@ -715,6 +584,7 @@ func encodeListChildrenCursor(cursor *virtualfs.ListChildrenCursor) string {
 	}
 
 	var d int
+
 	switch cursor.OrderDirection {
 	case virtualfs.ListChildrenDirectionAsc:
 		d = 0
@@ -723,6 +593,7 @@ func encodeListChildrenCursor(cursor *virtualfs.ListChildrenCursor) string {
 	}
 
 	s := fmt.Sprintf("%d:%d:%s", by, d, cursor.Node.PublicID)
+
 	return base64.URLEncoding.EncodeToString([]byte(s))
 }
 
@@ -781,7 +652,7 @@ func (h *HTTPHandler) listDirectoryShares(c *fiber.Ctx) error {
 
 	includesExpired := c.Query("includesExpired") == "true"
 
-	shares, err := h.sharingService.ListShares(c.Context(), h.db, node.DriveID, sharing.ListSharesOptions{
+	shares, err := h.sharingService.ListShares(c.Context(), node.DriveID, sharing.ListSharesOptions{
 		Items:           []*virtualfs.Node{node},
 		IncludesExpired: includesExpired,
 	})

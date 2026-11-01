@@ -2,95 +2,91 @@ package organization
 
 import (
 	"context"
-	"database/sql"
 	"errors"
+	"strings"
 
 	"github.com/get-drexa/drexa/internal/account"
 	"github.com/google/uuid"
-	"github.com/uptrace/bun"
 )
 
-type Service struct{}
-
-func NewService() *Service {
-	return &Service{}
+type Service interface {
+	ResolveForUser(ctx context.Context, slug string, userID uuid.UUID) (*Membership, error)
+	CreatePersonalOrganization(ctx context.Context, name string) (*Organization, error)
+	OrganizationByID(ctx context.Context, id uuid.UUID) (*Organization, error)
+	OrganizationBySlug(ctx context.Context, slug string) (*Organization, error)
+	PersonalOrganizationForUser(ctx context.Context, userID uuid.UUID) (*Organization, error)
+	ListOrganizationsForUser(ctx context.Context, userID uuid.UUID) ([]Organization, error)
 }
 
-func (s *Service) CreatePersonalOrganization(ctx context.Context, db bun.IDB, name string) (*Organization, error) {
-	id, err := newOrganizationID()
-	if err != nil {
-		return nil, err
-	}
-
-	org := &Organization{
-		ID:   id,
-		Kind: KindPersonal,
-		Name: name,
-	}
-
-	_, err = db.NewInsert().Model(org).Returning("*").Exec(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	return org, nil
+type service struct {
+	store    Store
+	accounts account.Store
 }
 
-func (s *Service) OrganizationByID(ctx context.Context, db bun.IDB, id uuid.UUID) (*Organization, error) {
-	var org Organization
-	err := db.NewSelect().Model(&org).Where("id = ?", id).Scan(ctx)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
+var _ Service = (*service)(nil)
+
+func NewService(store Store, accounts account.Store) Service {
+	return &service{store: store, accounts: accounts}
+}
+
+func (s *service) CreatePersonalOrganization(ctx context.Context, name string) (*Organization, error) {
+	return s.store.CreatePersonal(ctx, name)
+}
+
+func (s *service) OrganizationByID(ctx context.Context, id uuid.UUID) (*Organization, error) {
+	return s.store.FindByID(ctx, id)
+}
+
+func (s *service) OrganizationBySlug(ctx context.Context, slug string) (*Organization, error) {
+	return s.store.FindBySlug(ctx, slug)
+}
+
+func (s *service) PersonalOrganizationForUser(ctx context.Context, userID uuid.UUID) (*Organization, error) {
+	return s.store.FindPersonalForUser(ctx, userID)
+}
+
+func (s *service) ListOrganizationsForUser(ctx context.Context, userID uuid.UUID) ([]Organization, error) {
+	return s.store.ListForUser(ctx, userID)
+}
+
+type Membership struct {
+	Organization *Organization
+	Account      *account.Account
+}
+
+// ResolveForUser hides organizations from users without active membership.
+func (s *service) ResolveForUser(ctx context.Context, slug string, userID uuid.UUID) (*Membership, error) {
+	slug = strings.ToLower(strings.TrimSpace(slug))
+	var org *Organization
+	var err error
+
+	if slug == ReservedSlug {
+		org, err = s.store.FindPersonalForUser(ctx, userID)
+	} else {
+		slug, err = NormalizeSlug(slug)
+		if err != nil {
 			return nil, ErrOrganizationNotFound
 		}
-		return nil, err
-	}
-	return &org, nil
-}
 
-func (s *Service) OrganizationBySlug(ctx context.Context, db bun.IDB, slug string) (*Organization, error) {
-	var org Organization
-	err := db.NewSelect().Model(&org).Where("lower(slug) = lower(?)", slug).Scan(ctx)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return nil, ErrOrganizationNotFound
-		}
-		return nil, err
+		org, err = s.store.FindBySlug(ctx, slug)
 	}
-	return &org, nil
-}
 
-func (s *Service) PersonalOrganizationForUser(ctx context.Context, db bun.IDB, userID uuid.UUID) (*Organization, error) {
-	var org Organization
-	err := db.NewSelect().Model(&org).
-		Join("JOIN accounts ON accounts.org_id = organization.id").
-		Where("accounts.user_id = ?", userID).
-		Where("accounts.status = ?", account.StatusActive).
-		Where("organization.kind = ?", KindPersonal).
-		Scan(ctx)
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return nil, ErrOrganizationNotFound
-		}
 		return nil, err
 	}
-	return &org, nil
-}
 
-func (s *Service) ListOrganizationsForUser(ctx context.Context, db bun.IDB, userID uuid.UUID) ([]Organization, error) {
-	orgs := make([]Organization, 0)
-	err := db.NewSelect().
-		Model(&orgs).
-		Join("JOIN accounts ON accounts.org_id = organization.id").
-		Where("accounts.user_id = ?", userID).
-		Where("accounts.status = ?", account.StatusActive).
-		Order("organization.kind ASC", "organization.name ASC").
-		Scan(ctx)
+	acc, err := s.accounts.FindForUserInOrg(ctx, org.ID, userID)
+	if errors.Is(err, account.ErrAccountNotFound) {
+		return nil, ErrOrganizationNotFound
+	}
+
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return orgs, nil
-		}
 		return nil, err
 	}
-	return orgs, nil
+
+	if acc.Status != account.StatusActive {
+		return nil, ErrOrganizationNotFound
+	}
+
+	return &Membership{Organization: org, Account: acc}, nil
 }

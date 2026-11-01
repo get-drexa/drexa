@@ -23,6 +23,7 @@ func TestService_UserQueries(t *testing.T) {
 	if err != nil {
 		t.Skipf("postgres testcontainer unavailable (docker not running/configured?): %v", err)
 	}
+
 	t.Cleanup(func() { _ = pg.Terminate(ctx) })
 
 	postgresURL, err := pg.ConnectionString(ctx, "sslmode=disable")
@@ -41,14 +42,15 @@ func TestService_UserQueries(t *testing.T) {
 	if err != nil {
 		t.Fatalf("HashString: %v", err)
 	}
+
 	pw2, err := password.HashString("password-2")
 	if err != nil {
 		t.Fatalf("HashString: %v", err)
 	}
 
-	svc := user.NewService()
+	svc := user.NewService(user.NewDBStore(db))
 
-	user1, err := svc.RegisterUser(ctx, db, user.UserRegistrationOptions{
+	user1, err := svc.RegisterUser(ctx, user.UserRegistrationOptions{
 		Email:       "alice@example.com",
 		DisplayName: "Alice",
 		Password:    pw1,
@@ -56,7 +58,8 @@ func TestService_UserQueries(t *testing.T) {
 	if err != nil {
 		t.Fatalf("RegisterUser(user1): %v", err)
 	}
-	user2, err := svc.RegisterUser(ctx, db, user.UserRegistrationOptions{
+
+	user2, err := svc.RegisterUser(ctx, user.UserRegistrationOptions{
 		Email:       "bob@example.com",
 		DisplayName: "Bob",
 		Password:    pw2,
@@ -66,42 +69,48 @@ func TestService_UserQueries(t *testing.T) {
 	}
 
 	t.Run("user by id", func(t *testing.T) {
-		got1, err := svc.UserByID(ctx, db, user1.ID)
+		got1, err := svc.UserByID(ctx, user1.ID)
 		if err != nil {
 			t.Fatalf("UserByID(user1): %v", err)
 		}
+
 		if got1.ID != user1.ID {
 			t.Fatalf("unexpected user1 id: got %q want %q", got1.ID, user1.ID)
 		}
+
 		if got1.Email != user1.Email {
 			t.Fatalf("unexpected user1 email: got %q want %q", got1.Email, user1.Email)
 		}
 
-		got2, err := svc.UserByID(ctx, db, user2.ID)
+		got2, err := svc.UserByID(ctx, user2.ID)
 		if err != nil {
 			t.Fatalf("UserByID(user2): %v", err)
 		}
+
 		if got2.ID != user2.ID {
 			t.Fatalf("unexpected user2 id: got %q want %q", got2.ID, user2.ID)
 		}
+
 		if got2.Email != user2.Email {
 			t.Fatalf("unexpected user2 email: got %q want %q", got2.Email, user2.Email)
 		}
 	})
 
 	t.Run("user by email", func(t *testing.T) {
-		got1, err := svc.UserByEmail(ctx, db, user1.Email)
+		got1, err := svc.UserByEmail(ctx, user1.Email)
 		if err != nil {
 			t.Fatalf("UserByEmail(user1): %v", err)
 		}
+
 		if got1.ID != user1.ID {
 			t.Fatalf("unexpected user1 id: got %q want %q", got1.ID, user1.ID)
 		}
 
-		got2, err := svc.UserByEmail(ctx, db, user2.Email)
+		got2, err := svc.UserByEmail(ctx, user2.Email)
 		if err != nil {
 			t.Fatalf("UserByEmail(user2): %v", err)
 		}
+
 		if got2.ID != user2.ID {
 			t.Fatalf("unexpected user2 id: got %q want %q", got2.ID, user2.ID)
 		}
@@ -116,6 +125,7 @@ func TestService_RegisterUserConflict(t *testing.T) {
 	if err != nil {
 		t.Skipf("postgres testcontainer unavailable (docker not running/configured?): %v", err)
 	}
+
 	t.Cleanup(func() { _ = pg.Terminate(ctx) })
 
 	postgresURL, err := pg.ConnectionString(ctx, "sslmode=disable")
@@ -135,9 +145,9 @@ func TestService_RegisterUserConflict(t *testing.T) {
 		t.Fatalf("HashString: %v", err)
 	}
 
-	svc := user.NewService()
+	svc := user.NewService(user.NewDBStore(db))
 
-	_, err = svc.RegisterUser(ctx, db, user.UserRegistrationOptions{
+	_, err = svc.RegisterUser(ctx, user.UserRegistrationOptions{
 		Email:       "conflict@example.com",
 		DisplayName: "Conflict",
 		Password:    pw,
@@ -146,7 +156,7 @@ func TestService_RegisterUserConflict(t *testing.T) {
 		t.Fatalf("RegisterUser(first): %v", err)
 	}
 
-	_, err = svc.RegisterUser(ctx, db, user.UserRegistrationOptions{
+	_, err = svc.RegisterUser(ctx, user.UserRegistrationOptions{
 		Email:       "conflict@example.com",
 		DisplayName: "Conflict 2",
 		Password:    pw,
@@ -154,10 +164,13 @@ func TestService_RegisterUserConflict(t *testing.T) {
 	if err == nil {
 		t.Fatalf("expected conflict error, got nil")
 	}
+
 	var existsErr *user.AlreadyExistsError
+
 	if !errors.As(err, &existsErr) {
 		t.Fatalf("expected AlreadyExistsError, got %T: %v", err, err)
 	}
+
 	if existsErr.Email != "conflict@example.com" {
 		t.Fatalf("unexpected conflict email: got %q want %q", existsErr.Email, "conflict@example.com")
 	}

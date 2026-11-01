@@ -14,13 +14,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/get-drexa/drexa/internal/account"
 	"github.com/get-drexa/drexa/internal/auth"
 	"github.com/get-drexa/drexa/internal/blob"
 	"github.com/get-drexa/drexa/internal/database"
-	"github.com/get-drexa/drexa/internal/drive"
 	"github.com/get-drexa/drexa/internal/httperr"
-	"github.com/get-drexa/drexa/internal/organization"
 	"github.com/get-drexa/drexa/internal/registration"
 	"github.com/get-drexa/drexa/internal/user"
 	"github.com/get-drexa/drexa/internal/virtualfs"
@@ -35,6 +32,7 @@ func TestHTTP_RegisterAccount_TokenDeliveryBody(t *testing.T) {
 	if err != nil {
 		t.Skipf("postgres testcontainer unavailable (docker not running/configured?): %v", err)
 	}
+
 	t.Cleanup(func() { _ = pg.Terminate(ctx) })
 
 	postgresURL, err := pg.ConnectionString(ctx, "sslmode=disable")
@@ -53,6 +51,7 @@ func TestHTTP_RegisterAccount_TokenDeliveryBody(t *testing.T) {
 	if err != nil {
 		t.Fatalf("temp blob dir: %v", err)
 	}
+
 	t.Cleanup(func() { _ = os.RemoveAll(blobRoot) })
 
 	blobStore := blob.NewFSStore(blob.FSStoreConfig{Root: blobRoot})
@@ -65,23 +64,18 @@ func TestHTTP_RegisterAccount_TokenDeliveryBody(t *testing.T) {
 		t.Fatalf("virtualfs.New: %v", err)
 	}
 
-	userSvc := user.NewService()
-	orgSvc := organization.NewService()
-	accSvc := account.NewService()
-	driveSvc := drive.NewService()
-	regSvc := registration.NewService(userSvc, orgSvc, accSvc, driveSvc, vfs)
-
-	authSvc := auth.NewService(userSvc, auth.TokenConfig{
+	authSvc := auth.NewService(db, user.NewDBStore(db), auth.TokenConfig{
 		Issuer:    "drexa-test",
 		Audience:  "drexa-test",
 		SecretKey: []byte("drexa-test-secret"),
 	})
+	regSvc := registration.NewService(db, authSvc, vfs)
 
 	app := fiber.New(fiber.Config{
 		ErrorHandler: httperr.ErrorHandler,
 	})
 	api := app.Group("/api")
-	registration.NewHTTPHandler(regSvc, authSvc, db, auth.CookieConfig{}).RegisterRoutes(api)
+	registration.NewHTTPHandler(regSvc, auth.CookieConfig{}).RegisterRoutes(api)
 
 	body := map[string]any{
 		"email":         "reg@example.com",
@@ -89,6 +83,26 @@ func TestHTTP_RegisterAccount_TokenDeliveryBody(t *testing.T) {
 		"displayName":   "Reg User",
 		"tokenDelivery": auth.TokenDeliveryBody,
 	}
+
+	for _, delivery := range []string{"", "unsupported"} {
+		t.Run("reject token delivery "+delivery+" before registration", func(t *testing.T) {
+			body["tokenDelivery"] = delivery
+			var payload map[string]string
+
+			doJSON(t, app, http.MethodPost, "/api/accounts", body, http.StatusBadRequest, &payload)
+			if payload["error"] != "invalid token delivery method" {
+				t.Fatalf("unexpected error response: %v", payload)
+			}
+
+			for table, count := range registrationRowCounts(t, ctx, db) {
+				if count != 0 {
+					t.Errorf("invalid request created %d records in %s", count, table)
+				}
+			}
+		})
+	}
+
+	body["tokenDelivery"] = auth.TokenDeliveryBody
 
 	var resp struct {
 		Account struct {
@@ -115,17 +129,28 @@ func TestHTTP_RegisterAccount_TokenDeliveryBody(t *testing.T) {
 	if resp.Account.ID == "" || resp.Account.OrgID == "" || resp.Account.UserID == "" {
 		t.Fatalf("expected account ids to be set, got %+v", resp.Account)
 	}
+
 	if resp.User.ID == "" || resp.User.Email != "reg@example.com" || resp.User.DisplayName != "Reg User" {
 		t.Fatalf("unexpected user: %+v", resp.User)
 	}
+
 	if resp.Drive.ID == "" {
 		t.Fatalf("expected drive.id to be set")
 	}
+
 	if resp.AccessToken == "" || resp.RefreshToken == "" {
 		t.Fatalf("expected access/refresh tokens in body")
 	}
+
 	if resp.Account.UserID != resp.User.ID {
 		t.Fatalf("expected account.userId to match user.id: got %q want %q", resp.Account.UserID, resp.User.ID)
+	}
+
+	var conflict map[string]string
+
+	doJSON(t, app, http.MethodPost, "/api/accounts", body, http.StatusConflict, &conflict)
+	if conflict["error"] == "" {
+		t.Fatal("expected a JSON conflict error")
 	}
 }
 
@@ -137,6 +162,7 @@ func TestHTTP_RegisterAccount_TokenDeliveryCookie(t *testing.T) {
 	if err != nil {
 		t.Skipf("postgres testcontainer unavailable (docker not running/configured?): %v", err)
 	}
+
 	t.Cleanup(func() { _ = pg.Terminate(ctx) })
 
 	postgresURL, err := pg.ConnectionString(ctx, "sslmode=disable")
@@ -155,6 +181,7 @@ func TestHTTP_RegisterAccount_TokenDeliveryCookie(t *testing.T) {
 	if err != nil {
 		t.Fatalf("temp blob dir: %v", err)
 	}
+
 	t.Cleanup(func() { _ = os.RemoveAll(blobRoot) })
 
 	blobStore := blob.NewFSStore(blob.FSStoreConfig{Root: blobRoot})
@@ -167,23 +194,18 @@ func TestHTTP_RegisterAccount_TokenDeliveryCookie(t *testing.T) {
 		t.Fatalf("virtualfs.New: %v", err)
 	}
 
-	userSvc := user.NewService()
-	orgSvc := organization.NewService()
-	accSvc := account.NewService()
-	driveSvc := drive.NewService()
-	regSvc := registration.NewService(userSvc, orgSvc, accSvc, driveSvc, vfs)
-
-	authSvc := auth.NewService(userSvc, auth.TokenConfig{
+	authSvc := auth.NewService(db, user.NewDBStore(db), auth.TokenConfig{
 		Issuer:    "drexa-test",
 		Audience:  "drexa-test",
 		SecretKey: []byte("drexa-test-secret"),
 	})
+	regSvc := registration.NewService(db, authSvc, vfs)
 
 	app := fiber.New(fiber.Config{
 		ErrorHandler: httperr.ErrorHandler,
 	})
 	api := app.Group("/api")
-	registration.NewHTTPHandler(regSvc, authSvc, db, auth.CookieConfig{}).RegisterRoutes(api)
+	registration.NewHTTPHandler(regSvc, auth.CookieConfig{}).RegisterRoutes(api)
 
 	body := map[string]any{
 		"email":         "reg@example.com",
@@ -195,6 +217,7 @@ func TestHTTP_RegisterAccount_TokenDeliveryCookie(t *testing.T) {
 	res, b := doRequest(t, app, http.MethodPost, "/api/accounts", body, http.StatusOK)
 
 	var payload map[string]any
+
 	if err := json.Unmarshal(b, &payload); err != nil {
 		t.Fatalf("unmarshal response: %v body=%s", err, string(b))
 	}
@@ -202,6 +225,7 @@ func TestHTTP_RegisterAccount_TokenDeliveryCookie(t *testing.T) {
 	if _, ok := payload["accessToken"]; ok {
 		t.Fatalf("expected accessToken to be omitted for cookie delivery")
 	}
+
 	if _, ok := payload["refreshToken"]; ok {
 		t.Fatalf("expected refreshToken to be omitted for cookie delivery")
 	}
@@ -210,6 +234,7 @@ func TestHTTP_RegisterAccount_TokenDeliveryCookie(t *testing.T) {
 	if !ok {
 		t.Fatalf("expected account object, got %T", payload["account"])
 	}
+
 	if accRaw["id"] == "" || accRaw["orgId"] == "" || accRaw["userId"] == "" {
 		t.Fatalf("expected account ids to be set, got %+v", accRaw)
 	}
@@ -218,6 +243,7 @@ func TestHTTP_RegisterAccount_TokenDeliveryCookie(t *testing.T) {
 	if !ok {
 		t.Fatalf("expected user object, got %T", payload["user"])
 	}
+
 	if userRaw["id"] == "" || userRaw["email"] != "reg@example.com" || userRaw["displayName"] != "Reg User" {
 		t.Fatalf("unexpected user: %+v", userRaw)
 	}
@@ -226,6 +252,7 @@ func TestHTTP_RegisterAccount_TokenDeliveryCookie(t *testing.T) {
 	if !ok {
 		t.Fatalf("expected drive object, got %T", payload["drive"])
 	}
+
 	if driveRaw["id"] == "" {
 		t.Fatalf("expected drive.id to be set, got %+v", driveRaw)
 	}
@@ -235,20 +262,25 @@ func TestHTTP_RegisterAccount_TokenDeliveryCookie(t *testing.T) {
 	for _, c := range cookies {
 		byName[c.Name] = c
 	}
+
 	at, ok := byName["access_token"]
 	if !ok {
 		t.Fatalf("expected access_token cookie to be set (set-cookie=%v)", res.Header.Values("Set-Cookie"))
 	}
+
 	rt, ok := byName["refresh_token"]
 	if !ok {
 		t.Fatalf("expected refresh_token cookie to be set (set-cookie=%v)", res.Header.Values("Set-Cookie"))
 	}
+
 	if at.Value == "" || rt.Value == "" {
 		t.Fatalf("expected auth cookies to have values")
 	}
+
 	if !at.HttpOnly || !rt.HttpOnly {
 		t.Fatalf("expected auth cookies to be HttpOnly")
 	}
+
 	if at.Path != "/" || rt.Path != "/" {
 		t.Fatalf("expected auth cookies to have Path=/ (access=%q refresh=%q)", at.Path, rt.Path)
 	}
@@ -270,6 +302,7 @@ func doRequest(
 	t.Helper()
 
 	var reqBody *bytes.Reader
+
 	if body == nil {
 		reqBody = bytes.NewReader(nil)
 	} else {
@@ -277,6 +310,7 @@ func doRequest(
 		if err != nil {
 			t.Fatalf("json marshal: %v", err)
 		}
+
 		reqBody = bytes.NewReader(b)
 	}
 
@@ -287,6 +321,7 @@ func doRequest(
 	if err != nil {
 		t.Fatalf("%s %s: %v", method, path, err)
 	}
+
 	defer res.Body.Close()
 
 	b, _ := io.ReadAll(res.Body)
@@ -312,6 +347,7 @@ func doJSON(
 	if out == nil {
 		return
 	}
+
 	if err := json.Unmarshal(b, out); err != nil {
 		t.Fatalf("%s %s: decode response: %v body=%s", method, path, err, string(b))
 	}

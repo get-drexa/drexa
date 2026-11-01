@@ -8,7 +8,6 @@ import (
 	"github.com/get-drexa/drexa/internal/reqctx"
 	"github.com/get-drexa/drexa/internal/virtualfs"
 	"github.com/gofiber/fiber/v2"
-	"github.com/uptrace/bun"
 )
 
 // createUploadRequest represents a new upload session request
@@ -28,12 +27,11 @@ type updateUploadRequest struct {
 }
 
 type HTTPHandler struct {
-	service *Service
-	db      *bun.DB
+	service Service
 }
 
-func NewHTTPHandler(s *Service, db *bun.DB) *HTTPHandler {
-	return &HTTPHandler{service: s, db: db}
+func NewHTTPHandler(s Service) *HTTPHandler {
+	return &HTTPHandler{service: s}
 }
 
 func (h *HTTPHandler) RegisterRoutes(api *virtualfs.ScopedRouter) {
@@ -71,7 +69,7 @@ func (h *HTTPHandler) Create(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid request"})
 	}
 
-	upload, err := h.service.CreateUpload(c.Context(), h.db, CreateUploadOptions{
+	upload, err := h.service.CreateUpload(c.Context(), CreateUploadOptions{
 		ParentID: req.ParentID,
 		Name:     req.Name,
 	}, scope)
@@ -79,18 +77,23 @@ func (h *HTTPHandler) Create(c *fiber.Ctx) error {
 		if errors.Is(err, ErrUnauthorized) {
 			return c.SendStatus(fiber.StatusUnauthorized)
 		}
+
 		if errors.Is(err, virtualfs.ErrAccessDenied) {
 			return c.SendStatus(fiber.StatusNotFound)
 		}
+
 		if errors.Is(err, ErrNotFound) {
 			return c.SendStatus(fiber.StatusNotFound)
 		}
+
 		if errors.Is(err, ErrParentNotDirectory) {
 			return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Parent is not a directory"})
 		}
+
 		if errors.Is(err, ErrConflict) {
 			return c.Status(fiber.StatusConflict).JSON(fiber.Map{"error": "A file with this name already exists"})
 		}
+
 		return httperr.Internal(err)
 	}
 
@@ -123,18 +126,21 @@ func (h *HTTPHandler) ReceiveContent(c *fiber.Ctx) error {
 
 	uploadID := c.Params("uploadID")
 
-	err := h.service.ReceiveUpload(c.Context(), h.db, uploadID, c.Context().RequestBodyStream(), scope)
+	err := h.service.ReceiveUpload(c.Context(), uploadID, c.Context().RequestBodyStream(), scope)
 	defer c.Context().Request.CloseBodyStream()
 	if err != nil {
 		if errors.Is(err, ErrUnauthorized) {
 			return c.SendStatus(fiber.StatusUnauthorized)
 		}
+
 		if errors.Is(err, virtualfs.ErrAccessDenied) {
 			return c.SendStatus(fiber.StatusNotFound)
 		}
+
 		if errors.Is(err, ErrNotFound) {
 			return c.SendStatus(fiber.StatusNotFound)
 		}
+
 		return httperr.Internal(err)
 	}
 
@@ -169,22 +175,27 @@ func (h *HTTPHandler) Update(c *fiber.Ctx) error {
 	}
 
 	if req.Status == StatusCompleted {
-		upload, err := h.service.CompleteUpload(c.Context(), h.db, c.Params("uploadID"), scope)
+		upload, err := h.service.CompleteUpload(c.Context(), c.Params("uploadID"), scope)
 		if err != nil {
 			if errors.Is(err, ErrUnauthorized) {
 				return c.SendStatus(fiber.StatusUnauthorized)
 			}
+
 			if errors.Is(err, virtualfs.ErrAccessDenied) {
 				return c.SendStatus(fiber.StatusNotFound)
 			}
+
 			if errors.Is(err, ErrNotFound) {
 				return c.SendStatus(fiber.StatusNotFound)
 			}
+
 			if errors.Is(err, ErrContentNotUploaded) {
 				return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Content has not been uploaded"})
 			}
+
 			return httperr.Internal(err)
 		}
+
 		return c.JSON(upload)
 	}
 

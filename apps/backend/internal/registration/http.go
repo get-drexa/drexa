@@ -9,14 +9,11 @@ import (
 	"github.com/get-drexa/drexa/internal/httperr"
 	"github.com/get-drexa/drexa/internal/user"
 	"github.com/gofiber/fiber/v2"
-	"github.com/uptrace/bun"
 )
 
 type HTTPHandler struct {
-	service      *Service
-	authService   *auth.Service
-	db            *bun.DB
-	cookieConfig  auth.CookieConfig
+	service      Service
+	cookieConfig auth.CookieConfig
 }
 
 type registerAccountRequest struct {
@@ -27,19 +24,17 @@ type registerAccountRequest struct {
 }
 
 type registerAccountResponse struct {
-	Account   *account.Account     `json:"account"`
-	User      *user.User           `json:"user"`
-	Drive     *drive.Drive         `json:"drive"`
+	Account *account.Account `json:"account"`
+	User    *user.User       `json:"user"`
+	Drive   *drive.Drive     `json:"drive"`
 
 	AccessToken  string `json:"accessToken,omitempty"`
 	RefreshToken string `json:"refreshToken,omitempty"`
 }
 
-func NewHTTPHandler(service *Service, authService *auth.Service, db *bun.DB, cookieConfig auth.CookieConfig) *HTTPHandler {
+func NewHTTPHandler(service Service, cookieConfig auth.CookieConfig) *HTTPHandler {
 	return &HTTPHandler{
-		service:     service,
-		authService: authService,
-		db:          db,
+		service:      service,
 		cookieConfig: cookieConfig,
 	}
 }
@@ -51,57 +46,44 @@ func (h *HTTPHandler) RegisterRoutes(api fiber.Router) {
 func (h *HTTPHandler) registerAccount(c *fiber.Ctx) error {
 	req := new(registerAccountRequest)
 	if err := c.BodyParser(req); err != nil {
-		return c.SendStatus(fiber.StatusBadRequest)
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid request body"})
 	}
 
-	tx, err := h.db.BeginTx(c.Context(), nil)
-	if err != nil {
-		return httperr.Internal(err)
+	if req.TokenDelivery != auth.TokenDeliveryCookie && req.TokenDelivery != auth.TokenDeliveryBody {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid token delivery method"})
 	}
-	defer tx.Rollback()
 
-	result, err := h.service.Register(c.Context(), tx, RegisterOptions{
+	result, err := h.service.Register(c.Context(), RegisterOptions{
 		Email:       req.Email,
 		Password:    req.Password,
 		DisplayName: req.DisplayName,
 	})
 	if err != nil {
 		var ae *user.AlreadyExistsError
+
 		if errors.As(err, &ae) {
-			return c.SendStatus(fiber.StatusConflict)
+			return c.Status(fiber.StatusConflict).JSON(fiber.Map{"error": "account already exists"})
 		}
+
 		if errors.Is(err, account.ErrAccountAlreadyExists) {
-			return c.SendStatus(fiber.StatusConflict)
+			return c.Status(fiber.StatusConflict).JSON(fiber.Map{"error": "account already exists"})
 		}
-		return httperr.Internal(err)
-	}
 
-	grant, err := h.authService.GrantForUser(c.Context(), tx, result.User)
-	if err != nil {
-		return httperr.Internal(err)
-	}
-
-	if err := tx.Commit(); err != nil {
 		return httperr.Internal(err)
 	}
 
 	resp := registerAccountResponse{
-		Account:   result.Account,
-		User:      result.User,
-		Drive:     result.Drive,
+		Account: result.Account,
+		User:    result.User,
+		Drive:   result.Drive,
 	}
 
-	switch req.TokenDelivery {
-	default:
-		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "invalid token delivery method"})
-
-	case auth.TokenDeliveryCookie:
-		auth.SetAuthCookies(c, grant.AccessToken, grant.RefreshToken, h.cookieConfig)
-		return c.JSON(resp)
-
-	case auth.TokenDeliveryBody:
-		resp.AccessToken = grant.AccessToken
-		resp.RefreshToken = grant.RefreshToken
-		return c.JSON(resp)
+	if req.TokenDelivery == auth.TokenDeliveryCookie {
+		auth.SetAuthCookies(c, result.Tokens.AccessToken, result.Tokens.RefreshToken, h.cookieConfig)
+	} else {
+		resp.AccessToken = result.Tokens.AccessToken
+		resp.RefreshToken = result.Tokens.RefreshToken
 	}
+
+	return c.JSON(resp)
 }

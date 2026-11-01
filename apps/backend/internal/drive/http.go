@@ -10,7 +10,6 @@ import (
 	"github.com/get-drexa/drexa/internal/user"
 	"github.com/get-drexa/drexa/internal/virtualfs"
 	"github.com/gofiber/fiber/v2"
-	"github.com/uptrace/bun"
 )
 
 type driveInfoResponse struct {
@@ -18,20 +17,19 @@ type driveInfoResponse struct {
 	RootDirID string `json:"rootDirId"`
 }
 
+type driveListItemResponse struct {
+	*Drive
+	RootDir string `json:"rootDir"`
+}
+
 type HTTPHandler struct {
-	driveService   *Service
-	accountService *account.Service
-	vfs            *virtualfs.VirtualFS
-	db             *bun.DB
+	driveService   Service
 	authMiddleware fiber.Handler
 }
 
-func NewHTTPHandler(driveService *Service, accountService *account.Service, vfs *virtualfs.VirtualFS, db *bun.DB, authMiddleware fiber.Handler) *HTTPHandler {
+func NewHTTPHandler(driveService Service, authMiddleware fiber.Handler) *HTTPHandler {
 	return &HTTPHandler{
 		driveService:   driveService,
-		accountService: accountService,
-		vfs:            vfs,
-		db:             db,
 		authMiddleware: authMiddleware,
 	}
 }
@@ -48,6 +46,16 @@ func (h *HTTPHandler) RegisterRoutes(api fiber.Router) *virtualfs.ScopedRouter {
 	return &virtualfs.ScopedRouter{Router: drive}
 }
 
+// listDrives returns accessible drives with their root directory public IDs.
+// @Summary List accessible drives
+// @Tags drives
+// @Produce json
+// @Param orgSlug path string true "Organization slug"
+// @Security BearerAuth
+// @Success 200 {array} driveListItemResponse
+// @Failure 401 {string} string "Not authenticated"
+// @Failure 404 {string} string "Organization not found"
+// @Router /{orgSlug}/drives [get]
 func (h *HTTPHandler) listDrives(c *fiber.Ctx) error {
 	u := reqctx.AuthenticatedUser(c).(*user.User)
 	org, ok := reqctx.CurrentOrganization(c).(*organization.Organization)
@@ -55,22 +63,21 @@ func (h *HTTPHandler) listDrives(c *fiber.Ctx) error {
 		return c.SendStatus(fiber.StatusNotFound)
 	}
 
-	acc, err := h.accountService.FindUserAccountInOrg(c.Context(), h.db, org.ID, u.ID)
+	drives, err := h.driveService.ListForUserInOrganization(c.Context(), org.ID, u.ID)
 	if err != nil {
-		if errors.Is(err, account.ErrAccountNotFound) {
+		if errors.Is(err, ErrDriveNotFound) {
 			return c.SendStatus(fiber.StatusNotFound)
 		}
+
 		return httperr.Internal(err)
-	}
-	if acc.Status != account.StatusActive {
-		return c.SendStatus(fiber.StatusNotFound)
 	}
 
-	drives, err := h.driveService.ListAccessibleDrives(c.Context(), h.db, org.ID, acc.ID)
-	if err != nil {
-		return httperr.Internal(err)
+	response := make([]driveListItemResponse, 0, len(drives))
+	for _, info := range drives {
+		response = append(response, driveListItemResponse{Drive: info.Drive, RootDir: info.RootDirID})
 	}
-	return c.JSON(drives)
+
+	return c.JSON(response)
 }
 
 func (h *HTTPHandler) getDriveInfo(c *fiber.Ctx) error {
@@ -87,14 +94,16 @@ func (h *HTTPHandler) getDriveInfo(c *fiber.Ctx) error {
 			return c.SendStatus(fiber.StatusUnauthorized)
 		}
 
-		root, err := h.vfs.FindNode(c.Context(), h.db, scope.RootNodeID.String(), scope)
+		rootID, err := h.driveService.RootPublicID(c.Context(), scope)
 		if err != nil {
 			if errors.Is(err, virtualfs.ErrNodeNotFound) || errors.Is(err, virtualfs.ErrAccessDenied) {
 				return c.SendStatus(fiber.StatusNotFound)
 			}
+
 			return httperr.Internal(err)
 		}
-		rootDirID = root.PublicID
+
+		rootDirID = rootID
 	}
 
 	return c.JSON(driveInfoResponse{
@@ -109,45 +118,19 @@ func (h *HTTPHandler) driveMiddleware(c *fiber.Ctx) error {
 		return c.SendStatus(fiber.StatusNotFound)
 	}
 
-	driveID := c.Params("driveID")
-	drive, err := h.driveService.DriveByPublicID(c.Context(), h.db, driveID)
+	acc, _ := reqctx.CurrentAccount(c).(*account.Account)
+	access, err := h.driveService.ResolveAccess(c.Context(), c.Params("driveID"), org.ID, acc)
 	if err != nil {
 		if errors.Is(err, ErrDriveNotFound) {
 			return c.SendStatus(fiber.StatusNotFound)
 		}
-		return httperr.Internal(err)
-	}
-	if drive.OrgID != org.ID {
-		return c.SendStatus(fiber.StatusNotFound)
-	}
 
-	acc, ok := reqctx.CurrentAccount(c).(*account.Account)
-	if !ok || acc == nil {
-		return c.SendStatus(fiber.StatusNotFound)
-	}
-
-	if !h.driveService.CanAccessDrive(drive, acc.OrgID, acc.ID) {
-		return c.SendStatus(fiber.StatusNotFound)
-	}
-
-	root, err := h.vfs.FindRootDirectory(c.Context(), h.db, drive.ID)
-	if err != nil {
 		return httperr.Internal(err)
 	}
 
-	c.Locals("rootDirId", root.PublicID)
-
-	scope := &virtualfs.Scope{
-		DriveID:      drive.ID,
-		RootNodeID:   root.ID,
-		AllowedOps:   virtualfs.AllAllowedOps,
-		AllowedNodes: nil,
-		ActorKind:    virtualfs.ScopeActorAccount,
-		ActorID:      acc.ID,
-	}
-
-	reqctx.SetCurrentDrive(c, drive)
-	reqctx.SetVFSAccessScope(c, scope)
+	c.Locals("rootDirId", access.RootDirID)
+	reqctx.SetCurrentDrive(c, access.Drive)
+	reqctx.SetVFSAccessScope(c, access.Scope)
 
 	return c.Next()
 }

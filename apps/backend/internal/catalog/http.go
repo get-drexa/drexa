@@ -5,13 +5,11 @@ import (
 	"github.com/get-drexa/drexa/internal/sharing"
 	"github.com/get-drexa/drexa/internal/virtualfs"
 	"github.com/gofiber/fiber/v2"
-	"github.com/uptrace/bun"
 )
 
 type HTTPHandler struct {
-	sharingService *sharing.Service
-	vfs            *virtualfs.VirtualFS
-	db             *bun.DB
+	sharingService sharing.Service
+	service        Service
 }
 
 // patchFileRequest represents a file update request
@@ -28,8 +26,8 @@ type patchDirectoryRequest struct {
 	Name string `json:"name" example:"My Documents"`
 }
 
-func NewHTTPHandler(sharingService *sharing.Service, vfs *virtualfs.VirtualFS, db *bun.DB) *HTTPHandler {
-	return &HTTPHandler{sharingService: sharingService, vfs: vfs, db: db}
+func NewHTTPHandler(service Service, sharingService sharing.Service) *HTTPHandler {
+	return &HTTPHandler{service: service, sharingService: sharingService}
 }
 
 func (h *HTTPHandler) RegisterRoutes(api *virtualfs.ScopedRouter) {
@@ -93,9 +91,11 @@ func scopeFromCtx(c *fiber.Ctx) (*virtualfs.Scope, bool) {
 	if scopeAny == nil {
 		return nil, false
 	}
+
 	scope, ok := scopeAny.(*virtualfs.Scope)
 	if !ok || scope == nil {
 		return nil, false
 	}
+
 	return scope, true
 }

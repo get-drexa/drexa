@@ -25,6 +25,7 @@ func TestService_CreatePersonalOrganization(t *testing.T) {
 	if err != nil {
 		t.Skipf("postgres testcontainer unavailable (docker not running/configured?): %v", err)
 	}
+
 	t.Cleanup(func() { _ = pg.Terminate(ctx) })
 
 	postgresURL, err := pg.ConnectionString(ctx, "sslmode=disable")
@@ -39,30 +40,35 @@ func TestService_CreatePersonalOrganization(t *testing.T) {
 		t.Fatalf("RunMigrations: %v", err)
 	}
 
-	svc := organization.NewService()
+	svc := organization.NewService(organization.NewDBStore(db), account.NewDBStore(db))
 
-	org, err := svc.CreatePersonalOrganization(ctx, db, "Personal Org")
+	org, err := svc.CreatePersonalOrganization(ctx, "Personal Org")
 	if err != nil {
 		t.Fatalf("CreatePersonalOrganization: %v", err)
 	}
+
 	if org.Kind != organization.KindPersonal {
 		t.Fatalf("unexpected org kind: got %q want %q", org.Kind, organization.KindPersonal)
 	}
+
 	if org.Name != "Personal Org" {
 		t.Fatalf("unexpected org name: got %q want %q", org.Name, "Personal Org")
 	}
 
 	t.Run("organization by id", func(t *testing.T) {
-		got, err := svc.OrganizationByID(ctx, db, org.ID)
+		got, err := svc.OrganizationByID(ctx, org.ID)
 		if err != nil {
 			t.Fatalf("OrganizationByID: %v", err)
 		}
+
 		if got.ID != org.ID {
 			t.Fatalf("unexpected org id: got %q want %q", got.ID, org.ID)
 		}
+
 		if got.Kind != organization.KindPersonal {
 			t.Fatalf("unexpected org kind: got %q want %q", got.Kind, organization.KindPersonal)
 		}
+
 		if got.Name != "Personal Org" {
 			t.Fatalf("unexpected org name: got %q want %q", got.Name, "Personal Org")
 		}
@@ -76,18 +82,21 @@ func TestService_CreatePersonalOrganization(t *testing.T) {
 			Name: "Team Org",
 			Slug: &slug,
 		}
+
 		if _, err := db.NewInsert().Model(orgWithSlug).Returning("*").Exec(ctx); err != nil {
 			t.Fatalf("insert org with slug: %v", err)
 		}
 
 		for _, candidate := range []string{"TEST-ORG", "Test-Org", "test-org"} {
-			got, err := svc.OrganizationBySlug(ctx, db, candidate)
+			got, err := svc.OrganizationBySlug(ctx, candidate)
 			if err != nil {
 				t.Fatalf("OrganizationBySlug(%q): %v", candidate, err)
 			}
+
 			if got.ID != orgWithSlug.ID {
 				t.Fatalf("unexpected org id: got %q want %q", got.ID, orgWithSlug.ID)
 			}
+
 			if got.Slug == nil || *got.Slug != slug {
 				t.Fatalf("unexpected org slug: got %v want %q", got.Slug, slug)
 			}
@@ -95,15 +104,15 @@ func TestService_CreatePersonalOrganization(t *testing.T) {
 	})
 
 	t.Run("personal organization for user", func(t *testing.T) {
-		accSvc := account.NewService()
-		userSvc := user.NewService()
+		accSvc := account.NewService(account.NewDBStore(db))
+		userSvc := user.NewService(user.NewDBStore(db))
 
 		hashed, err := password.HashString("test-password")
 		if err != nil {
 			t.Fatalf("HashString: %v", err)
 		}
 
-		u, err := userSvc.RegisterUser(ctx, db, user.UserRegistrationOptions{
+		u, err := userSvc.RegisterUser(ctx, user.UserRegistrationOptions{
 			Email:       fmt.Sprintf("org-user-%s@example.com", uuid.Must(uuid.NewV7())),
 			DisplayName: "Org User",
 			Password:    hashed,
@@ -112,15 +121,16 @@ func TestService_CreatePersonalOrganization(t *testing.T) {
 			t.Fatalf("RegisterUser: %v", err)
 		}
 
-		acc, err := accSvc.CreateAccount(ctx, db, org.ID, u.ID, account.RoleAdmin, account.StatusActive)
+		acc, err := accSvc.CreateAccount(ctx, org.ID, u.ID, account.RoleAdmin, account.StatusActive)
 		if err != nil {
 			t.Fatalf("CreateAccount: %v", err)
 		}
 
-		got, err := svc.PersonalOrganizationForUser(ctx, db, acc.UserID)
+		got, err := svc.PersonalOrganizationForUser(ctx, acc.UserID)
 		if err != nil {
 			t.Fatalf("PersonalOrganizationForUser: %v", err)
 		}
+
 		if got.ID != org.ID {
 			t.Fatalf("unexpected org id: got %q want %q", got.ID, org.ID)
 		}

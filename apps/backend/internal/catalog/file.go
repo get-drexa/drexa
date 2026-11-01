@@ -45,11 +45,12 @@ func (h *HTTPHandler) currentFileMiddleware(c *fiber.Ctx) error {
 	}
 
 	fileID := c.Params("fileID")
-	node, err := h.vfs.FindNodeByPublicID(c.Context(), h.db, fileID, scope)
+	node, err := h.service.FindNode(c.Context(), fileID, scope)
 	if err != nil {
 		if errors.Is(err, virtualfs.ErrNodeNotFound) {
 			return c.SendStatus(fiber.StatusNotFound)
 		}
+
 		return httperr.Internal(err)
 	}
 
@@ -82,6 +83,7 @@ func (h *HTTPHandler) fetchFile(c *fiber.Ctx) error {
 		UpdatedAt: node.UpdatedAt,
 		DeletedAt: node.DeletedAt,
 	}
+
 	return c.JSON(i)
 }
 
@@ -105,14 +107,16 @@ func (h *HTTPHandler) downloadFile(c *fiber.Ctx) error {
 		return c.SendStatus(fiber.StatusUnauthorized)
 	}
 
-	content, err := h.vfs.ReadFile(c.Context(), h.db, node, scope)
+	content, err := h.service.ReadFile(c.Context(), node, scope)
 	if err != nil {
 		if errors.Is(err, virtualfs.ErrAccessDenied) {
 			return c.SendStatus(fiber.StatusNotFound)
 		}
+
 		if errors.Is(err, virtualfs.ErrUnsupportedOperation) {
 			return c.SendStatus(fiber.StatusNotFound)
 		}
+
 		return httperr.Internal(err)
 	}
 
@@ -124,9 +128,11 @@ func (h *HTTPHandler) downloadFile(c *fiber.Ctx) error {
 		if node.MimeType != "" {
 			c.Set("Content-Type", node.MimeType)
 		}
+
 		if content.Size > 0 {
 			return c.SendStream(content.Reader, int(content.Size))
 		}
+
 		return c.SendStream(content.Reader)
 	}
 
@@ -160,27 +166,11 @@ func (h *HTTPHandler) patchFile(c *fiber.Ctx) error {
 		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{"error": "Invalid request"})
 	}
 
-	tx, err := h.db.BeginTx(c.Context(), nil)
-	if err != nil {
-		return httperr.Internal(err)
-	}
-	defer tx.Rollback()
-
-	if patch.Name != "" {
-		err := h.vfs.RenameNode(c.Context(), tx, node, patch.Name, scope)
-		if err != nil {
-			if errors.Is(err, virtualfs.ErrNodeNotFound) {
-				return c.SendStatus(fiber.StatusNotFound)
-			}
-			if errors.Is(err, virtualfs.ErrAccessDenied) {
-				return c.SendStatus(fiber.StatusNotFound)
-			}
-			return httperr.Internal(err)
+	if err := h.service.RenameNode(c.Context(), node, patch.Name, scope); err != nil {
+		if errors.Is(err, virtualfs.ErrNodeNotFound) || errors.Is(err, virtualfs.ErrAccessDenied) {
+			return c.SendStatus(fiber.StatusNotFound)
 		}
-	}
 
-	err = tx.Commit()
-	if err != nil {
 		return httperr.Internal(err)
 	}
 
@@ -216,47 +206,22 @@ func (h *HTTPHandler) deleteFile(c *fiber.Ctx) error {
 		return c.SendStatus(fiber.StatusUnauthorized)
 	}
 
-	tx, err := h.db.BeginTx(c.Context(), nil)
+	trash := c.Query("trash") == "true"
+	deleted, err := h.service.DeleteNode(c.Context(), node, trash, scope)
 	if err != nil {
+		if errors.Is(err, virtualfs.ErrAccessDenied) || errors.Is(err, virtualfs.ErrNodeNotFound) {
+			return c.SendStatus(fiber.StatusNotFound)
+		}
+
 		return httperr.Internal(err)
 	}
-	defer tx.Rollback()
 
-	shouldTrash := c.Query("trash") == "true"
-	if shouldTrash {
-		deleted, err := h.vfs.SoftDeleteNode(c.Context(), tx, node, scope)
-		if err != nil {
-			if errors.Is(err, virtualfs.ErrNodeNotFound) {
-				return c.SendStatus(fiber.StatusNotFound)
-			}
-			if errors.Is(err, virtualfs.ErrAccessDenied) {
-				return c.SendStatus(fiber.StatusNotFound)
-			}
-			return httperr.Internal(err)
-		}
-
-		err = tx.Commit()
-		if err != nil {
-			return httperr.Internal(err)
-		}
-
+	if trash {
 		return c.JSON(fileInfoFromNode(deleted))
-	} else {
-		err = h.vfs.PermanentlyDeleteNode(c.Context(), tx, node, scope)
-		if err != nil {
-			if errors.Is(err, virtualfs.ErrAccessDenied) {
-				return c.SendStatus(fiber.StatusNotFound)
-			}
-			return httperr.Internal(err)
-		}
-
-		err = tx.Commit()
-		if err != nil {
-			return httperr.Internal(err)
-		}
-
-		return c.SendStatus(fiber.StatusNoContent)
 	}
+
+	return c.SendStatus(fiber.StatusNoContent)
+
 }
 
 // deleteFiles removes multiple files
@@ -290,60 +255,29 @@ func (h *HTTPHandler) deleteFiles(c *fiber.Ctx) error {
 
 	shouldTrash := c.Query("trash") == "true"
 
-	tx, err := h.db.BeginTx(c.Context(), nil)
+	deleted, err := h.service.DeleteNodes(c.Context(), ids, virtualfs.NodeKindFile, shouldTrash, scope)
 	if err != nil {
+		if errors.Is(err, virtualfs.ErrUnsupportedOperation) {
+			return httperr.NewHTTPError(fiber.StatusBadRequest, "all items must be files", err)
+		}
+
+		if errors.Is(err, virtualfs.ErrAccessDenied) {
+			return c.SendStatus(fiber.StatusNotFound)
+		}
+
 		return httperr.Internal(err)
 	}
-	defer tx.Rollback()
 
-	nodes, err := h.vfs.FindNodesByPublicID(c.Context(), tx, ids, scope)
-	if err != nil {
-		return httperr.Internal(err)
-	}
-
-	if len(nodes) == 0 {
+	if !shouldTrash || len(deleted) == 0 {
 		return c.SendStatus(fiber.StatusNoContent)
 	}
 
-	if shouldTrash {
-		deleted, err := h.vfs.SoftDeleteNodes(c.Context(), tx, nodes, scope)
-		if err != nil {
-			if errors.Is(err, virtualfs.ErrAccessDenied) {
-				return c.SendStatus(fiber.StatusNotFound)
-			}
-			return httperr.Internal(err)
-		}
-
-		err = tx.Commit()
-		if err != nil {
-			return httperr.Internal(err)
-		}
-
-		res := make([]FileInfo, 0, len(deleted))
-		for _, node := range deleted {
-			res = append(res, fileInfoFromNode(node))
-		}
-
-		return c.JSON(res)
-	} else {
-		err = h.vfs.PermanentlyDeleteFiles(c.Context(), tx, nodes, scope)
-		if err != nil {
-			if errors.Is(err, virtualfs.ErrUnsupportedOperation) {
-				return httperr.NewHTTPError(fiber.StatusBadRequest, "all items must be files", err)
-			}
-			if errors.Is(err, virtualfs.ErrAccessDenied) {
-				return c.SendStatus(fiber.StatusNotFound)
-			}
-			return httperr.Internal(err)
-		}
-
-		err = tx.Commit()
-		if err != nil {
-			return httperr.Internal(err)
-		}
-
-		return c.SendStatus(fiber.StatusNoContent)
+	res := make([]FileInfo, 0, len(deleted))
+	for _, node := range deleted {
+		res = append(res, fileInfoFromNode(node))
 	}
+
+	return c.JSON(res)
 
 }
 
@@ -364,7 +298,7 @@ func (h *HTTPHandler) listFileShares(c *fiber.Ctx) error {
 
 	includesExpired := c.Query("includesExpired") == "true"
 
-	shares, err := h.sharingService.ListShares(c.Context(), h.db, node.DriveID, sharing.ListSharesOptions{
+	shares, err := h.sharingService.ListShares(c.Context(), node.DriveID, sharing.ListSharesOptions{
 		Items:           []*virtualfs.Node{node},
 		IncludesExpired: includesExpired,
 	})

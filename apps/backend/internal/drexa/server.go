@@ -31,10 +31,10 @@ type Server struct {
 	db             *bun.DB
 	blobStore      blob.Store
 	vfs            *virtualfs.VirtualFS
-	userService    *user.Service
-	authService    *auth.Service
-	accountService *account.Service
-	uploadService  *upload.Service
+	userService    user.Service
+	authService    auth.Service
+	accountService account.Service
+	uploadService  upload.Service
 	authMiddleware fiber.Handler
 }
 
@@ -55,9 +55,11 @@ func NewServer(c Config) (*Server, error) {
 		AllowOrigins:     "",
 		AllowCredentials: c.CORS.AllowCredentials,
 	}
+
 	if len(c.CORS.AllowOrigins) > 0 {
 		corsConfig.AllowOrigins = strings.Join(c.CORS.AllowOrigins, ",")
 	}
+
 	app.Use(cors.New(corsConfig))
 
 	db := database.NewFromPostgres(c.Database.PostgresURL)
@@ -65,6 +67,7 @@ func NewServer(c Config) (*Server, error) {
 
 	// Initialize blob store based on config
 	var blobStore blob.Store
+
 	switch c.Storage.Backend {
 	case StorageBackendFS:
 		blobStore = blob.NewFSStore(blob.FSStoreConfig{
@@ -83,6 +86,7 @@ func NewServer(c Config) (*Server, error) {
 
 	// Initialize key resolver based on config
 	var keyResolver virtualfs.BlobKeyResolver
+
 	switch c.Storage.Mode {
 	case StorageModeFlat:
 		keyResolver = virtualfs.NewFlatKeyResolver()
@@ -97,50 +101,50 @@ func NewServer(c Config) (*Server, error) {
 		return nil, fmt.Errorf("failed to create virtual file system: %w", err)
 	}
 
-	sharingService, err := sharing.NewService(vfs)
+	sharingService, err := sharing.NewService(db, vfs)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create sharing service: %w", err)
 	}
 
-	userService := user.NewService()
-	organizationService := organization.NewService()
-	accountService := account.NewService()
-	driveService := drive.NewService()
-	authService := auth.NewService(userService, auth.TokenConfig{
+	userService := user.NewService(user.NewDBStore(db))
+	organizationService := organization.NewService(organization.NewDBStore(db), account.NewDBStore(db))
+	accountService := account.NewService(account.NewDBStore(db))
+	driveService := drive.NewService(drive.NewDBStore(db), account.NewDBStore(db), db, vfs)
+	authService := auth.NewService(db, user.NewDBStore(db), auth.TokenConfig{
 		Issuer:    c.JWT.Issuer,
 		Audience:  c.JWT.Audience,
 		SecretKey: c.JWT.SecretKey,
 	})
-	uploadService := upload.NewService(vfs, blobStore)
-	registrationService := registration.NewService(userService, organizationService, accountService, driveService, vfs)
+	uploadService := upload.NewService(db, vfs, blobStore)
+	registrationService := registration.NewService(db, authService, vfs)
 
 	cookieConfig := auth.CookieConfig{
 		Domain: c.Cookie.Domain,
 	}
 
-	authMiddleware := auth.NewAuthMiddleware(authService, db, cookieConfig)
-	optionalAuthMiddleware := auth.NewOptionalAuthMiddleware(authService, db, cookieConfig)
+	authMiddleware := auth.NewAuthMiddleware(authService, cookieConfig)
+	optionalAuthMiddleware := auth.NewOptionalAuthMiddleware(authService, cookieConfig)
 
 	api := app.Group("/api")
-	auth.NewHTTPHandler(authService, organizationService, db, cookieConfig).RegisterRoutes(api)
-	registration.NewHTTPHandler(registrationService, authService, db, cookieConfig).RegisterRoutes(api)
-	usersAPI := user.NewHTTPHandler(userService, db, authMiddleware).RegisterRoutes(api)
-	account.NewHTTPHandler(accountService, db, authMiddleware).RegisterRoutes(api)
+	auth.NewHTTPHandler(authService, cookieConfig).RegisterRoutes(api)
+	registration.NewHTTPHandler(registrationService, cookieConfig).RegisterRoutes(api)
+	usersAPI := user.NewHTTPHandler(authMiddleware).RegisterRoutes(api)
+	account.NewHTTPHandler(accountService, authMiddleware).RegisterRoutes(api)
 
-	orgHTTP := organization.NewHTTPHandler(organizationService, accountService, db, authMiddleware)
+	orgHTTP := organization.NewHTTPHandler(organizationService, authMiddleware)
 	orgHTTP.RegisterUserRoutes(usersAPI)
 	orgHTTP.RegisterRoutes(api)
 
-	orgAPI := api.Group("/:orgSlug", authMiddleware, organization.NewMiddleware(organizationService, accountService, db))
+	orgAPI := api.Group("/:orgSlug", authMiddleware, organization.NewMiddleware(organizationService))
 
-	driveRouter := drive.NewHTTPHandler(driveService, accountService, vfs, db, authMiddleware).RegisterRoutes(orgAPI)
-	upload.NewHTTPHandler(uploadService, db).RegisterRoutes(driveRouter)
+	driveRouter := drive.NewHTTPHandler(driveService, authMiddleware).RegisterRoutes(orgAPI)
+	upload.NewHTTPHandler(uploadService).RegisterRoutes(driveRouter)
 
-	shareHTTP := sharing.NewHTTPHandler(sharingService, accountService, driveService, vfs, db, optionalAuthMiddleware)
+	shareHTTP := sharing.NewHTTPHandler(sharingService, optionalAuthMiddleware)
 	shareRoutes := shareHTTP.RegisterShareConsumeRoutes(api)
 	shareHTTP.RegisterShareManagementRoutes(driveRouter)
 
-	catalogHTTP := catalog.NewHTTPHandler(sharingService, vfs, db)
+	catalogHTTP := catalog.NewHTTPHandler(catalog.NewService(db, vfs), sharingService)
 	catalogHTTP.RegisterRoutes(driveRouter)
 	catalogHTTP.RegisterRoutes(shareRoutes)
 

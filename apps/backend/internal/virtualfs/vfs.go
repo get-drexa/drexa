@@ -179,13 +179,13 @@ func (vfs *VirtualFS) CreateRootDirectory(ctx context.Context, db bun.IDB, drive
 	}
 
 	node := &Node{
-		ID:        id,
-		PublicID:  pid,
-		DriveID:   driveID,
-		ParentID:  uuid.Nil,
-		Kind:      NodeKindDirectory,
-		Status:    NodeStatusReady,
-		Name:      RootDirectoryName,
+		ID:       id,
+		PublicID: pid,
+		DriveID:  driveID,
+		ParentID: uuid.Nil,
+		Kind:     NodeKindDirectory,
+		Status:   NodeStatusReady,
+		Name:     RootDirectoryName,
 	}
 
 	_, err = db.NewInsert().Model(node).Exec(ctx)
@@ -736,13 +736,13 @@ func (vfs *VirtualFS) MoveNodesInSameDirectory(ctx context.Context, db bun.IDB, 
 		nodeNames[i] = node.Name
 	}
 
-		var destinationConflicts []*Node
-		err = db.NewSelect().Model(&destinationConflicts).
+	var destinationConflicts []*Node
+	err = db.NewSelect().Model(&destinationConflicts).
 		Where("drive_id = ?", allowedNodes[0].DriveID).
-			Where("parent_id = ?", newParentID).
-			Where("deleted_at IS NULL").
-			Where("name IN (?)", bun.In(nodeNames)).
-			Scan(ctx)
+		Where("parent_id = ?", newParentID).
+		Where("deleted_at IS NULL").
+		Where("name IN (?)", bun.In(nodeNames)).
+		Scan(ctx)
 	if err != nil {
 		return nil, err
 	}

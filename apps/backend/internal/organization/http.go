@@ -2,25 +2,20 @@ package organization
 
 import (
 	"errors"
-	"strings"
 
-	"github.com/get-drexa/drexa/internal/account"
 	"github.com/get-drexa/drexa/internal/httperr"
 	"github.com/get-drexa/drexa/internal/reqctx"
 	"github.com/get-drexa/drexa/internal/user"
 	"github.com/gofiber/fiber/v2"
-	"github.com/uptrace/bun"
 )
 
 type HTTPHandler struct {
-	service        *Service
-	accountService *account.Service
-	db             *bun.DB
+	service        Service
 	authMiddleware fiber.Handler
 }
 
-func NewHTTPHandler(service *Service, accountService *account.Service, db *bun.DB, authMiddleware fiber.Handler) *HTTPHandler {
-	return &HTTPHandler{service: service, accountService: accountService, db: db, authMiddleware: authMiddleware}
+func NewHTTPHandler(service Service, authMiddleware fiber.Handler) *HTTPHandler {
+	return &HTTPHandler{service: service, authMiddleware: authMiddleware}
 }
 
 // RegisterUserRoutes mounts user-scoped organization routes onto an existing
@@ -52,7 +47,7 @@ func (h *HTTPHandler) listAuthenticatedUserOrganizations(c *fiber.Ctx) error {
 		return c.SendStatus(fiber.StatusUnauthorized)
 	}
 
-	orgs, err := h.service.ListOrganizationsForUser(c.Context(), h.db, u.ID)
+	orgs, err := h.service.ListOrganizationsForUser(c.Context(), u.ID)
 	if err != nil {
 		return httperr.Internal(err)
 	}
@@ -77,41 +72,14 @@ func (h *HTTPHandler) getOrganizationBySlug(c *fiber.Ctx) error {
 		return c.SendStatus(fiber.StatusUnauthorized)
 	}
 
-	rawSlug := strings.ToLower(strings.TrimSpace(c.Params("orgSlug")))
-	if rawSlug == ReservedSlug {
-		org, err := h.service.PersonalOrganizationForUser(c.Context(), h.db, u.ID)
-		if err != nil {
-			if errors.Is(err, ErrOrganizationNotFound) {
-				return c.SendStatus(fiber.StatusNotFound)
-			}
-			return httperr.Internal(err)
-		}
-		return c.JSON(org)
-	}
-
-	slug, err := NormalizeSlug(rawSlug)
-	if err != nil {
-		return c.SendStatus(fiber.StatusNotFound)
-	}
-
-	org, err := h.service.OrganizationBySlug(c.Context(), h.db, slug)
+	membership, err := h.service.ResolveForUser(c.Context(), c.Params("orgSlug"), u.ID)
 	if err != nil {
 		if errors.Is(err, ErrOrganizationNotFound) {
 			return c.SendStatus(fiber.StatusNotFound)
 		}
+
 		return httperr.Internal(err)
 	}
 
-	acc, err := h.accountService.FindUserAccountInOrg(c.Context(), h.db, org.ID, u.ID)
-	if err != nil {
-		if errors.Is(err, account.ErrAccountNotFound) {
-			return c.SendStatus(fiber.StatusNotFound)
-		}
-		return httperr.Internal(err)
-	}
-	if acc.Status != account.StatusActive {
-		return c.SendStatus(fiber.StatusNotFound)
-	}
-
-	return c.JSON(org)
+	return c.JSON(membership.Organization)
 }

@@ -18,6 +18,7 @@ import (
 	"github.com/get-drexa/drexa/internal/drexa"
 	"github.com/get-drexa/drexa/internal/organization"
 	"github.com/gofiber/fiber/v2"
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
 )
@@ -30,6 +31,7 @@ func TestRegistrationFlow(t *testing.T) {
 	if err != nil {
 		t.Skipf("postgres testcontainer unavailable (docker not running/configured?): %v", err)
 	}
+
 	t.Cleanup(func() { _ = pg.Terminate(ctx) })
 
 	postgresURL, err := pg.ConnectionString(ctx, "sslmode=disable")
@@ -41,6 +43,7 @@ func TestRegistrationFlow(t *testing.T) {
 	if err != nil {
 		t.Fatalf("temp blob dir: %v", err)
 	}
+
 	t.Cleanup(func() { _ = os.RemoveAll(blobRoot) })
 
 	db := database.NewFromPostgres(postgresURL)
@@ -98,13 +101,16 @@ func TestRegistrationFlow(t *testing.T) {
 	}
 
 	var reg registerResponse
+
 	doJSON(t, s.App(), http.MethodPost, "/api/accounts", "", registerBody, http.StatusOK, &reg)
 	if reg.AccessToken == "" {
 		t.Fatalf("expected access token in registration response")
 	}
+
 	if reg.User.Email != "alice@example.com" {
 		t.Fatalf("unexpected registered user email: %q", reg.User.Email)
 	}
+
 	if reg.Account.ID == "" || reg.Drive.ID == "" {
 		t.Fatalf("expected account.id and drive.id to be set")
 	}
@@ -133,19 +139,24 @@ func TestRegistrationFlow(t *testing.T) {
 		}
 
 		var login loginResponse
+
 		doJSON(t, s.App(), http.MethodPost, "/api/auth/login", "", loginBody, http.StatusOK, &login)
 		if login.AccessToken == "" {
 			t.Fatalf("expected access token in login response")
 		}
+
 		if login.User.ID != reg.User.ID {
 			t.Fatalf("unexpected user id: got %q want %q", login.User.ID, reg.User.ID)
 		}
+
 		if len(login.Organizations) != 1 {
 			t.Fatalf("expected 1 organization, got %d", len(login.Organizations))
 		}
+
 		if login.Organizations[0].Kind != string(organization.KindPersonal) {
 			t.Fatalf("unexpected organization kind: %q", login.Organizations[0].Kind)
 		}
+
 		if login.Organizations[0].Slug != organization.ReservedSlug {
 			t.Fatalf("unexpected personal organization slug: %q", login.Organizations[0].Slug)
 		}
@@ -153,14 +164,106 @@ func TestRegistrationFlow(t *testing.T) {
 
 	t.Run("drives list", func(t *testing.T) {
 		var drives []struct {
-			ID string `json:"id"`
+			ID      string `json:"id"`
+			RootDir string `json:"rootDir"`
 		}
+
 		doJSON(t, s.App(), http.MethodGet, "/api/my/drives", reg.AccessToken, nil, http.StatusOK, &drives)
 		if len(drives) != 1 {
 			t.Fatalf("expected 1 drive, got %d", len(drives))
 		}
+
 		if drives[0].ID != reg.Drive.ID {
 			t.Fatalf("unexpected drive id: got %q want %q", drives[0].ID, reg.Drive.ID)
+		}
+
+		var root struct {
+			ID string `json:"id"`
+		}
+
+		doJSON(t, s.App(), http.MethodGet, fmt.Sprintf("/api/my/drives/%s/directories/root", reg.Drive.ID), reg.AccessToken, nil, http.StatusOK, &root)
+		if root.ID == "" || drives[0].RootDir != root.ID {
+			t.Fatalf("unexpected rootDir: got %q want %q", drives[0].RootDir, root.ID)
+		}
+	})
+
+	t.Run("nested auth middleware preserves refreshed sessions", func(t *testing.T) {
+		for _, path := range []string{"/api/my/drives", fmt.Sprintf("/api/my/drives/%s/directories/root", reg.Drive.ID)} {
+			for _, refreshOnly := range []bool{false, true} {
+				t.Run(fmt.Sprintf("%s/refreshOnly=%t", path, refreshOnly), func(t *testing.T) {
+					var login struct {
+						RefreshToken string `json:"refreshToken"`
+					}
+
+					doJSON(t, s.App(), http.MethodPost, "/api/auth/login", "", map[string]any{
+						"email": "alice@example.com", "password": "password123", "tokenDelivery": "body",
+					}, http.StatusOK, &login)
+
+					req := httptest.NewRequest(http.MethodGet, path, nil)
+					req.AddCookie(&http.Cookie{Name: "refresh_token", Value: login.RefreshToken})
+					if !refreshOnly {
+						nearExpiry, err := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.RegisteredClaims{
+							Issuer:    "drexa-test",
+							Audience:  jwt.ClaimStrings{"drexa-test"},
+							Subject:   reg.User.ID,
+							ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Minute)),
+						}).SignedString([]byte("drexa-test-secret"))
+						if err != nil {
+							t.Fatal(err)
+						}
+
+						req.AddCookie(&http.Cookie{Name: "access_token", Value: nearExpiry})
+					}
+
+					res, err := s.App().Test(req, 10_000)
+					if err != nil {
+						t.Fatal(err)
+					}
+
+					defer res.Body.Close()
+					if res.StatusCode != http.StatusOK {
+						t.Fatalf("cookie-authenticated request: got %d want 200", res.StatusCode)
+					}
+
+					var refresh string
+					for _, cookie := range res.Cookies() {
+						if cookie.Name == "refresh_token" {
+							refresh = cookie.Value
+						}
+					}
+
+					if refresh == "" || refresh == login.RefreshToken {
+						t.Fatal("expected a rotated refresh cookie")
+					}
+
+					// A separate request can still carry the original cookies.
+					retry := httptest.NewRequest(http.MethodGet, path, nil)
+					retry.Header = req.Header.Clone()
+					retryRes, err := s.App().Test(retry, 10_000)
+					if err != nil {
+						t.Fatal(err)
+					}
+
+					defer retryRes.Body.Close()
+					wantStatus := http.StatusOK
+					if refreshOnly {
+						wantStatus = http.StatusConflict
+					}
+
+					if retryRes.StatusCode != wantStatus {
+						t.Fatalf("cross-request collision: got %d want %d", retryRes.StatusCode, wantStatus)
+					}
+
+					if len(retryRes.Header.Values("Set-Cookie")) != 0 {
+						t.Fatal("collision must not overwrite or clear the winning cookies")
+					}
+
+					// The winning cookie must still belong to a live session.
+					doJSON(t, s.App(), http.MethodPost, "/api/auth/tokens", "", map[string]any{
+						"refreshToken": refresh,
+					}, http.StatusOK, nil)
+				})
+			}
 		}
 	})
 
@@ -169,10 +272,12 @@ func TestRegistrationFlow(t *testing.T) {
 			ID        string `json:"id"`
 			RootDirID string `json:"rootDirId"`
 		}
+
 		doJSON(t, s.App(), http.MethodGet, fmt.Sprintf("/api/my/drives/%s", reg.Drive.ID), reg.AccessToken, nil, http.StatusOK, &info)
 		if info.ID != reg.Drive.ID {
 			t.Fatalf("unexpected drive id: got %q want %q", info.ID, reg.Drive.ID)
 		}
+
 		if info.RootDirID == "" {
 			t.Fatalf("expected rootDirId to be set")
 		}
@@ -184,10 +289,12 @@ func TestRegistrationFlow(t *testing.T) {
 			DisplayName string `json:"displayName"`
 			Email       string `json:"email"`
 		}
+
 		doJSON(t, s.App(), http.MethodGet, "/api/users/me", reg.AccessToken, nil, http.StatusOK, &me)
 		if me.ID != reg.User.ID {
 			t.Fatalf("unexpected user id: got %q want %q", me.ID, reg.User.ID)
 		}
+
 		if me.Email != reg.User.Email {
 			t.Fatalf("unexpected user email: got %q want %q", me.Email, reg.User.Email)
 		}
@@ -200,13 +307,16 @@ func TestRegistrationFlow(t *testing.T) {
 			Name string `json:"name"`
 			Slug string `json:"slug"`
 		}
+
 		doJSON(t, s.App(), http.MethodGet, "/api/users/me/organizations", reg.AccessToken, nil, http.StatusOK, &orgs)
 		if len(orgs) != 1 {
 			t.Fatalf("expected 1 organization, got %d", len(orgs))
 		}
+
 		if orgs[0].Kind != string(organization.KindPersonal) {
 			t.Fatalf("unexpected organization kind: %q", orgs[0].Kind)
 		}
+
 		if orgs[0].Slug != organization.ReservedSlug {
 			t.Fatalf("unexpected personal organization slug: %q", orgs[0].Slug)
 		}
@@ -219,10 +329,12 @@ func TestRegistrationFlow(t *testing.T) {
 			Name string `json:"name"`
 			Slug string `json:"slug"`
 		}
+
 		doJSON(t, s.App(), http.MethodGet, "/api/organizations/my", reg.AccessToken, nil, http.StatusOK, &myOrg)
 		if myOrg.Kind != string(organization.KindPersonal) {
 			t.Fatalf("unexpected personal org kind: %q", myOrg.Kind)
 		}
+
 		if myOrg.Slug != organization.ReservedSlug {
 			t.Fatalf("unexpected personal org slug: %q", myOrg.Slug)
 		}
@@ -231,6 +343,7 @@ func TestRegistrationFlow(t *testing.T) {
 		if err != nil {
 			t.Fatalf("uuid: %v", err)
 		}
+
 		accountID, err := uuid.NewV7()
 		if err != nil {
 			t.Fatalf("uuid: %v", err)
@@ -258,10 +371,12 @@ func TestRegistrationFlow(t *testing.T) {
 			Name string `json:"name"`
 			Slug string `json:"slug"`
 		}
+
 		doJSON(t, s.App(), http.MethodGet, "/api/organizations/acme", reg.AccessToken, nil, http.StatusOK, &got)
 		if got.Slug != "acme" {
 			t.Fatalf("unexpected org slug: %q", got.Slug)
 		}
+
 		if got.Kind != string(organization.KindTeam) {
 			t.Fatalf("unexpected org kind: %q", got.Kind)
 		}
@@ -275,10 +390,12 @@ func TestRegistrationFlow(t *testing.T) {
 			Role   string `json:"role"`
 			Status string `json:"status"`
 		}
+
 		doJSON(t, s.App(), http.MethodGet, fmt.Sprintf("/api/accounts/%s", reg.Account.ID), reg.AccessToken, nil, http.StatusOK, &got)
 		if got.ID != reg.Account.ID {
 			t.Fatalf("unexpected account id: got %q want %q", got.ID, reg.Account.ID)
 		}
+
 		if got.UserID != reg.User.ID {
 			t.Fatalf("unexpected account userId: got %q want %q", got.UserID, reg.User.ID)
 		}
@@ -288,6 +405,7 @@ func TestRegistrationFlow(t *testing.T) {
 		var resp struct {
 			Items []any `json:"items"`
 		}
+
 		doJSON(
 			t,
 			s.App(),
@@ -334,6 +452,7 @@ func doJSON(
 	t.Helper()
 
 	var reqBody *bytes.Reader
+
 	if body == nil {
 		reqBody = bytes.NewReader(nil)
 	} else {
@@ -341,6 +460,7 @@ func doJSON(
 		if err != nil {
 			t.Fatalf("json marshal: %v", err)
 		}
+
 		reqBody = bytes.NewReader(b)
 	}
 
@@ -354,6 +474,7 @@ func doJSON(
 	if err != nil {
 		t.Fatalf("%s %s: %v", method, path, err)
 	}
+
 	defer res.Body.Close()
 
 	if res.StatusCode != wantStatus {
@@ -364,6 +485,7 @@ func doJSON(
 	if out == nil {
 		return
 	}
+
 	if err := json.NewDecoder(res.Body).Decode(out); err != nil {
 		t.Fatalf("%s %s: decode response: %v", method, path, err)
 	}

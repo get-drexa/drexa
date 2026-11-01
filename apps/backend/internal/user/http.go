@@ -3,23 +3,21 @@ package user
 import (
 	"github.com/get-drexa/drexa/internal/reqctx"
 	"github.com/gofiber/fiber/v2"
-	"github.com/uptrace/bun"
 )
 
 type HTTPHandler struct {
-	service        *Service
-	db             *bun.DB
 	authMiddleware fiber.Handler
 }
 
-func NewHTTPHandler(service *Service, db *bun.DB, authMiddleware fiber.Handler) *HTTPHandler {
-	return &HTTPHandler{service: service, db: db, authMiddleware: authMiddleware}
+func NewHTTPHandler(authMiddleware fiber.Handler) *HTTPHandler {
+	return &HTTPHandler{authMiddleware: authMiddleware}
 }
 
 func (h *HTTPHandler) RegisterRoutes(api fiber.Router) fiber.Router {
 	users := api.Group("/users")
 	users.Use(h.authMiddleware)
 	users.Get("/me", h.getAuthenticatedUser)
+
 	return users
 }
 
@@ -37,5 +35,6 @@ func (h *HTTPHandler) getAuthenticatedUser(c *fiber.Ctx) error {
 	if u == nil {
 		return c.SendStatus(fiber.StatusUnauthorized)
 	}
+
 	return c.JSON(u)
 }

@@ -24,6 +24,7 @@ func TestService_AccountQueries(t *testing.T) {
 	if err != nil {
 		t.Skipf("postgres testcontainer unavailable (docker not running/configured?): %v", err)
 	}
+
 	t.Cleanup(func() { _ = pg.Terminate(ctx) })
 
 	postgresURL, err := pg.ConnectionString(ctx, "sslmode=disable")
@@ -43,11 +44,11 @@ func TestService_AccountQueries(t *testing.T) {
 		t.Fatalf("HashString: %v", err)
 	}
 
-	userSvc := user.NewService()
-	orgSvc := organization.NewService()
-	accSvc := account.NewService()
+	userSvc := user.NewService(user.NewDBStore(db))
+	orgSvc := organization.NewService(organization.NewDBStore(db), account.NewDBStore(db))
+	accSvc := account.NewService(account.NewDBStore(db))
 
-	testUser, err := userSvc.RegisterUser(ctx, db, user.UserRegistrationOptions{
+	testUser, err := userSvc.RegisterUser(ctx, user.UserRegistrationOptions{
 		Email:       "account@example.com",
 		DisplayName: "Account User",
 		Password:    hashed,
@@ -56,37 +57,41 @@ func TestService_AccountQueries(t *testing.T) {
 		t.Fatalf("RegisterUser: %v", err)
 	}
 
-	personalOrg, err := orgSvc.CreatePersonalOrganization(ctx, db, "Personal Org")
+	personalOrg, err := orgSvc.CreatePersonalOrganization(ctx, "Personal Org")
 	if err != nil {
 		t.Fatalf("CreatePersonalOrganization(personal): %v", err)
 	}
 
-	accPersonal, err := accSvc.CreateAccount(ctx, db, personalOrg.ID, testUser.ID, account.RoleAdmin, account.StatusActive)
+	accPersonal, err := accSvc.CreateAccount(ctx, personalOrg.ID, testUser.ID, account.RoleAdmin, account.StatusActive)
 	if err != nil {
 		t.Fatalf("CreateAccount(personal): %v", err)
 	}
 
 	t.Run("list accounts", func(t *testing.T) {
-		accounts, err := accSvc.ListAccounts(ctx, db, testUser.ID)
+		accounts, err := accSvc.ListAccounts(ctx, testUser.ID)
 		if err != nil {
 			t.Fatalf("ListAccounts: %v", err)
 		}
+
 		if len(accounts) != 1 {
 			t.Fatalf("expected 1 account, got %d", len(accounts))
 		}
+
 		if accounts[0].ID != accPersonal.ID {
 			t.Fatalf("unexpected account id: got %q want %q", accounts[0].ID, accPersonal.ID)
 		}
 	})
 
 	t.Run("account by id", func(t *testing.T) {
-		gotPersonal, err := accSvc.AccountByID(ctx, db, testUser.ID, accPersonal.ID)
+		gotPersonal, err := accSvc.AccountByID(ctx, testUser.ID, accPersonal.ID)
 		if err != nil {
 			t.Fatalf("AccountByID(personal): %v", err)
 		}
+
 		if gotPersonal.OrgID != personalOrg.ID {
 			t.Fatalf("unexpected personal org id: got %q want %q", gotPersonal.OrgID, personalOrg.ID)
 		}
+
 		if gotPersonal.Role != account.RoleAdmin {
 			t.Fatalf("unexpected personal role: got %q want %q", gotPersonal.Role, account.RoleAdmin)
 		}
@@ -94,10 +99,11 @@ func TestService_AccountQueries(t *testing.T) {
 	})
 
 	t.Run("find user account in org", func(t *testing.T) {
-		gotPersonal, err := accSvc.FindUserAccountInOrg(ctx, db, personalOrg.ID, testUser.ID)
+		gotPersonal, err := accSvc.FindUserAccountInOrg(ctx, personalOrg.ID, testUser.ID)
 		if err != nil {
 			t.Fatalf("FindUserAccountInOrg(personal): %v", err)
 		}
+
 		if gotPersonal.ID != accPersonal.ID {
 			t.Fatalf("unexpected personal account id: got %q want %q", gotPersonal.ID, accPersonal.ID)
 		}

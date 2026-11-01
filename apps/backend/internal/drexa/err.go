@@ -19,5 +19,6 @@ func (e *ConfigError) Error() string {
 	for _, err := range e.Errors {
 		sb.WriteString(fmt.Sprintf("  - %s\n", err.Error()))
 	}
+
 	return sb.String()
 }
